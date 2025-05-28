@@ -1,0 +1,30 @@
+version: '3.9'
+
+services:
+  python-app:
+    build: ./app
+    container_name: madbot-service
+    depends_on:
+      - mysql-db
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app  # bind seluruh project ke /app di container
+    # working_dir: /app  # pastikan kerja di direktori tempat main.py
+    command: py main.py # Sesuaikan jika aplikasimu menggunakan perintah lain
+
+  mysql-db:
+    image: mysql:8.0
+    container_name: madbot-db
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_volume:/var/lib/mysql
+
+volumes:
+  db_volume:

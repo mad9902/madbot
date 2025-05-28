@@ -1,0 +1,17 @@
+__pycache__
+downloads
+.vscode
+ffmpeg.exe
+
+google-images-download
+
+notes.txt
+token.txt
+
+*.jpg
+*.jpeg
+*.png
+*.gif
+nugasinn.7.session
+.cache
+.env
