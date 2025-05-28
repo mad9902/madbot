@@ -10,13 +10,18 @@ class main_cog(commands.Cog):
         self.help_message = """
 ```
 General commands:
-mad help                   - displays all the available commands
-mad clear / cl <amount>    - will delete the past messages with the amount specified
+mad help                                    - displays all the available 
+                                            commands
+mad clear / cl <amount>                     - will delete the past messages with 
+                                            the amount specified
+mad pick <keyword1 (percent), keyword2>     - will generate you a random pick things
+                                            ex: mpick noodles 5%, chicken, juice, you 80%
 
 Image commands:
 mad emoji <emoji>                  - will get the emoji
 mad sticker <sticker               - will get the sticker
 mad avatar <tag>                   - will get the avatar from the user
+mad upload <reply or upload img>   - will generate image to link
 
 Music commands:
 mad p or play <keywords>       - finds the song on youtube and plays 
@@ -44,7 +49,7 @@ mad setrolelvl <level> <id role>
 mad removerolelvl <level> <id role>
 
 Auto Send:
-Instagram or tiktok link
+Instagram or tiktok link into video or image
 
 Info:
 mad serverinfo
@@ -249,6 +254,55 @@ mad userinfo <tag>
                     print(f"Role '{role_name}' di-remove dari {member}")
                 except Exception as e:
                     print(f"Gagal menghapus role dari member: {e}")
+
+
+    @commands.command(name="pick", help="Pilih random dari daftar item dengan persentase opsional. Contoh: !pick ayam 5%, bakso, mie, nasi 10%")
+    async def pick(self, ctx, *, items: str):
+            entries = [x.strip() for x in items.split(',')]
+            choices = []
+            total_given_percent = 0.0
+            unspecified = []
+
+            for entry in entries:
+                if '%' in entry:
+                    try:
+                        name, percent = entry.rsplit(' ', 1)
+                        percent = float(percent.strip().replace('%', ''))
+                        if percent < 0 or percent > 100:
+                            await ctx.send(f"❌ Persentase untuk '{name.strip()}' harus antara 0 dan 100.")
+                            return
+                        choices.append((name.strip(), percent))
+                        total_given_percent += percent
+                    except Exception:
+                        unspecified.append(entry)
+                else:
+                    unspecified.append(entry)
+
+            if total_given_percent > 100:
+                await ctx.send("❌ Total persentase yang diberikan melebihi 100%.")
+                return
+
+            remaining = 100 - total_given_percent
+            count_unspecified = len(unspecified)
+
+            if count_unspecified > 0:
+                share = remaining / count_unspecified
+                for name in unspecified:
+                    choices.append((name.strip(), share))
+
+            # Buat cumulative distribution
+            cumulative = []
+            current = 0
+            for name, percent in choices:
+                current += percent
+                cumulative.append((name, current))
+
+            # Pilih secara acak berdasarkan distribusi
+            roll = random.uniform(0, 100)
+            for name, threshold in cumulative:
+                if roll <= threshold:
+                    await ctx.send(f"🎲 Hasil random: **{name}**")
+                    return
 
 
 
