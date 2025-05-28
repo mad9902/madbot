@@ -1,10 +1,28 @@
 import mysql.connector
 from mysql.connector import Error
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
 
+def retry_database(retries=5, delay=3):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(1, retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Error as e:
+                    last_exception = e
+                    print(f"[Attempt {attempt}] Gagal koneksi ke database: {e}. Retry in {delay}s...")
+                    time.sleep(delay)
+            print(f"Gagal setelah {retries} percobaan.")
+            raise last_exception
+        return wrapper
+    return decorator
+
+@retry_database(retries=3, delay=3)
 def ensure_database_exists():
     try:
         db = mysql.connector.connect(
@@ -19,19 +37,15 @@ def ensure_database_exists():
     except Error as e:
         print(f"[DB INIT ERROR] Failed to create database: {e}")
 
-
+@retry_database(retries=3, delay=3)
 def connect_db():
-    try:
-        db = mysql.connector.connect(
-            host=os.getenv("MYSQL_HOST"),
-            user=os.getenv("MYSQL_USER"),
-            password=os.getenv("MYSQL_PASS") or None,
-            database=os.getenv("MYSQL_DB")
-        )
-        return db
-    except Error as e:
-        print(f"Error connecting to MySQL: {e}")
-        return None
+    db = mysql.connector.connect(
+        host=os.getenv("MYSQL_HOST"),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASS") or None,
+        database=os.getenv("MYSQL_DB")
+    )
+    return db
 
 def get_user_xp(db, user_id, guild_id):
     if db is None:

@@ -19,8 +19,6 @@ services:
     image: mysql:8.0
     container_name: madbot-db
     restart: always
-    env_file:
-      - .env
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASS}
       MYSQL_DATABASE: ${MYSQL_DB}
