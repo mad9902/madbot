@@ -3,6 +3,10 @@ from discord.ext import commands
 import os, shutil, random
 import aiohttp
 import urllib.parse
+from dotenv import load_dotenv
+
+load_dotenv()
+IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
 
 class image_cog(commands.Cog):
     def __init__(self, bot):
@@ -12,7 +16,7 @@ class image_cog(commands.Cog):
         if not os.path.exists(self.download_folder):
             os.makedirs(self.download_folder)
 
-        self.clear_folder()  # <--- Clear folder saat bot di-restart
+        self.clear_folder()
 
     def clear_folder(self):
         for filename in os.listdir(self.download_folder):
@@ -25,6 +29,22 @@ class image_cog(commands.Cog):
             except Exception as e:
                 print(f'Gagal hapus {file_path}. Alasan: {e}')
 
+    async def upload_to_imgur(self, image_path):
+        headers = {"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"}
+        url = "https://api.imgur.com/3/upload"
+
+        with open(image_path, 'rb') as img:
+            data = {'image': img.read()}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, data=data) as resp:
+                if resp.status == 200:
+                    json_resp = await resp.json()
+                    return json_resp['data']['link']
+                else:
+                    print(await resp.text())
+                    return None
+
     @commands.command(name="get", help="Displays random image from the downloads")
     async def get(self, ctx):
         files = os.listdir(self.download_folder)
@@ -34,6 +54,22 @@ class image_cog(commands.Cog):
 
         random_file = random.choice(files)
         await ctx.send(file=discord.File(os.path.join(self.download_folder, random_file)))
+
+    @commands.command(name="upload", help="Upload gambar acak dari folder ke Imgur dan kirim link")
+    async def upload(self, ctx):
+        files = os.listdir(self.download_folder)
+        if not files:
+            await ctx.send("Tidak ada gambar untuk diupload.")
+            return
+
+        random_file = random.choice(files)
+        file_path = os.path.join(self.download_folder, random_file)
+
+        link = await self.upload_to_imgur(file_path)
+        if link:
+            await ctx.send(f"Gambar berhasil diupload ke Imgur:\n{link}")
+        else:
+            await ctx.send("Gagal mengupload gambar.")
 
     @commands.command(name="avatar", help="Menampilkan avatar dari user")
     async def avatar(self, ctx, member: discord.Member = None):
@@ -55,14 +91,12 @@ class image_cog(commands.Cog):
             url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{file_ext}"
             filename = f"custom_{emoji_id}.{file_ext}"
         else:
-            # Asumsikan emoji unicode
             codepoints = '-'.join(f"{ord(c):x}" for c in emoji_input)
             url = f"https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/{codepoints}.png"
             filename = f"unicode_{codepoints}.png"
 
         path = os.path.join(self.download_folder, filename)
 
-        # Download file dari URL
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 if resp.status != 200:
@@ -72,7 +106,6 @@ class image_cog(commands.Cog):
                     f.write(await resp.read())
 
         await ctx.send(file=discord.File(path))
-
 
     @commands.command(name="sticker", help="Download sticker dari pesan yang direply")
     async def sticker(self, ctx):
