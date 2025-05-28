@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import os, shutil, random
 import aiohttp
-import urllib.parse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -44,6 +43,42 @@ class image_cog(commands.Cog):
                 else:
                     print(await resp.text())
                     return None
+
+    @commands.command(name="upload", help="Upload attachment atau reply gambar ke Imgur")
+    async def upload(self, ctx):
+        image = None
+
+        # Cek attachment langsung
+        if ctx.message.attachments:
+            attachment = ctx.message.attachments[0]
+            if attachment.content_type and "image" in attachment.content_type:
+                image = attachment
+        # Cek jika reply ke gambar
+        elif ctx.message.reference:
+            replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            if replied.attachments:
+                attachment = replied.attachments[0]
+                if attachment.content_type and "image" in attachment.content_type:
+                    image = attachment
+
+        if image is None:
+            await ctx.send("Tidak ada gambar yang bisa diupload. Kirim gambar atau reply ke gambar.")
+            return
+
+        filename = os.path.join(self.download_folder, image.filename)
+        await image.save(fp=filename)
+
+        link = await self.upload_to_imgur(filename)
+
+        try:
+            os.remove(filename)
+        except Exception as e:
+            print(f"Gagal menghapus file sementara: {e}")
+
+        if link:
+            await ctx.send(f"Gambar berhasil diupload ke Imgur:\n{link}")
+        else:
+            await ctx.send("Gagal mengupload gambar.")
 
     @commands.command(name="get", help="Displays random image from the downloads")
     async def get(self, ctx):
