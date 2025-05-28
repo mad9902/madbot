@@ -16,6 +16,7 @@ from yt_dlp import YoutubeDL
 from spotipy.oauth2 import SpotifyClientCredentials
 from discord.ui import View, Button
 from dotenv import load_dotenv
+from database import set_channel_setting, get_channel_settings
 load_dotenv()
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
@@ -34,8 +35,9 @@ class music_cog(commands.Cog):
         self.current_song = None
         self.previous_song = None
         self.music_queue = []
+        self.db = bot.db
         self.loop_mode = None
-        self.channel_settings = self.load_channel_settings()
+        self.channel_settings = {}
         self.YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'True'}
         self.FFMPEG_OPTIONS = {
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -hide_banner',
@@ -44,24 +46,35 @@ class music_cog(commands.Cog):
         self.vc = None
         self.ffmpeg_executable = r'C:\ffmpeg\bin\ffmpeg.exe'
 
-    def load_channel_settings(self):
-        if os.path.exists('channel_settings.json'):
-            with open('channel_settings.json', 'r') as f:
-                return json.load(f)
-        return {}
+    async def load_channel_settings(self, guild_id, channel_id):
+        settings = get_channel_settings(self.bot.db, guild_id, channel_id)
+        self.channel_settings[(guild_id, channel_id)] = settings or {}
 
-    def save_channel_settings(self):
-        with open('channel_settings.json', 'w') as f:
-            json.dump(self.channel_settings, f)
+    async def save_channel_setting(self, guild_id, channel_id, key, value):
+        set_channel_setting(self.bot.db, guild_id, channel_id, key, value)
+        if (guild_id, channel_id) not in self.channel_settings:
+            self.channel_settings[(guild_id, channel_id)] = {}
+        self.channel_settings[(guild_id, channel_id)][key] = value
 
-    async def send_to_music_channel(self, guild, embed):
-        channel_id = self.channel_settings.get(str(guild.id))
+    async def send_to_music_channel(self, guild: discord.Guild, embed: discord.Embed):
+        guild_id = str(guild.id)
+        channel_id = self.channel_settings.get(guild_id)
+
+        if channel_id is None:
+            # Kalau belum ada di cache, coba load dari DB lalu simpan ke cache
+            channel_id = get_channel_settings(self.bot.db, guild_id)
+            if channel_id:
+                self.channel_settings[guild_id] = channel_id
+
         target_channel = guild.get_channel(int(channel_id)) if channel_id else None
+
         if not target_channel:
+            # fallback ke channel pertama yang bot bisa kirim pesan
             for ch in guild.text_channels:
                 if ch.permissions_for(guild.me).send_messages:
                     target_channel = ch
                     break
+
         if target_channel:
             await target_channel.send(embed=embed)
 
@@ -320,8 +333,16 @@ class music_cog(commands.Cog):
 
     @commands.command(name="setch", aliases=["setchannel"], help="Set channel khusus untuk kirim info musik")
     async def setch(self, ctx, channel: discord.TextChannel):
-        self.channel_settings[str(ctx.guild.id)] = str(channel.id)
-        self.save_channel_settings()
+        guild_id = str(ctx.guild.id)
+        channel_id = str(channel.id)
+
+        # Simpan ke DB
+        set_channel_setting(self.db, guild_id, channel_id)
+
+        print(guild_id, channel_id)
+        # Update cache
+        self.channel_settings[guild_id] = channel_id
+
         await ctx.send(f"✅ Channel khusus musik telah disetel ke {channel.mention}")
 
     @commands.command(name="disconnect", aliases=["stop", "dc", "leave"], help="Disconnect the bot from voice channel")

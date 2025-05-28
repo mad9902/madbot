@@ -1,11 +1,11 @@
 import discord
 from discord.ext import commands
-from database import get_user_xp, set_user_xp, get_level_role, insert_level_role, connect_db
+from database import get_user_xp, set_user_xp, get_level_role, insert_level_role
 
 class LevelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.guild_level_roles = {}  # Cache: {guild_id: {level: role_id}}
+        self.guild_level_roles = {}
         self.db = bot.db
 
     def calculate_level(self, xp):
@@ -18,15 +18,13 @@ class LevelCog(commands.Cog):
         return level
 
     async def load_level_roles(self):
-        db = connect_db()
-        if db is None:
+        if self.db is None:
             print("[ERROR] Gagal connect ke DB saat load_level_roles")
             return
-        cursor = db.cursor()
+        cursor = self.db.cursor()
         cursor.execute("SELECT guild_id, level, role_id FROM level_roles")
         rows = cursor.fetchall()
         cursor.close()
-        db.close()
 
         self.guild_level_roles.clear()
         for guild_id, level, role_id in rows:
@@ -43,7 +41,7 @@ class LevelCog(commands.Cog):
         user = ctx.author
         user_id = user.id
         guild_id = ctx.guild.id
-        xp = get_user_xp(user_id, guild_id)
+        xp = get_user_xp(self.db, user_id, guild_id)
         level = self.calculate_level(xp)
         await ctx.send(f"🔢 {user.name}, kamu level {level} dengan {xp} XP.")
 
@@ -57,7 +55,7 @@ class LevelCog(commands.Cog):
         guild_id = ctx.guild.id
 
         # Simpan ke database
-        insert_level_role(guild_id, level, role_id)
+        insert_level_role(self.db, guild_id, level, role_id)
 
         # Update cache lokal juga
         if guild_id not in self.guild_level_roles:
@@ -73,16 +71,13 @@ class LevelCog(commands.Cog):
             return
 
         guild_id = ctx.guild.id
-
-        db = connect_db()
-        if db is None:
+        if self.db is None:
             await ctx.send("❌ Gagal koneksi ke database.")
             return
-        cursor = db.cursor()
+        cursor = self.db.cursor()
         cursor.execute("DELETE FROM level_roles WHERE guild_id=%s AND level=%s", (guild_id, level))
-        db.commit()
+        self.db.commit()
         cursor.close()
-        db.close()
 
         if guild_id in self.guild_level_roles and level in self.guild_level_roles[guild_id]:
             del self.guild_level_roles[guild_id][level]
@@ -102,9 +97,9 @@ class LevelCog(commands.Cog):
         user_id = user.id
         guild_id = message.guild.id
 
-        previous_xp = get_user_xp(user_id, guild_id)
+        previous_xp = get_user_xp(self.db, user_id, guild_id)
         new_xp = previous_xp + 10
-        set_user_xp(user_id, guild_id, new_xp)
+        set_user_xp(self.db, user_id, guild_id, new_xp)
 
         old_level = self.calculate_level(previous_xp)
         new_level = self.calculate_level(new_xp)
@@ -116,7 +111,7 @@ class LevelCog(commands.Cog):
                 role_id = guild_roles.get(new_level)
 
             if role_id is None:
-                role_id = get_level_role(guild_id, new_level)
+                role_id = get_level_role(self.db, guild_id, new_level)
                 if role_id:
                     if guild_id not in self.guild_level_roles:
                         self.guild_level_roles[guild_id] = {}

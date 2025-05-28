@@ -5,6 +5,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def ensure_database_exists():
+    try:
+        db = mysql.connector.connect(
+            host=os.getenv("MYSQL_HOST"),
+            user=os.getenv("MYSQL_USER"),
+            password=os.getenv("MYSQL_PASS") or None
+        )
+        cursor = db.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {os.getenv('MYSQL_DB')}")
+        cursor.close()
+        db.close()
+    except Error as e:
+        print(f"[DB INIT ERROR] Failed to create database: {e}")
+
+
 def connect_db():
     try:
         db = mysql.connector.connect(
@@ -18,8 +33,7 @@ def connect_db():
         print(f"Error connecting to MySQL: {e}")
         return None
 
-def get_user_xp(user_id, guild_id):
-    db = connect_db()
+def get_user_xp(db, user_id, guild_id):
     if db is None:
         return 0
     cursor = db.cursor()
@@ -29,13 +43,12 @@ def get_user_xp(user_id, guild_id):
     )
     result = cursor.fetchone()
     cursor.close()
-    db.close()
+
     if result:
         return result[0]
     return 0
 
-def set_user_xp(user_id, guild_id, xp):
-    db = connect_db()
+def set_user_xp(db, user_id, guild_id, xp):
     if db is None:
         return
     cursor = db.cursor()
@@ -46,10 +59,9 @@ def set_user_xp(user_id, guild_id, xp):
     )
     db.commit()
     cursor.close()
-    db.close()
 
-def insert_level_role(guild_id, level, role_id):
-    db = connect_db()
+
+def insert_level_role(db, guild_id, level, role_id):
     if db is None:
         return
     cursor = db.cursor()
@@ -69,10 +81,9 @@ def insert_level_role(guild_id, level, role_id):
     """, (str(guild_id), level, str(role_id)))
     db.commit()
     cursor.close()
-    db.close()
 
-def get_level_role(guild_id, level):
-    db = connect_db()
+
+def get_level_role(db, guild_id, level):
     if db is None:
         return None
     cursor = db.cursor()
@@ -82,7 +93,30 @@ def get_level_role(guild_id, level):
     )
     result = cursor.fetchone()
     cursor.close()
-    db.close()
+
     if result:
         return int(result[0])
     return None
+
+def get_channel_settings(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT channel_id FROM channel_settings WHERE guild_id=%s
+    """, (guild_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    if row:
+        return str(row[0])
+    return None
+
+def set_channel_setting(db, guild_id, channel_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO channel_settings (guild_id, channel_id)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE channel_id=VALUES(channel_id)
+    """, (guild_id, channel_id))
+    db.commit()
+    cursor.close()
+
+
