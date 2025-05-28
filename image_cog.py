@@ -28,9 +28,25 @@ class image_cog(commands.Cog):
             except Exception as e:
                 print(f'Gagal hapus {file_path}. Alasan: {e}')
 
+    import os
+import aiohttp
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
+
+load_dotenv()
+IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
+
+class image_cog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.download_folder = 'downloads'
+        if not os.path.exists(self.download_folder):
+            os.makedirs(self.download_folder)
+
     async def upload_to_imgur(self, image_path):
         headers = {"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"}
-        url = "https://api.imgur.com/3/upload"
+        url = "https://api.imgur.com/3/image"
 
         with open(image_path, 'rb') as img:
             data = {'image': img.read()}
@@ -39,21 +55,20 @@ class image_cog(commands.Cog):
             async with session.post(url, headers=headers, data=data) as resp:
                 if resp.status == 200:
                     json_resp = await resp.json()
-                    return json_resp['data']['link']
+                    image_id = json_resp['data']['id']
+                    image_type = json_resp['data']['type'].split('/')[-1]
+                    return f"https://i.imgur.com/{image_id}.{image_type}"
                 else:
-                    print(await resp.text())
                     return None
 
-    @commands.command(name="upload", help="Upload attachment atau reply gambar ke Imgur")
+    @commands.command(name="upload", help="Upload gambar dari attachment atau reply ke Imgur")
     async def upload(self, ctx):
         image = None
 
-        # Cek attachment langsung
         if ctx.message.attachments:
             attachment = ctx.message.attachments[0]
             if attachment.content_type and "image" in attachment.content_type:
                 image = attachment
-        # Cek jika reply ke gambar
         elif ctx.message.reference:
             replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
             if replied.attachments:
@@ -62,7 +77,7 @@ class image_cog(commands.Cog):
                     image = attachment
 
         if image is None:
-            await ctx.send("Tidak ada gambar yang bisa diupload. Kirim gambar atau reply ke gambar.")
+            await ctx.send("❌ Tidak ada gambar yang bisa diupload. Kirim gambar atau reply ke gambar.")
             return
 
         filename = os.path.join(self.download_folder, image.filename)
@@ -72,39 +87,14 @@ class image_cog(commands.Cog):
 
         try:
             os.remove(filename)
-        except Exception as e:
-            print(f"Gagal menghapus file sementara: {e}")
+        except:
+            pass
 
         if link:
-            await ctx.send(f"Gambar berhasil diupload ke Imgur:\n{link}")
+            await ctx.send(f"✅ Gambar berhasil diupload ke Imgur:\n{link}")
         else:
-            await ctx.send("Gagal mengupload gambar.")
+            await ctx.send("❌ Gagal mengupload gambar ke Imgur.")
 
-    @commands.command(name="get", help="Displays random image from the downloads")
-    async def get(self, ctx):
-        files = os.listdir(self.download_folder)
-        if not files:
-            await ctx.send("No images found.")
-            return
-
-        random_file = random.choice(files)
-        await ctx.send(file=discord.File(os.path.join(self.download_folder, random_file)))
-
-    @commands.command(name="upload", help="Upload gambar acak dari folder ke Imgur dan kirim link")
-    async def upload(self, ctx):
-        files = os.listdir(self.download_folder)
-        if not files:
-            await ctx.send("Tidak ada gambar untuk diupload.")
-            return
-
-        random_file = random.choice(files)
-        file_path = os.path.join(self.download_folder, random_file)
-
-        link = await self.upload_to_imgur(file_path)
-        if link:
-            await ctx.send(f"Gambar berhasil diupload ke Imgur:\n{link}")
-        else:
-            await ctx.send("Gagal mengupload gambar.")
 
     @commands.command(name="avatar", help="Menampilkan avatar dari user")
     async def avatar(self, ctx, member: discord.Member = None):
