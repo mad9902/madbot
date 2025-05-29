@@ -58,6 +58,10 @@ mad userinfo <tag>
 ```
 """
         self.text_channel_list = []
+
+    async def on_ready(self):
+        activity = discord.Activity(type=discord.ActivityType.listening, name="mad |md |m")
+        await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
    
     @commands.Cog.listener()
     async def on_ready(self):
