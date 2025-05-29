@@ -44,7 +44,7 @@ class music_cog(commands.Cog):
             'options': '-vn -loglevel warning'
         }
         self.vc = None
-        self.ffmpeg_executable = r'C:\ffmpeg\bin\ffmpeg.exe'
+        self.ffmpeg_executable = "/usr/bin/ffmpeg" if not os.name == "nt" else r"C:\\ffmpeg\\bin\\ffmpeg.exe"
 
     async def load_channel_settings(self, guild_id, channel_id):
         settings = get_channel_settings(self.bot.db, guild_id, channel_id)
