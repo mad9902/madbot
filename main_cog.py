@@ -59,15 +59,18 @@ mad userinfo <tag>
 """
         self.text_channel_list = []
 
-    async def on_ready(self):
-        activity = discord.Activity(type=discord.ActivityType.listening, name="mad |md |m")
-        await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
-   
     @commands.Cog.listener()
     async def on_ready(self):
+        # Set status dan activity
+        activity = discord.Activity(type=discord.ActivityType.listening, name="mad |md |m")
+        await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
+
+        # Simpan semua text channels di semua guild
         for guild in self.bot.guilds:
             for channel in guild.text_channels:
                 self.text_channel_list.append(channel)
+
+        print(f"Bot siap, ditemukan {len(self.text_channel_list)} channel teks di semua server.")
         
 
     @commands.command(name="help", aliases=["h"], help="Displays all the available commands")
