@@ -11,7 +11,6 @@ import re
 import requests
 import logging
 
-logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger('link_cog')
 
 INSTAGRAM_POST_RE = re.compile(r"(https?://(?:www\.)?instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+)/?)")
@@ -145,7 +144,7 @@ class link_cog(commands.Cog):
         ydl_opts = {
             'outtmpl': os.path.join(self.media_folder, '%(id)s.%(ext)s'),
             'format': 'best',
-            'quiet': False,  # Tampilkan log yt_dlp di console VPS
+            'quiet': False,
             'noplaylist': True,
             'no_warnings': False,
             'ignoreerrors': False,
@@ -195,7 +194,6 @@ class link_cog(commands.Cog):
                 loop = asyncio.get_running_loop()
                 file_path = await loop.run_in_executor(None, self.download_instagram_post, url)
 
-
                 mime, _ = mimetypes.guess_type(file_path)
                 if not mime or not mime.startswith(('image', 'video')):
                     await message.channel.send("Jenis file tidak dikenali.")
@@ -226,7 +224,6 @@ class link_cog(commands.Cog):
             try:
                 loop = asyncio.get_running_loop()
                 file_path = await loop.run_in_executor(None, self.download_media_yt_dlp, message.content)
-
 
                 mime, _ = mimetypes.guess_type(file_path)
                 if not mime or not mime.startswith(('image', 'video')):
