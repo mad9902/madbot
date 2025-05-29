@@ -19,8 +19,6 @@ class main_cog(commands.Cog):
         for guild in self.bot.guilds:
             for channel in guild.text_channels:
                 self.text_channel_list.append(channel)
-
-        print(f"Bot siap, ditemukan {len(self.text_channel_list)} channel teks di semua server.")
         
 
     @commands.command(name="help", aliases=["h"], help="Displays all the available commands")

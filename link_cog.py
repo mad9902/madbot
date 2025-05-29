@@ -12,7 +12,7 @@ import requests
 import logging
 
 
-logger = logging.getLogger('link_cog')
+logger = logging.getLogger()
 
 INSTAGRAM_POST_RE = re.compile(r"(https?://(?:www\.)?instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+)/?)")
 
@@ -53,7 +53,6 @@ class link_cog(commands.Cog):
             else:
                 self.L = None
         except Exception as e:
-            logger.error(f"Gagal load atau login session Instaloader: {e}")
             self.L = None
 
     def clean_media_folder(self):
@@ -215,7 +214,6 @@ class link_cog(commands.Cog):
 
                 await message.channel.send(file=discord.File(file_path))
                 os.remove(file_path)
-                logger.debug("File hasil download TikTok berhasil dihapus setelah upload.")
             except Exception as e:
                 await message.channel.send("Gagal mengambil media dari TikTok.")
                 logger.error(f"Gagal download TikTok media: {e}")
