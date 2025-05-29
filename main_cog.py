@@ -27,7 +27,7 @@ class main_cog(commands.Cog):
     async def help(self, ctx):
         embed = discord.Embed(
             title="📜 MAD BOT HELP",
-            description="Daftar command yang tersedia:\nGunakan prefix `mad` sebelum command.\nContoh: `mad play`",
+            description="Daftar command yang tersedia:\nGunakan prefix `mad , md , m` sebelum command.\nContoh: `mad play | md play | mplay`",
             color=discord.Color.purple()
         )
 
