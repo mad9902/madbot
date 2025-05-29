@@ -173,12 +173,8 @@ class link_cog(commands.Cog):
 
         content = message.content.lower()
 
+        # Cek apakah ada link Instagram
         if "instagram.com/p/" in content or "instagram.com/reel/" in content:
-            if not self.L:
-                await message.channel.send("Instagram session belum siap, coba lagi nanti.")
-                logger.error("Instagram session belum siap saat pesan diterima.")
-                return
-
             match = INSTAGRAM_POST_RE.search(message.content)
             if not match:
                 await message.channel.send("URL Instagram tidak valid atau tidak ditemukan.")
@@ -190,10 +186,29 @@ class link_cog(commands.Cog):
             logger.info(f"Pesan Instagram diterima dengan shortcode: {shortcode}")
 
             await message.channel.typing()
-            try:
-                loop = asyncio.get_running_loop()
-                file_path = await loop.run_in_executor(None, self.download_instagram_post, url)
+            loop = asyncio.get_running_loop()
+            file_path = None
 
+            # Coba download dengan instaloader jika tersedia
+            if self.L:
+                try:
+                    file_path = await loop.run_in_executor(None, self.download_instagram_post, url)
+                    logger.info("Berhasil download menggunakan Instaloader.")
+                except Exception as e:
+                    logger.warning(f"Gagal menggunakan Instaloader: {e}")
+            
+            # Jika instaloader gagal atau tidak tersedia, pakai yt_dlp
+            if not file_path:
+                try:
+                    file_path = await loop.run_in_executor(None, self.download_media_yt_dlp, url)
+                    logger.info("Berhasil download menggunakan yt_dlp sebagai fallback.")
+                except Exception as e:
+                    await message.channel.send("Gagal mengambil media dari Instagram.")
+                    logger.error(f"Gagal download media dengan yt_dlp: {e}")
+                    return
+
+            # Validasi dan upload ke Discord
+            try:
                 mime, _ = mimetypes.guess_type(file_path)
                 if not mime or not mime.startswith(('image', 'video')):
                     await message.channel.send("Jenis file tidak dikenali.")
@@ -203,21 +218,23 @@ class link_cog(commands.Cog):
                 size_mb = os.path.getsize(file_path) / (1024 * 1024)
                 if size_mb > 8:
                     await message.channel.send(f"File terlalu besar untuk diupload ke Discord (max 8MB). Ukuran file: {size_mb:.2f} MB")
-                    logger.error(f"File terlalu besar untuk upload: {file_path}, ukuran {size_mb:.2f} MB")
+                    logger.error(f"File terlalu besar: {file_path}, ukuran {size_mb:.2f} MB")
                     return
 
                 await message.channel.send(file=discord.File(file_path))
-
+            except Exception as e:
+                await message.channel.send("Terjadi kesalahan saat mengirim file ke Discord.")
+                logger.error(f"Error saat mengirim file: {e}")
+            finally:
                 try:
                     os.remove(file_path)
-                    os.rmdir(os.path.dirname(file_path))
-                    logger.debug("File dan folder hasil download Instagram berhasil dihapus setelah upload.")
+                    parent_dir = os.path.dirname(file_path)
+                    if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                        os.rmdir(parent_dir)
+                    logger.debug("File dan folder sementara berhasil dihapus.")
                 except Exception as e:
-                    logger.error(f"Gagal hapus file/folder setelah upload: {e}")
+                    logger.warning(f"Gagal hapus file/folder setelah upload: {e}")
 
-            except Exception as e:
-                await message.channel.send("Gagal mengambil media dari Instagram.")
-                logger.error(f"Gagal download Instagram media: {e}")
 
         elif "tiktok.com" in content:
             await message.channel.typing()
