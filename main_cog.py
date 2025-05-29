@@ -7,56 +7,6 @@ from discord.ext import commands
 class main_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.help_message = """
-```
-General commands:
-mad help                                    - displays all the available 
-                                            commands
-mad clear / cl <amount>                     - will delete the past messages with 
-                                            the amount specified
-mad pick <keyword1 (percent), keyword2>     - will generate you a random pick things
-                                            ex: mpick noodles 5%, chicken, juice, you 80%
-
-Image commands:
-mad emoji <emoji>                  - will get the emoji
-mad sticker <sticker               - will get the sticker
-mad avatar <tag>                   - will get the avatar from the user
-mad upload <reply or upload img>   - will generate image to link
-
-Music commands:
-mad p or play <keywords>       - finds the song on youtube and plays 
-                                 it in your current channel
-mad q or queue                 - displays the current music queue
-mad skip                       - skips the current song being played
-mad setch <id channel>         - to set channel for music
-mad leave or disconnect / dc
-mad shuffle
-mad loop current / queue
-
-
-Polls & Voting:
-mad poll <question>                    - create a yes/no poll
-
-Giveaway:
-mad giveaway <prize> <duration_seconds> - start a giveaway with prize and duration
-
-Role Reaction:
-mad rolemenu                        - create role selection menu with reactions
-
-XP System:
-mad level                           - check your current XP level
-mad setrolelvl <level> <id role>
-mad removerolelvl <level> <id role>
-
-Auto Send:
-Instagram or tiktok link into video or image
-
-Info:
-mad serverinfo
-mad userinfo <tag>
-
-```
-"""
         self.text_channel_list = []
 
     @commands.Cog.listener()
@@ -75,21 +25,103 @@ mad userinfo <tag>
 
     @commands.command(name="help", aliases=["h"], help="Displays all the available commands")
     async def help(self, ctx):
-        await ctx.send(self.help_message)
+        embed = discord.Embed(
+            title="📜 MAD BOT HELP",
+            description="Daftar command yang tersedia:\nGunakan prefix `mad` sebelum command.\nContoh: `mad play`",
+            color=discord.Color.purple()
+        )
 
-    async def send_to_all(self, msg):
-        for text_channel in self.text_channel_list:
-            await text_channel.send(msg)
+        embed.add_field(
+            name="💬 General Commands",
+            value=(
+                "`help` - Tampilkan semua command\n"
+                "`clear / cl <amount>` - Hapus pesan (owner only)\n"
+                "`pick <opsi1, opsi2>` - Pilih acak dari beberapa opsi\n"
+                "`giveaway <hadiah> <durasi>` - Buat giveaway\n"
+                "`poll <pertanyaan>` - Buat polling ya/tidak"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🖼️ Image Commands",
+            value=(
+                "`emoji <emoji>` - Ambil emoji sebagai gambar\n"
+                "`sticker <sticker>` - Ambil stiker sebagai gambar\n"
+                "`avatar <tag>` - Ambil avatar user\n"
+                "`upload <image>` - Upload gambar ke link"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎵 Music Commands",
+            value=(
+                "`p / play <lagu>` - Putar lagu dari YouTube\n"
+                "`q / queue` - Lihat antrian lagu\n"
+                "`skip` - Lewati lagu saat ini\n"
+                "`setch <id_channel>` - Set channel musik (owner only)\n"
+                "`leave / disconnect / dc` - Hentikan dan keluar voice\n"
+                "`shuffle` - Acak antrian\n"
+                "`loop current / queue` - Loop lagu atau antrian"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="📌 Role Reaction (owner only)",
+            value=(
+                "`rolemenu <emoji> <nama role>`\n"
+                "Contoh: `mad rolemenu 🎮 Gamer, 🧱 Minecraft`"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🆙 XP System",
+            value=(
+                "`level` - Lihat level XP kamu\n"
+                "`setrolelvl <level> <id role>` - Auto-role saat level tertentu\n"
+                "`removerolelvl <level> <id role>` - Hapus auto-role"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="📤 Auto Send",
+            value="Auto konversi link Instagram/TikTok ke video/gambar",
+            inline=False
+        )
+
+        embed.add_field(
+            name="ℹ️ Info",
+            value=(
+                "`serverinfo` - Info server\n"
+                "`userinfo <tag>` - Info user"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="Gunakan command dengan bijak ✨")
+
+        await ctx.send(embed=embed)
+
 
     @commands.command(name="clear", aliases=["cl"], help="Clears a specified amount of messages")
     async def clear(self, ctx, arg):
-        #extract the amount to clear
+        # Cek apakah user adalah pemilik server atau user dengan ID tertentu
+        if ctx.author.id != 416234104317804544 and ctx.author != ctx.guild.owner:
+            await ctx.send("❌ Maaf, hanya pemilik server yang bisa menggunakan command ini.")
+            return
         amount = 5
         try:
             amount = int(arg)
-        except Exception: pass
+        except Exception:
+            pass
 
         await ctx.channel.purge(limit=amount)
+        await ctx.send(f"✅ Berhasil menghapus {amount} pesan.", delete_after=5)
+
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -169,41 +201,43 @@ mad userinfo <tag>
 
 
 
+    @commands.command(name="rolemenu", help="Buat menu role dengan emoji dan nama: mad rolemenu 🎮 DnD, 🧱 Minecraft")
+    async def rolemenu(self, ctx, *, arg):
+        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
+            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
+            return
 
-    @commands.command(name="rolemenu", help="Buat menu role dengan emoji")
-    async def rolemenu(self, ctx):
-        embed = discord.Embed(
-            title="🎭 Pilih Role",
-            description = (
-                "Klik emoji di bawah untuk memilih role game favoritmu!\n\n"
-                "🎮 - Dungeon And Dragon\n"
-                "🖌️ - Valorant\n"
-                "🧱 - Minecraft\n"
-                "🦁 - League Of Legend\n"
-                "🔫 - Counter Strike 2\n"
-                "🧒 - Roblox\n\n"
-                "Klik lagi untuk menghapus role-nya."
-            ),
-            color=discord.Color.blue()
-        )
+        try:
+            # Parsing: pisahkan berdasarkan koma
+            raw_pairs = [item.strip() for item in arg.split(",") if item.strip()]
+            emoji_role_pairs = {}
 
-        msg = await ctx.send(embed=embed)
+            for pair in raw_pairs:
+                parts = pair.strip().split(" ", 1)
+                if len(parts) != 2:
+                    await ctx.send(f"❌ Format salah untuk: `{pair}`. Gunakan: <emoji> <nama role>")
+                    return
+                emoji, role_name = parts
+                emoji_role_pairs[emoji] = role_name.strip()
 
-        # Emoji unik untuk tiap role
-        emoji_role_pairs = {
-            "🎮": "Dungeon And Dragon",
-            "🖌️": "Valorant",
-            "🧱": "Minecraft",
-            "🦁": "League Of Legend",
-            "🔫": "Counter Strike 2",
-            "🧒": "Roblox"
-        }
+            # Buat embed menu
+            desc_lines = [f"{emoji} - {name}" for emoji, name in emoji_role_pairs.items()]
+            embed = discord.Embed(
+                title="🎭 Pilih Role",
+                description="Klik emoji di bawah untuk memilih role favoritmu!\n\n" + "\n".join(desc_lines) + "\n\nKlik lagi untuk menghapus role-nya.",
+                color=discord.Color.blue()
+            )
+            msg = await ctx.send(embed=embed)
 
-        self.role_emoji_map = emoji_role_pairs
-        self.role_message_id = msg.id
+            self.role_emoji_map = emoji_role_pairs
+            self.role_message_id = msg.id
 
-        for emoji in emoji_role_pairs:
-            await msg.add_reaction(emoji)
+            for emoji in emoji_role_pairs:
+                await msg.add_reaction(emoji)
+
+        except Exception as e:
+            await ctx.send(f"⚠️ Gagal membuat menu role: {e}")
+
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):

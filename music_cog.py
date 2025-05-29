@@ -333,6 +333,10 @@ class music_cog(commands.Cog):
 
     @commands.command(name="setch", aliases=["setchannel"], help="Set channel khusus untuk kirim info musik")
     async def setch(self, ctx, channel: discord.TextChannel):
+        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
+            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
+            return
+
         guild_id = str(ctx.guild.id)
         channel_id = str(channel.id)
 

@@ -47,9 +47,8 @@ class LevelCog(commands.Cog):
 
     @commands.command(name="setrolelvl")
     async def set_role_level(self, ctx, level: int, role_id: int):
-        # Hanya owner server yang boleh pakai command ini
-        if ctx.author.id != ctx.guild.owner_id:
-            await ctx.send("❌ Hanya owner server yang dapat menggunakan command ini.")
+        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
+            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
             return
 
         guild_id = ctx.guild.id
@@ -66,8 +65,8 @@ class LevelCog(commands.Cog):
 
     @commands.command(name="removerolelvl")
     async def remove_role_level(self, ctx, level: int):
-        if ctx.author.id != ctx.guild.owner_id:
-            await ctx.send("❌ Hanya owner server yang dapat menggunakan command ini.")
+        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
+            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
             return
 
         guild_id = ctx.guild.id
