@@ -192,7 +192,9 @@ class link_cog(commands.Cog):
 
             await message.channel.typing()
             try:
-                file_path = await asyncio.to_thread(self.download_instagram_post, url)
+                loop = asyncio.get_running_loop()
+                file_path = await loop.run_in_executor(None, self.download_instagram_post, url)
+
 
                 mime, _ = mimetypes.guess_type(file_path)
                 if not mime or not mime.startswith(('image', 'video')):
@@ -222,7 +224,9 @@ class link_cog(commands.Cog):
         elif "tiktok.com" in content:
             await message.channel.typing()
             try:
-                file_path = await asyncio.to_thread(self.download_media_yt_dlp, message.content)
+                loop = asyncio.get_running_loop()
+                file_path = await loop.run_in_executor(None, self.download_media_yt_dlp, message.content)
+
 
                 mime, _ = mimetypes.guess_type(file_path)
                 if not mime or not mime.startswith(('image', 'video')):
