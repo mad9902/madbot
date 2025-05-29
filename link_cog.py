@@ -12,53 +12,54 @@ import requests
 
 INSTAGRAM_POST_RE = re.compile(r"(https?://(?:www\.)?instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+))")
 
-def __init__(self, bot):
-    self.bot = bot
-    self.media_folder = 'media'
-    if not os.path.exists(self.media_folder):
-        os.makedirs(self.media_folder)
+class link_cog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.media_folder = 'media'
+        if not os.path.exists(self.media_folder):
+            os.makedirs(self.media_folder)
 
-    # Bersihkan folder media saat inisialisasi (misal server restart)
-    self.clean_media_folder()
+        # Bersihkan folder media saat inisialisasi (misal server restart)
+        self.clean_media_folder()
 
-    # Ambil dari environment variables
-    self.insta_user = os.getenv('INSTA_USER')
-    self.insta_pass = os.getenv('INSTA_PASS')
+        # Ambil dari environment variables
+        self.insta_user = os.getenv('INSTA_USER')
+        self.insta_pass = os.getenv('INSTA_PASS')
 
-    if not self.insta_user:
-        print("[ERROR] Username Instagram tidak ditemukan di environment variables!")
-        self.L = None
-        return
-
-    # Setup instaloader
-    self.L = instaloader.Instaloader(
-        download_videos=True,
-        download_pictures=True,
-        save_metadata=False,
-        quiet=True
-    )
-
-    # Lokasi folder session — cross-platform
-    session_folder = os.path.join(os.getcwd(), "insta_sessions")
-    os.makedirs(session_folder, exist_ok=True)
-
-    self.session_file = os.path.join(session_folder, f"{self.insta_user}.session")
-
-    try:
-        if os.path.exists(self.session_file):
-            self.L.load_session_from_file(self.insta_user, self.session_file)
-            print("[INFO] Instaloader session loaded.")
-        elif self.insta_pass:
-            print("[INFO] Login ke Instagram (pertama kali)...")
-            self.L.login(self.insta_user, self.insta_pass)
-            self.L.save_session_to_file(filename=self.session_file)
-            print("[INFO] Session Instagram disimpan.")
-        else:
-            print("[ERROR] File session tidak ditemukan dan tidak bisa login (password tidak disediakan).")
+        if not self.insta_user:
+            print("[ERROR] Username Instagram tidak ditemukan di environment variables!")
             self.L = None
-    except Exception as e:
-        print(f"[ERROR] Gagal load atau login session Instaloader: {e}")
-        self.L = None
+            return
+
+        # Setup instaloader
+        self.L = instaloader.Instaloader(
+            download_videos=True,
+            download_pictures=True,
+            save_metadata=False,
+            quiet=True
+        )
+
+        # Lokasi folder session — cross-platform
+        session_folder = os.path.join(os.getcwd(), "insta_sessions")
+        os.makedirs(session_folder, exist_ok=True)
+
+        self.session_file = os.path.join(session_folder, f"{self.insta_user}.session")
+
+        try:
+            if os.path.exists(self.session_file):
+                self.L.load_session_from_file(self.insta_user, self.session_file)
+                print("[INFO] Instaloader session loaded.")
+            elif self.insta_pass:
+                print("[INFO] Login ke Instagram (pertama kali)...")
+                self.L.login(self.insta_user, self.insta_pass)
+                self.L.save_session_to_file(filename=self.session_file)
+                print("[INFO] Session Instagram disimpan.")
+            else:
+                print("[ERROR] File session tidak ditemukan dan tidak bisa login (password tidak disediakan).")
+                self.L = None
+        except Exception as e:
+            print(f"[ERROR] Gagal load atau login session Instaloader: {e}")
+            self.L = None
 
 
     def clean_media_folder(self):
