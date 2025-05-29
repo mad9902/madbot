@@ -5,15 +5,19 @@ import os
 import asyncio
 import mimetypes
 import glob
-import instaloader
 import shutil
 import re
-import requests
 import logging
 
 logger = logging.getLogger('link_cog')
+logger.setLevel(logging.DEBUG)  # atur sesuai kebutuhan
+ch = logging.StreamHandler()
+formatter = logging.Formatter('[%(levelname)s] %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
-INSTAGRAM_POST_RE = re.compile(r"(https?://(?:www\.)?instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+)/?)")
+INSTAGRAM_RE = re.compile(r"(https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/[A-Za-z0-9_-]+/?)+")
+TIKTOK_RE = re.compile(r"(https?://(?:www\.)?tiktok\.com/[^\s]+)")
 
 class link_cog(commands.Cog):
     def __init__(self, bot):
@@ -22,45 +26,6 @@ class link_cog(commands.Cog):
         if not os.path.exists(self.media_folder):
             os.makedirs(self.media_folder)
             logger.info(f"Folder media dibuat: {self.media_folder}")
-
-        self.clean_media_folder()
-
-        self.insta_user = os.getenv('INSTA_USER')
-        self.insta_pass = os.getenv('INSTA_PASS')
-
-        if not self.insta_user:
-            logger.error("Username Instagram tidak ditemukan di environment variables!")
-            self.L = None
-            return
-
-        self.L = instaloader.Instaloader(
-            download_videos=True,
-            download_pictures=True,
-            save_metadata=False,
-            quiet=True
-        )
-
-        session_folder = os.path.join(os.getcwd(), "insta_sessions")
-        os.makedirs(session_folder, exist_ok=True)
-        logger.info(f"Folder session Instagram: {session_folder}")
-
-        self.session_file = os.path.join(session_folder, f"{self.insta_user}.session")
-
-        try:
-            if os.path.exists(self.session_file):
-                self.L.load_session_from_file(self.insta_user, self.session_file)
-                logger.info("Instaloader session loaded dari file.")
-            elif self.insta_pass:
-                logger.info("Login ke Instagram dengan username & password...")
-                self.L.login(self.insta_user, self.insta_pass)
-                self.L.save_session_to_file(filename=self.session_file)
-                logger.info("Session Instagram disimpan.")
-            else:
-                logger.error("File session tidak ditemukan dan password tidak disediakan.")
-                self.L = None
-        except Exception as e:
-            logger.error(f"Gagal load atau login session Instaloader: {e}")
-            self.L = None
 
     def clean_media_folder(self):
         files = glob.glob(os.path.join(self.media_folder, '*'))
@@ -75,78 +40,14 @@ class link_cog(commands.Cog):
             except Exception as e:
                 logger.error(f"Gagal hapus {f}: {e}")
 
-    def download_instagram_post(self, url):
-        if not self.L:
-            raise Exception("Instaloader belum terinisialisasi (gagal login).")
-
-        match = INSTAGRAM_POST_RE.search(url)
-        if not match:
-            raise Exception("URL Instagram tidak valid atau shortcode tidak ditemukan.")
-        shortcode = match.group(2)
-        logger.info(f"Shortcode diambil: {shortcode}")
-
-        post = instaloader.Post.from_shortcode(self.L.context, shortcode)
-        target_folder = os.path.join(self.media_folder, shortcode)
-        if not os.path.exists(target_folder):
-            os.makedirs(target_folder)
-            logger.debug(f"Folder target dibuat: {target_folder}")
-
-        if post.typename == 'GraphSidecar':
-            nodes = list(post.get_sidecar_nodes())
-            logger.info(f"Post carousel dengan {len(nodes)} media.")
-            for idx, node in enumerate(nodes):
-                if node.is_video:
-                    media_url = node.video_url
-                    ext = '.mp4'
-                else:
-                    media_url = node.display_url
-                    ext = '.jpg'
-
-                filename = os.path.join(target_folder, f"{shortcode}_{idx}{ext}")
-                logger.debug(f"Download media carousel idx {idx}: {media_url}")
-
-                r = requests.get(media_url, stream=True)
-                if r.status_code == 200:
-                    with open(filename, 'wb') as f:
-                        for chunk in r.iter_content(1024):
-                            f.write(chunk)
-                    logger.debug(f"Media {idx} berhasil diunduh: {filename}")
-                else:
-                    logger.error(f"Gagal download media {idx} dari carousel, status code: {r.status_code}")
-        else:
-            if post.is_video:
-                media_url = post.video_url
-                ext = '.mp4'
-            else:
-                media_url = post.url
-                ext = '.jpg'
-            filename = os.path.join(target_folder, shortcode + ext)
-            logger.info(f"Download media single post: {media_url}")
-
-            r = requests.get(media_url, stream=True)
-            if r.status_code == 200:
-                with open(filename, 'wb') as f:
-                    for chunk in r.iter_content(1024):
-                        f.write(chunk)
-                logger.info(f"Media berhasil diunduh: {filename}")
-            else:
-                raise Exception(f"Gagal download media, status code {r.status_code}")
-
-        files = os.listdir(target_folder)
-        if files:
-            logger.debug(f"File hasil download: {files}")
-            return os.path.join(target_folder, files[0])
-        else:
-            raise FileNotFoundError("Media tidak ditemukan setelah download.")
-
     def download_media_yt_dlp(self, url):
         self.clean_media_folder()
         ydl_opts = {
             'outtmpl': os.path.join(self.media_folder, '%(id)s.%(ext)s'),
-            'format': 'best',
-            'quiet': False,
+            'format': 'bestvideo+bestaudio/best',
+            'quiet': True,
             'noplaylist': True,
-            'no_warnings': False,
+            'no_warnings': True,
             'ignoreerrors': False,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -154,10 +55,18 @@ class link_cog(commands.Cog):
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            if not info:
-                raise FileNotFoundError("Info media tidak didapatkan.")
-
+            try:
+                info = ydl.extract_info(url, download=True)
+                if not info:
+                    raise FileNotFoundError("Info media tidak didapatkan.")
+            except yt_dlp.utils.DownloadError as e:
+                err_msg = str(e)
+                if "There is no video in this post" in err_msg:
+                    logger.warning(f"Tidak ada video di post Instagram: {url}")
+                    return None
+                else:
+                    raise
+        # Cari file hasil download
         files = glob.glob(os.path.join(self.media_folder, '*'))
         if not files:
             raise FileNotFoundError("File hasil download tidak ditemukan.")
@@ -173,93 +82,45 @@ class link_cog(commands.Cog):
 
         content = message.content.lower()
 
-        # Cek apakah ada link Instagram
-        if "instagram.com/p/" in content or "instagram.com/reel/" in content:
-            match = INSTAGRAM_POST_RE.search(message.content)
-            if not match:
-                await message.channel.send("URL Instagram tidak valid atau tidak ditemukan.")
-                logger.error("URL Instagram tidak valid saat pesan diterima.")
-                return
-
-            url = match.group(1)
-            shortcode = match.group(2)
-            logger.info(f"Pesan Instagram diterima dengan shortcode: {shortcode}")
-
-            await message.channel.typing()
-            loop = asyncio.get_running_loop()
-            file_path = None
-
-            # Coba download dengan instaloader jika tersedia
-            if self.L:
-                try:
-                    file_path = await loop.run_in_executor(None, self.download_instagram_post, url)
-                    logger.info("Berhasil download menggunakan Instaloader.")
-                except Exception as e:
-                    logger.warning(f"Gagal menggunakan Instaloader: {e}")
-            
-            # Jika instaloader gagal atau tidak tersedia, pakai yt_dlp
-            if not file_path:
-                try:
-                    file_path = await loop.run_in_executor(None, self.download_media_yt_dlp, url)
-                    logger.info("Berhasil download menggunakan yt_dlp sebagai fallback.")
-                except Exception as e:
-                    await message.channel.send("Gagal mengambil media dari Instagram.")
-                    logger.error(f"Gagal download media dengan yt_dlp: {e}")
-                    return
-
-            # Validasi dan upload ke Discord
-            try:
-                mime, _ = mimetypes.guess_type(file_path)
-                if not mime or not mime.startswith(('image', 'video')):
-                    await message.channel.send("Jenis file tidak dikenali.")
-                    logger.error(f"Jenis file tidak dikenali: {file_path} dengan MIME {mime}")
-                    return
-
-                size_mb = os.path.getsize(file_path) / (1024 * 1024)
-                if size_mb > 8:
-                    await message.channel.send(f"File terlalu besar untuk diupload ke Discord (max 8MB). Ukuran file: {size_mb:.2f} MB")
-                    logger.error(f"File terlalu besar: {file_path}, ukuran {size_mb:.2f} MB")
-                    return
-
-                await message.channel.send(file=discord.File(file_path))
-            except Exception as e:
-                await message.channel.send("Terjadi kesalahan saat mengirim file ke Discord.")
-                logger.error(f"Error saat mengirim file: {e}")
-            finally:
-                try:
-                    os.remove(file_path)
-                    parent_dir = os.path.dirname(file_path)
-                    if os.path.exists(parent_dir) and not os.listdir(parent_dir):
-                        os.rmdir(parent_dir)
-                    logger.debug("File dan folder sementara berhasil dihapus.")
-                except Exception as e:
-                    logger.warning(f"Gagal hapus file/folder setelah upload: {e}")
-
-
-        elif "tiktok.com" in content:
+        if INSTAGRAM_RE.search(content) or TIKTOK_RE.search(content):
             await message.channel.typing()
             try:
                 loop = asyncio.get_running_loop()
                 file_path = await loop.run_in_executor(None, self.download_media_yt_dlp, message.content)
 
+                if file_path is None:
+                    logger.info("Media pada link tersebut bukan video, jadi tidak bisa dikirim.") 
+                    return
+
                 mime, _ = mimetypes.guess_type(file_path)
-                if not mime or not mime.startswith(('image', 'video')):
-                    await message.channel.send("Jenis file tidak dikenali.")
-                    logger.error(f"Jenis file tidak dikenali: {file_path} dengan MIME {mime}")
+                if not mime or not mime.startswith('video'):
+                    logger.info(f"File yang didownload bukan video, diabaikan: {file_path} dengan MIME {mime}")
+                    os.remove(file_path)
+                       
                     return
 
                 size_mb = os.path.getsize(file_path) / (1024 * 1024)
                 if size_mb > 8:
                     await message.channel.send(f"File terlalu besar untuk diupload ke Discord (max 8MB). Ukuran file: {size_mb:.2f} MB")
                     logger.error(f"File terlalu besar untuk upload: {file_path}, ukuran {size_mb:.2f} MB")
+                    try:
+                        os.remove(file_path)
+                        logger.debug("File besar dihapus setelah dicek.")
+                    except Exception as e:
+                        logger.error(f"Gagal hapus file besar: {e}")
                     return
 
                 await message.channel.send(file=discord.File(file_path))
-                os.remove(file_path)
-                logger.debug("File hasil download TikTok berhasil dihapus setelah upload.")
+
+                try:
+                    os.remove(file_path)
+                    logger.debug("File hasil download berhasil dihapus setelah upload.")
+                except Exception as e:
+                    logger.error(f"Gagal hapus file setelah upload: {e}")
+
             except Exception as e:
-                await message.channel.send("Gagal mengambil media dari TikTok.")
-                logger.error(f"Gagal download TikTok media: {e}")
+                await message.channel.send("Gagal mengambil media dari link.")
+                logger.error(f"Gagal download media dengan yt_dlp: {e}")
 
 async def setup(bot):
     await bot.add_cog(link_cog(bot))
