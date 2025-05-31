@@ -1,11 +1,13 @@
 import discord
 from discord.ext import commands
-import os, shutil, random
+import os
+import shutil
 import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
 IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
+
 
 class image_cog(commands.Cog):
     def __init__(self, bot):
@@ -28,28 +30,17 @@ class image_cog(commands.Cog):
             except Exception as e:
                 print(f'Gagal hapus {file_path}. Alasan: {e}')
 
-    import os
-import aiohttp
-import discord
-from discord.ext import commands
-from dotenv import load_dotenv
-
-load_dotenv()
-IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
-
-class image_cog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.download_folder = 'downloads'
-        if not os.path.exists(self.download_folder):
-            os.makedirs(self.download_folder)
-
     async def upload_to_imgur(self, image_path):
         headers = {"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"}
         url = "https://api.imgur.com/3/image"
 
+        # baca file sebagai bytes untuk upload multipart/form-data
         with open(image_path, 'rb') as img:
-            data = {'image': img.read()}
+            img_bytes = img.read()
+
+        # untuk aiohttp harus dikirim dalam data sebagai dict dengan key 'image'
+        data = aiohttp.FormData()
+        data.add_field('image', img_bytes)
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, data=data) as resp:
@@ -59,6 +50,7 @@ class image_cog(commands.Cog):
                     image_type = json_resp['data']['type'].split('/')[-1]
                     return f"https://i.imgur.com/{image_id}.{image_type}"
                 else:
+                    print(f"Imgur upload gagal, status: {resp.status}")
                     return None
 
     @commands.command(name="upload", help="Upload gambar dari attachment atau reply ke Imgur")
@@ -87,22 +79,23 @@ class image_cog(commands.Cog):
 
         try:
             os.remove(filename)
-        except:
-            pass
+        except Exception as e:
+            print(f"Gagal hapus file sementara: {e}")
 
         if link:
             await ctx.send(f"✅ Gambar berhasil diupload ke Imgur:\n{link}")
         else:
             await ctx.send("❌ Gagal mengupload gambar ke Imgur.")
 
-
     @commands.command(name="avatar", help="Menampilkan avatar dari user")
     async def avatar(self, ctx, member: discord.Member = None):
         member = member or ctx.author
-        avatar_url = member.display_avatar.url
+        avatar_url = member.display_avatar.url  # Sudah otomatis gif jika animasi
+
         embed = discord.Embed(title=f"Avatar {member.display_name}")
         embed.set_image(url=avatar_url)
         await ctx.send(embed=embed)
+
 
     @commands.command(name="emoji", help="Download emoji sebagai gambar (custom atau unicode)")
     async def emoji(self, ctx, *, emoji_input: str):
@@ -116,6 +109,7 @@ class image_cog(commands.Cog):
             url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{file_ext}"
             filename = f"custom_{emoji_id}.{file_ext}"
         else:
+            # Unicode emoji selalu png (twemoji)
             codepoints = '-'.join(f"{ord(c):x}" for c in emoji_input)
             url = f"https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/{codepoints}.png"
             filename = f"unicode_{codepoints}.png"
@@ -127,10 +121,12 @@ class image_cog(commands.Cog):
                 if resp.status != 200:
                     await ctx.send("Gagal mendownload emoji.")
                     return
+                data = await resp.read()
                 with open(path, 'wb') as f:
-                    f.write(await resp.read())
+                    f.write(data)
 
         await ctx.send(file=discord.File(path))
+
 
     @commands.command(name="sticker", help="Download sticker dari pesan yang direply")
     async def sticker(self, ctx):
@@ -138,7 +134,9 @@ class image_cog(commands.Cog):
             replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
             if replied.stickers:
                 sticker = replied.stickers[0]
-                filename = f"{sticker.name}.png"
+                # Gunakan ekstensi sesuai URL stiker (biasanya .png atau .gif)
+                ext = sticker.url.split('.')[-1].split('?')[0]
+                filename = f"{sticker.name}.{ext}"
                 path = os.path.join(self.download_folder, filename)
 
                 async with aiohttp.ClientSession() as session:
@@ -146,11 +144,13 @@ class image_cog(commands.Cog):
                         if resp.status != 200:
                             await ctx.send("Gagal mendownload stiker.")
                             return
+                        data = await resp.read()
                         with open(path, 'wb') as f:
-                            f.write(await resp.read())
+                            f.write(data)
 
                 await ctx.send(file=discord.File(path))
             else:
                 await ctx.send("Pesan yang direply tidak mengandung stiker.")
         else:
             await ctx.send("Reply pesan yang mengandung stiker untuk menggunakan perintah ini.")
+
