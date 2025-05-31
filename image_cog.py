@@ -1,16 +1,27 @@
 import discord
 from discord.ext import commands
 from PIL import Image, ImageOps
+import subprocess
+from bs4 import BeautifulSoup
 import io
 import aiohttp
 import os
 import shutil
+import re
 import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
 IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
 
+def guess_ext_from_bytes(data: bytes) -> str:
+        if data.startswith(b'GIF87a') or data.startswith(b'GIF89a'):
+            return "gif"
+        if data.startswith(b'RIFF') and data[8:12] == b'WEBP':
+            return "webp"
+        if data.startswith(b'\x89PNG\r\n\x1a\n'):
+            return "png"
+        return "bin"
 
 class image_cog(commands.Cog):
     def __init__(self, bot):
@@ -90,32 +101,42 @@ class image_cog(commands.Cog):
         else:
             await ctx.send("❌ Gagal mengupload gambar ke Imgur.")
 
-    @commands.command(name="avatar", help="Menampilkan avatar user dengan background")
+    @commands.command(name="avatar", help="Menampilkan avatar dan banner user (jika ada) dalam gaya profil Discord")
     async def avatar(self, ctx, member: discord.Member = None):
         member = member or ctx.author
-        avatar_url = member.display_avatar.with_size(256).with_static_format('png').url
+        user_id = member.id
+        token = ctx.bot.http.token
 
+        avatar_url = member.display_avatar.url
+        username = f"{member.name}#{member.discriminator}"
+
+        # Ambil banner user dari Discord API
         async with aiohttp.ClientSession() as session:
-            async with session.get(avatar_url) as resp:
+            headers = {"Authorization": f"Bot {token}"}
+            async with session.get(f"https://discord.com/api/v10/users/{user_id}", headers=headers) as resp:
                 if resp.status != 200:
-                    await ctx.send("Gagal mengambil avatar.")
+                    await ctx.send("Gagal mengambil data user.")
                     return
-                avatar_bytes = await resp.read()
+                data = await resp.json()
 
-        avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+        banner_hash = data.get("banner")
 
-        bg = Image.open("background.png").convert("RGBA")
+        embed = discord.Embed(
+            title=username,
+            description=f"ID: `{user_id}`",
+            color=discord.Color.blurple()
+        )
 
-        avatar_img = ImageOps.fit(avatar_img, (128, 128), method=Image.LANCZOS)
+        if banner_hash:
+            ext = "gif" if banner_hash.startswith("a_") else "png"
+            banner_url = f"https://cdn.discordapp.com/banners/{user_id}/{banner_hash}.{ext}?size=1024"
+            embed.set_image(url=banner_url)
+            embed.set_thumbnail(url=avatar_url)
+        else:
+            # Jika tidak ada banner, avatar jadi gambar utama
+            embed.set_image(url=avatar_url)
 
-        bg_w, bg_h = bg.size
-        avatar_pos = ((bg_w - 128) // 2, (bg_h - 128) // 2)
-        bg.paste(avatar_img, avatar_pos, avatar_img)
-
-        with io.BytesIO() as image_binary:
-            bg.save(image_binary, "PNG")
-            image_binary.seek(0)
-            await ctx.send(file=discord.File(fp=image_binary, filename="avatar.png"))
+        await ctx.send(embed=embed)
 
 
     @commands.command(name="emoji", help="Download emoji custom dengan ID atau mention")
@@ -156,28 +177,97 @@ class image_cog(commands.Cog):
             await ctx.send("Gagal mendownload emoji dengan ID tersebut.")
 
 
-
-    @commands.command(name="sticker", help="Download sticker dari ID")
+    @commands.command(name="sticker", help="Download sticker dari ID (PNG, APNG, atau animasi WebP/GIF)")
     async def sticker(self, ctx, sticker_id: int):
-        url_png = f"https://cdn.discordapp.com/stickers/{sticker_id}.png"
-        url_gif = f"https://cdn.discordapp.com/stickers/{sticker_id}.gif"
+        try:
+            await ctx.send(f"🔍 Mengambil data stiker untuk ID `{sticker_id}`...")
 
-        path = None
-        async with aiohttp.ClientSession() as session:
-            for url in [url_gif, url_png]:
+            token = self.bot.http.token
+            async with aiohttp.ClientSession() as session:
+                headers = {"Authorization": f"Bot {token}"}
+                async with session.get(f"https://discord.com/api/v10/stickers/{sticker_id}", headers=headers) as resp:
+                    if resp.status != 200:
+                        await ctx.send("❌ Gagal mengambil data stiker.")
+                        return
+                    data = await resp.json()
+
+                format_type = data.get("format_type")
+                name = data.get("name", f"sticker_{sticker_id}")
+
+                if format_type == 3:
+                    await ctx.send(
+                        f"⚠️ Sticker **{name}** adalah animasi Lottie dan tidak bisa diunduh langsung.\n"
+                        f"Lihat preview: https://discord.com/stickers/{sticker_id}"
+                    )
+                    return
+
+                if format_type in [1, 2]:
+                    ext = "png" if format_type == 1 else "apng"
+                elif format_type == 4:
+                    ext = "webp"
+                else:
+                    await ctx.send("❌ Format sticker tidak dikenali atau tidak didukung.")
+                    return
+
+                url = f"https://cdn.discordapp.com/stickers/{sticker_id}.{ext}"
+                filename = f"{name}.{ext}"
+                path = os.path.join(self.download_folder, filename)
+
                 async with session.get(url) as resp:
                     if resp.status == 200:
-                        ext = url.split('.')[-1]
-                        filename = f"sticker_{sticker_id}.{ext}"
-                        path = os.path.join(self.download_folder, filename)
-                        data = await resp.read()
-                        with open(path, 'wb') as f:
-                            f.write(data)
-                        break
+                        content = await resp.read()
+                        with open(path, "wb") as f:
+                            f.write(content)
 
-        if path:
-            await ctx.send(file=discord.File(path))
-        else:
-            await ctx.send("Gagal mendownload sticker dengan ID tersebut.")
+                        await ctx.send(file=discord.File(path, filename=filename))
+                        return
+                    else:
+                        preview_url = f"https://discord.com/stickers/{sticker_id}"
+                        async with session.get(preview_url) as preview_resp:
+                            if preview_resp.status != 200:
+                                await ctx.send("❌ Gagal mengambil halaman preview sticker.")
+                                return
+
+                            content_type = preview_resp.headers.get("content-type", "")
+                            if content_type.startswith("text/html"):
+                                html = await preview_resp.text()
+                                soup = BeautifulSoup(html, "html.parser")
+                                video_tag = soup.find("video")
+                                if video_tag and video_tag.has_attr("src"):
+                                    video_url = video_tag["src"]
+                                    ext_video = "gif" if video_url.lower().endswith(".gif") else "mp4"
+                                    filename_video = f"{name}.{ext_video}"
+                                    path_video = os.path.join(self.download_folder, filename_video)
+
+                                    async with session.get(video_url) as video_resp:
+                                        if video_resp.status != 200:
+                                            await ctx.send("❌ Gagal mengunduh file animasi dari preview.")
+                                            return
+                                        content = await video_resp.read()
+                                        with open(path_video, "wb") as f:
+                                            f.write(content)
+                                    await ctx.send(file=discord.File(path_video, filename=filename_video))
+                                    return
+                                else:
+                                    await ctx.send(
+                                        f"⚠️ Sticker **{name}** adalah animasi dan preview video tidak ditemukan.\n"
+                                        f"Lihat preview: {preview_url}"
+                                    )
+                                    return
+                            else:
+                                content_bytes = await preview_resp.read()
+                                ext_real = guess_ext_from_bytes(content_bytes)
+                                filename_real = f"{name}.{ext_real}"
+                                path_real = os.path.join(self.download_folder, filename_real)
+                                with open(path_real, "wb") as f:
+                                    f.write(content_bytes)
+                                await ctx.send(file=discord.File(path_real, filename=filename_real))
+                                return
+
+        except Exception as e:
+            print(f"[ERROR] {e}")
+            await ctx.send(f"❌ Terjadi kesalahan: `{e}`")
+
+
 
 
