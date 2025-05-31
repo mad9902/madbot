@@ -1,5 +1,8 @@
 import discord
 from discord.ext import commands
+from PIL import Image, ImageOps
+import io
+import aiohttp
 import os
 import shutil
 import aiohttp
@@ -87,70 +90,94 @@ class image_cog(commands.Cog):
         else:
             await ctx.send("❌ Gagal mengupload gambar ke Imgur.")
 
-    @commands.command(name="avatar", help="Menampilkan avatar dari user")
+    @commands.command(name="avatar", help="Menampilkan avatar user dengan background")
     async def avatar(self, ctx, member: discord.Member = None):
         member = member or ctx.author
-        avatar_url = member.display_avatar.url  # Sudah otomatis gif jika animasi
+        avatar_url = member.display_avatar.with_size(256).with_static_format('png').url
 
-        embed = discord.Embed(title=f"Avatar {member.display_name}")
-        embed.set_image(url=avatar_url)
-        await ctx.send(embed=embed)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(avatar_url) as resp:
+                if resp.status != 200:
+                    await ctx.send("Gagal mengambil avatar.")
+                    return
+                avatar_bytes = await resp.read()
+
+        avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+
+        bg = Image.open("background.png").convert("RGBA")
+
+        avatar_img = ImageOps.fit(avatar_img, (128, 128), method=Image.LANCZOS)
+
+        bg_w, bg_h = bg.size
+        avatar_pos = ((bg_w - 128) // 2, (bg_h - 128) // 2)
+        bg.paste(avatar_img, avatar_pos, avatar_img)
+
+        with io.BytesIO() as image_binary:
+            bg.save(image_binary, "PNG")
+            image_binary.seek(0)
+            await ctx.send(file=discord.File(fp=image_binary, filename="avatar.png"))
 
 
-    @commands.command(name="emoji", help="Download emoji sebagai gambar (custom atau unicode)")
-    async def emoji(self, ctx, *, emoji_input: str):
+    @commands.command(name="emoji", help="Download emoji custom dengan ID atau mention")
+    async def emoji(self, ctx, emoji_input: str):
         import re
 
         custom_emoji_match = re.match(r'<(a)?:\w+:(\d+)>', emoji_input)
         if custom_emoji_match:
             is_animated = custom_emoji_match.group(1) == 'a'
             emoji_id = custom_emoji_match.group(2)
-            file_ext = 'gif' if is_animated else 'png'
-            url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{file_ext}"
-            filename = f"custom_{emoji_id}.{file_ext}"
         else:
-            # Unicode emoji selalu png (twemoji)
-            codepoints = '-'.join(f"{ord(c):x}" for c in emoji_input)
-            url = f"https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/{codepoints}.png"
-            filename = f"unicode_{codepoints}.png"
+            emoji_id = emoji_input
+            is_animated = False 
 
-        path = os.path.join(self.download_folder, filename)
+        ext = 'gif' if is_animated else 'png'
 
+        urls_to_try = [
+            f"https://cdn.discordapp.com/emojis/{emoji_id}.gif",
+            f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
+        ]
+
+        path = None
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    await ctx.send("Gagal mendownload emoji.")
-                    return
-                data = await resp.read()
-                with open(path, 'wb') as f:
-                    f.write(data)
-
-        await ctx.send(file=discord.File(path))
-
-
-    @commands.command(name="sticker", help="Download sticker dari pesan yang direply")
-    async def sticker(self, ctx):
-        if ctx.message.reference:
-            replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            if replied.stickers:
-                sticker = replied.stickers[0]
-                # Gunakan ekstensi sesuai URL stiker (biasanya .png atau .gif)
-                ext = sticker.url.split('.')[-1].split('?')[0]
-                filename = f"{sticker.name}.{ext}"
-                path = os.path.join(self.download_folder, filename)
-
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(sticker.url) as resp:
-                        if resp.status != 200:
-                            await ctx.send("Gagal mendownload stiker.")
-                            return
+            for url in urls_to_try:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        ext = url.split('.')[-1]
+                        filename = f"emoji_{emoji_id}.{ext}"
+                        path = os.path.join(self.download_folder, filename)
                         data = await resp.read()
                         with open(path, 'wb') as f:
                             f.write(data)
+                        break
 
-                await ctx.send(file=discord.File(path))
-            else:
-                await ctx.send("Pesan yang direply tidak mengandung stiker.")
+        if path:
+            await ctx.send(file=discord.File(path))
         else:
-            await ctx.send("Reply pesan yang mengandung stiker untuk menggunakan perintah ini.")
+            await ctx.send("Gagal mendownload emoji dengan ID tersebut.")
+
+
+
+    @commands.command(name="sticker", help="Download sticker dari ID")
+    async def sticker(self, ctx, sticker_id: int):
+        url_png = f"https://cdn.discordapp.com/stickers/{sticker_id}.png"
+        url_gif = f"https://cdn.discordapp.com/stickers/{sticker_id}.gif"
+
+        path = None
+        async with aiohttp.ClientSession() as session:
+            for url in [url_gif, url_png]:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        ext = url.split('.')[-1]
+                        filename = f"sticker_{sticker_id}.{ext}"
+                        path = os.path.join(self.download_folder, filename)
+                        data = await resp.read()
+                        with open(path, 'wb') as f:
+                            f.write(data)
+                        break
+
+        if path:
+            await ctx.send(file=discord.File(path))
+        else:
+            await ctx.send("Gagal mendownload sticker dengan ID tersebut.")
+
 
