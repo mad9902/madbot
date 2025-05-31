@@ -127,9 +127,10 @@ class image_cog(commands.Cog):
 
         embed = discord.Embed(
             title=username,
-            description=f"ID: `{user_id}`",
+            description=f"ID: `{user_id}`\n\n\u200b",  # tambahkan newline + zero width space supaya ada spasi bawah
             color=discord.Color.blurple()
         )
+
 
         if banner_hash:
             ext = "gif" if banner_hash.startswith("a_") else "png"
