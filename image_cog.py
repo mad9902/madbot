@@ -186,13 +186,16 @@ class image_cog(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 headers = {"Authorization": f"Bot {token}"}
                 async with session.get(f"https://discord.com/api/v10/stickers/{sticker_id}", headers=headers) as resp:
+                    print(f"[DEBUG] API sticker status: {resp.status}")
                     if resp.status != 200:
                         await ctx.send("❌ Gagal mengambil data stiker.")
                         return
                     data = await resp.json()
+                    print(f"[DEBUG] Sticker API data: {data}")
 
                 format_type = data.get("format_type")
                 name = data.get("name", f"sticker_{sticker_id}")
+                print(f"[DEBUG] format_type={format_type}, name={name}")
 
                 if format_type == 3:
                     await ctx.send(
@@ -212,40 +215,56 @@ class image_cog(commands.Cog):
                 url = f"https://cdn.discordapp.com/stickers/{sticker_id}.{ext}"
                 filename = f"{name}.{ext}"
                 path = os.path.join(self.download_folder, filename)
+                print(f"[DEBUG] Downloading sticker file from URL: {url}")
 
                 async with session.get(url) as resp:
+                    print(f"[DEBUG] CDN sticker file status: {resp.status}")
                     if resp.status == 200:
                         content = await resp.read()
                         with open(path, "wb") as f:
                             f.write(content)
 
+                        print(f"[DEBUG] Sticker file saved to {path}")
                         await ctx.send(file=discord.File(path, filename=filename))
                         return
                     else:
                         preview_url = f"https://discord.com/stickers/{sticker_id}"
+                        print(f"[DEBUG] CDN sticker file failed, trying preview page: {preview_url}")
                         async with session.get(preview_url) as preview_resp:
-                            if preview_resp.status != 200:
+                            print(f"[DEBUG] Preview page status: {preview_resp.status}")
+
+                            if resp.status == 404:
+                                await ctx.send("⚠️ Stiker APNG ini tidak tersedia untuk diunduh karena keterbatasan akses CDN Discord.")
+                                return
+                        
+                            elif preview_resp.status != 200:
                                 await ctx.send("❌ Gagal mengambil halaman preview sticker.")
                                 return
+                            
 
                             content_type = preview_resp.headers.get("content-type", "")
+                            print(f"[DEBUG] Preview page content-type: {content_type}")
+
                             if content_type.startswith("text/html"):
                                 html = await preview_resp.text()
                                 soup = BeautifulSoup(html, "html.parser")
                                 video_tag = soup.find("video")
                                 if video_tag and video_tag.has_attr("src"):
                                     video_url = video_tag["src"]
+                                    print(f"[DEBUG] Found video URL in preview page: {video_url}")
                                     ext_video = "gif" if video_url.lower().endswith(".gif") else "mp4"
                                     filename_video = f"{name}.{ext_video}"
                                     path_video = os.path.join(self.download_folder, filename_video)
 
                                     async with session.get(video_url) as video_resp:
+                                        print(f"[DEBUG] Video file status: {video_resp.status}")
                                         if video_resp.status != 200:
                                             await ctx.send("❌ Gagal mengunduh file animasi dari preview.")
                                             return
                                         content = await video_resp.read()
                                         with open(path_video, "wb") as f:
                                             f.write(content)
+                                    print(f"[DEBUG] Video file saved to {path_video}")
                                     await ctx.send(file=discord.File(path_video, filename=filename_video))
                                     return
                                 else:
@@ -256,17 +275,20 @@ class image_cog(commands.Cog):
                                     return
                             else:
                                 content_bytes = await preview_resp.read()
+                                print(f"[DEBUG] Preview non-HTML content bytes snippet: {content_bytes[:100]}")
                                 ext_real = guess_ext_from_bytes(content_bytes)
                                 filename_real = f"{name}.{ext_real}"
                                 path_real = os.path.join(self.download_folder, filename_real)
                                 with open(path_real, "wb") as f:
                                     f.write(content_bytes)
+                                print(f"[DEBUG] Non-HTML preview content saved to {path_real}")
                                 await ctx.send(file=discord.File(path_real, filename=filename_real))
                                 return
 
         except Exception as e:
             print(f"[ERROR] {e}")
             await ctx.send(f"❌ Terjadi kesalahan: `{e}`")
+
 
 
 
