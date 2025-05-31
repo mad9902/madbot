@@ -23,6 +23,10 @@ def guess_ext_from_bytes(data: bytes) -> str:
             return "png"
         return "bin"
 
+def sanitize_filename(name: str) -> str:
+    # Ganti karakter ilegal Windows dengan underscore
+    return re.sub(r'[<>:"/\\|?*]', '_', name)
+
 class image_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -177,9 +181,20 @@ class image_cog(commands.Cog):
             await ctx.send("Gagal mendownload emoji dengan ID tersebut.")
 
 
-    @commands.command(name="sticker", help="Download sticker dari ID (PNG, APNG, atau animasi WebP/GIF)")
-    async def sticker(self, ctx, sticker_id: int):
+    @commands.command(name="sticker", help="Download sticker dari ID atau dari pesan yang di-reply")
+    async def sticker(self, ctx, sticker_id: int = None):
         try:
+            if sticker_id is None:
+                if ctx.message.reference is None:
+                    await ctx.send("❌ Mohon reply pesan yang ada sticker atau sertakan ID sticker.")
+                    return
+                replied_msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                if not replied_msg.stickers:
+                    await ctx.send("❌ Pesan yang direply tidak mengandung sticker.")
+                    return
+                sticker = replied_msg.stickers[0]  # ambil sticker pertama
+                sticker_id = sticker.id
+
             await ctx.send(f"🔍 Mengambil data stiker untuk ID `{sticker_id}`...")
 
             token = self.bot.http.token
@@ -195,6 +210,7 @@ class image_cog(commands.Cog):
 
                 format_type = data.get("format_type")
                 name = data.get("name", f"sticker_{sticker_id}")
+                name = sanitize_filename(name)
                 print(f"[DEBUG] format_type={format_type}, name={name}")
 
                 if format_type == 3:
@@ -233,14 +249,13 @@ class image_cog(commands.Cog):
                         async with session.get(preview_url) as preview_resp:
                             print(f"[DEBUG] Preview page status: {preview_resp.status}")
 
-                            if resp.status == 404:
+                            if preview_resp.status == 404:
                                 await ctx.send("⚠️ Stiker APNG ini tidak tersedia untuk diunduh karena keterbatasan akses CDN Discord.")
                                 return
-                        
+
                             elif preview_resp.status != 200:
                                 await ctx.send("❌ Gagal mengambil halaman preview sticker.")
                                 return
-                            
 
                             content_type = preview_resp.headers.get("content-type", "")
                             print(f"[DEBUG] Preview page content-type: {content_type}")
@@ -276,6 +291,19 @@ class image_cog(commands.Cog):
                             else:
                                 content_bytes = await preview_resp.read()
                                 print(f"[DEBUG] Preview non-HTML content bytes snippet: {content_bytes[:100]}")
+
+                                # Fungsi ini harus kamu buat sendiri atau langsung pakai ekstensi default:
+                                def guess_ext_from_bytes(data: bytes) -> str:
+                                    # Contoh sederhana, kamu bisa kembangkan sesuai kebutuhan
+                                    if data.startswith(b"\x89PNG"):
+                                        return "png"
+                                    elif data.startswith(b"GIF"):
+                                        return "gif"
+                                    elif data[0:4] == b"RIFF" and data[8:12] == b"WEBP":
+                                        return "webp"
+                                    else:
+                                        return "png"  # fallback
+
                                 ext_real = guess_ext_from_bytes(content_bytes)
                                 filename_real = f"{name}.{ext_real}"
                                 path_real = os.path.join(self.download_folder, filename_real)
@@ -288,6 +316,7 @@ class image_cog(commands.Cog):
         except Exception as e:
             print(f"[ERROR] {e}")
             await ctx.send(f"❌ Terjadi kesalahan: `{e}`")
+
 
 
 

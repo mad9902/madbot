@@ -32,11 +32,11 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="💬 General Commands",
             value=(
-                "`help` - Tampilkan semua command\n"
-                "`clear / cl <amount>` - Hapus pesan (owner only)\n"
-                "`pick <opsi1, opsi2>` - Pilih acak dari beberapa opsi\n"
+                "`help`                       - Tampilkan semua command\n"
+                "`clear / cl <amount>`        - Hapus pesan (owner only)\n"
+                "`pick <opsi1, opsi2>`        - Pilih acak dari beberapa opsi\n"
                 "`giveaway <hadiah> <durasi>` - Buat giveaway\n"
-                "`poll <pertanyaan>` - Buat polling ya/tidak"
+                "`poll <pertanyaan>`          - Buat polling ya/tidak"
             ),
             inline=False
         )
@@ -44,10 +44,10 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🖼️ Image Commands",
             value=(
-                "`emoji <emoji>` - Ambil emoji sebagai gambar\n"
-                "`sticker <sticker>` - Ambil stiker sebagai gambar\n"
-                "`avatar <tag>` - Ambil avatar user\n"
-                "`upload <image>` - Upload gambar ke link"
+                "`emoji <emoji or id>`   - Ambil emoji sebagai gambar\n"
+                "`sticker <reply or id>` - Ambil stiker sebagai gambar\n"
+                "`avatar <tag optional>` - Ambil avatar user\n"
+                "`upload <image>`        - Upload gambar ke link"
             ),
             inline=False
         )
@@ -55,13 +55,13 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🎵 Music Commands",
             value=(
-                "`p / play <lagu>` - Putar lagu dari YouTube\n"
-                "`q / queue` - Lihat antrian lagu\n"
-                "`skip` - Lewati lagu saat ini\n"
-                "`setch <id_channel>` - Set channel musik (owner only)\n"
-                "`leave / disconnect / dc` - Hentikan dan keluar voice\n"
-                "`shuffle` - Acak antrian\n"
-                "`loop current / queue` - Loop lagu atau antrian"
+                "`p / play <lagu>`          - Putar lagu dari YouTube\n"
+                "`q / queue`                - Lihat antrian lagu\n"
+                "`skip`                     - Lewati lagu saat ini\n"
+                "`setch <id_channel>`       - Set channel musik (owner only)\n"
+                "`leave / disconnect / dc`  - Hentikan dan keluar voice\n"
+                "`shuffle`                  - Acak antrian\n"
+                "`loop current / queue`     - Loop lagu atau antrian"
             ),
             inline=False
         )
