@@ -140,40 +140,15 @@ class music_cog(commands.Cog):
 
         return results
 
-    def play_next(self, error=None):
-        if error:
-            print(f"❌ Error saat play_next: {error}")
-        if self.loop_mode == "single" and self.current_song:
-            self.music_queue.insert(0, [self.current_song, self.vc.channel])
-        elif self.loop_mode == "queue" and self.previous_song:
-            self.music_queue.append(self.previous_song)
-        if len(self.music_queue) > 0:
-            self.is_playing = True
-            next_song_data = self.music_queue.pop(0)
-            self.current_song = next_song_data[0]
-            m_url = self.current_song['source']
-            self.previous_song = [self.current_song, self.vc.channel]
-            try:
-                self.vc.play(
-                    discord.FFmpegPCMAudio(m_url, executable=self.ffmpeg_executable, **self.FFMPEG_OPTIONS),
-                    after=lambda e: self.play_next(e)
-                )
-            except Exception as e:
-                print(f"❌ Error saat memutar lagu di play_next: {e}")
-                self.is_playing = False
-        else:
-            self.is_playing = False
-            if self.vc and self.vc.is_connected():
-                if self.disconnect_task is None:
-                    self.disconnect_task = self.bot.loop.create_task(self.disconnect_after_timeout(self.vc.channel))
-
     async def play_music(self):
         if len(self.music_queue) == 0:
             self.is_playing = False
             return
+
         song_data, voice_channel = self.music_queue.pop(0)
         self.current_song = song_data
         m_url = song_data['source']
+
         try:
             if self.vc is None or not self.vc.is_connected():
                 self.vc = await voice_channel.connect()
@@ -183,8 +158,10 @@ class music_cog(commands.Cog):
             print(f"❌ Voice connect error: {e}")
             self.is_playing = False
             return
+
         if self.vc.is_playing():
             self.vc.stop()
+
         try:
             self.vc.play(
                 discord.FFmpegPCMAudio(m_url, executable=self.ffmpeg_executable, **self.FFMPEG_OPTIONS),
@@ -202,6 +179,50 @@ class music_cog(commands.Cog):
         except Exception as e:
             print(f"❌ Error saat memutar lagu di play_music: {e}")
             self.is_playing = False
+
+
+    def play_next(self, error=None):
+        if error:
+            print(f"❌ Error saat play_next: {error}")
+
+        if self.loop_mode == "single" and self.current_song:
+            self.music_queue.insert(0, [self.current_song, self.vc.channel])
+        elif self.loop_mode == "queue" and self.previous_song:
+            self.music_queue.append(self.previous_song)
+
+        if len(self.music_queue) > 0:
+            self.is_playing = True
+            next_song_data = self.music_queue.pop(0)
+            self.current_song = next_song_data[0]
+            m_url = self.current_song['source']
+            self.previous_song = [self.current_song, self.vc.channel]
+
+            # Kirim embed Now Playing
+            embed = discord.Embed(
+                title="🎶 Now Playing",
+                description=f"**{self.current_song['title']}**",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Track Length", value=self.current_song.get('duration', 'N/A'), inline=True)
+            embed.set_image(url=self.current_song.get('thumbnail', ''))
+            self.bot.loop.create_task(self.send_to_music_channel(self.vc.guild, embed))
+
+            try:
+                self.vc.play(
+                    discord.FFmpegPCMAudio(m_url, executable=self.ffmpeg_executable, **self.FFMPEG_OPTIONS),
+                    after=lambda e: self.play_next(e)
+                )
+            except Exception as e:
+                print(f"❌ Error saat memutar lagu di play_next: {e}")
+                self.is_playing = False
+        else:
+            self.is_playing = False
+            if self.vc and self.vc.is_connected():
+                if self.disconnect_task is None:
+                    self.disconnect_task = self.bot.loop.create_task(
+                        self.disconnect_after_timeout(self.vc.channel)
+                    )
+
 
     @commands.command(name="queue", aliases=["q"], help="Show the current queue")
     async def queue(self, ctx):
