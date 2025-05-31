@@ -16,8 +16,8 @@ formatter = logging.Formatter('[%(levelname)s] %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-INSTAGRAM_RE = re.compile(r"(https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/[A-Za-z0-9_-]+/?)+")
-TIKTOK_RE = re.compile(r"(https?://(?:www\.)?tiktok\.com/[^\s]+)")
+INSTAGRAM_RE = re.compile(r"https?://(?:www\.)?(?:instagram\.com|instagr\.am|l\.instagram\.com)/\S+")
+TIKTOK_RE = re.compile(r"https?://(?:www\.)?(?:tiktok\.com|vt\.tiktok\.com)/\S+")
 
 class link_cog(commands.Cog):
     def __init__(self, bot):
