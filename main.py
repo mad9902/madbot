@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import asyncio
+from ai_cog import AICog
 from database import connect_db, ensure_database_exists  
 from migration import migrate  # import fungsi migration
 
@@ -29,7 +30,6 @@ async def main():
     ensure_database_exists()
     bot.db = connect_db()
 
-    # Panggil migration supaya tabel dibuat jika belum ada
     migrate(bot.db)
 
     await bot.add_cog(main_cog(bot))
