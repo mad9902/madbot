@@ -1,14 +1,21 @@
 import discord
 from discord.ext import commands
-from database import get_user_xp, set_user_xp, get_level_role, insert_level_role
+from database import (
+    get_user_xp,
+    set_user_xp,
+    get_level_role,
+    insert_level_role,
+    set_channel_settings,
+    get_channel_settings
+)
 
 class LevelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.guild_level_roles = {}
+        self.guild_level_roles = {}  # Format: {guild_id(int): {level(int): role_id(int)}}
         self.db = bot.db
 
-    def calculate_level(self, xp):
+    def calculate_level(self, xp: int) -> int:
         level = 0
         required_xp = 100
         while xp >= required_xp:
@@ -28,6 +35,9 @@ class LevelCog(commands.Cog):
 
         self.guild_level_roles.clear()
         for guild_id, level, role_id in rows:
+            guild_id = int(guild_id)
+            level = int(level)
+            role_id = int(role_id)
             if guild_id not in self.guild_level_roles:
                 self.guild_level_roles[guild_id] = {}
             self.guild_level_roles[guild_id][level] = role_id
@@ -53,10 +63,8 @@ class LevelCog(commands.Cog):
 
         guild_id = ctx.guild.id
 
-        # Simpan ke database
         insert_level_role(self.db, guild_id, level, role_id)
 
-        # Update cache lokal juga
         if guild_id not in self.guild_level_roles:
             self.guild_level_roles[guild_id] = {}
         self.guild_level_roles[guild_id][level] = role_id
@@ -83,11 +91,25 @@ class LevelCog(commands.Cog):
 
         await ctx.send(f"✅ Role level untuk level `{level}` telah dihapus.")
 
+    @commands.command(name="setchlevel")
+    async def setchlevel(self, ctx, channel: discord.TextChannel):
+        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
+            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
+            return
+
+        guild_id = ctx.guild.id  # gunakan int
+        channel_id = channel.id  # gunakan int
+
+        # Perbaikan: urutan argumen sesuai fungsi set_channel_settings(db, guild_id, setting_type, channel_id)
+        set_channel_settings(self.db, guild_id, "level", channel_id)
+        await ctx.send(f"✅ Channel khusus level-up telah disetel ke {channel.mention}")
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or message.guild is None:
             return
 
+        # Skip jika pesan dimulai dengan prefix bot
         prefix = "!"
         if message.content.startswith(prefix):
             return
@@ -104,11 +126,13 @@ class LevelCog(commands.Cog):
         new_level = self.calculate_level(new_xp)
 
         if new_level > old_level:
+            # Cek role dari cache dulu
             role_id = None
             guild_roles = self.guild_level_roles.get(guild_id)
             if guild_roles:
                 role_id = guild_roles.get(new_level)
 
+            # Kalau belum ada, ambil dari DB lalu update cache
             if role_id is None:
                 role_id = get_level_role(self.db, guild_id, new_level)
                 if role_id:
@@ -121,22 +145,29 @@ class LevelCog(commands.Cog):
             if role_id:
                 try:
                     role_id_int = int(role_id)
-                except Exception:
-                    role_id_int = None
-
-                if role_id_int:
                     role = discord.utils.get(message.guild.roles, id=role_id_int)
                     if role and role not in user.roles:
                         bot_member = message.guild.me
                         if bot_member.top_role.position > role.position:
-                            try:
-                                await user.add_roles(role)
-                                message_content += f" Kamu juga mendapatkan role **{role.name}**!"
-                            except Exception:
-                                pass
+                            await user.add_roles(role)
+                            message_content += f" Kamu juga mendapatkan role **{role.name}**!"
+                except Exception as e:
+                    print(f"[ERROR] Gagal memberi role: {e}")
 
-            await message.channel.send(message_content)
+            # Ambil channel khusus level dari DB
+            channel_id_str = get_channel_settings(self.db, guild_id, setting_type="level")
+            target_channel = None
+            if channel_id_str:
+                try:
+                    channel_id_int = int(channel_id_str)
+                    target_channel = message.guild.get_channel(channel_id_int)
+                except Exception as e:
+                    print(f"[ERROR] Gagal konversi channel_id: {e}")
 
+            if not target_channel:
+                target_channel = message.channel
+
+            await target_channel.send(message_content)
 
 async def setup(bot):
     await bot.add_cog(LevelCog(bot))

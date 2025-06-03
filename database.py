@@ -112,25 +112,31 @@ def get_level_role(db, guild_id, level):
         return int(result[0])
     return None
 
-def get_channel_settings(db, guild_id):
+def get_channel_settings(db, guild_id, setting_type):
+    if db is None:
+        return None
     cursor = db.cursor()
     cursor.execute("""
-        SELECT channel_id FROM channel_settings WHERE guild_id=%s
-    """, (guild_id,))
+        SELECT channel_id FROM channel_settings
+        WHERE guild_id=%s AND setting_type=%s
+    """, (guild_id, setting_type))
     row = cursor.fetchone()
     cursor.close()
     if row:
         return str(row[0])
     return None
 
-def set_channel_setting(db, guild_id, channel_id):
+def set_channel_settings(db, guild_id, setting_type, channel_id):
+    if db is None:
+        return
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO channel_settings (guild_id, channel_id)
-        VALUES (%s, %s)
+        INSERT INTO channel_settings (guild_id, setting_type, channel_id)
+        VALUES (%s, %s, %s)
         ON DUPLICATE KEY UPDATE channel_id=VALUES(channel_id)
-    """, (guild_id, channel_id))
+    """, (guild_id, setting_type, channel_id))
     db.commit()
     cursor.close()
+
 
 
