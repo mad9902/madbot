@@ -24,10 +24,10 @@ def get_prefix(bot, message):
 
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 
-@bot.event
-async def on_command_error(ctx, error):
-    print(f"Error di command {ctx.command}: {error}")
-    await ctx.send(f"Terjadi error: {error}")
+# @bot.event
+# async def on_command_error(ctx, error):
+#     print(f"Error di command {ctx.command}: {error}")
+#     await ctx.send(f"Terjadi error: {error}")
 
 
 async def main():
