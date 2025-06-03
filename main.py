@@ -3,7 +3,6 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import asyncio
-from ai_cog import AICog
 from database import connect_db, ensure_database_exists  
 from migration import migrate  # import fungsi migration
 
@@ -17,12 +16,18 @@ from main_cog import main_cog
 from image_cog import image_cog
 from music_cog import music_cog
 from link_cog import link_cog
+from ai_cog import GeminiCog
 from level_cog import LevelCog
 
 def get_prefix(bot, message):
     return ['mad ', 'md ', 'm']
 
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
+
+@bot.event
+async def on_command_error(ctx, error):
+    print(f"Error di command {ctx.command}: {error}")
+    await ctx.send(f"Terjadi error: {error}")
 
 
 async def main():
@@ -37,6 +42,8 @@ async def main():
     await bot.add_cog(music_cog(bot))
     await bot.add_cog(link_cog(bot))
     await bot.add_cog(LevelCog(bot))
+    await bot.add_cog(GeminiCog(bot))
+
 
     await bot.start(os.getenv("TOKEN"))
 
