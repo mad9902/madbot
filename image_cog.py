@@ -10,6 +10,12 @@ import shutil
 import re
 import aiohttp
 from dotenv import load_dotenv
+from utils.get_attachments import extract_image_attachment
+from utils.image_tools import crop_to_square
+from utils.text_tools import place_text, Placement, CaseType
+from io import BytesIO
+from datetime import datetime
+from typing import cast
 
 load_dotenv()
 IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
@@ -73,25 +79,14 @@ class image_cog(commands.Cog):
 
     @commands.command(name="upload", help="Upload gambar dari attachment atau reply ke Imgur")
     async def upload(self, ctx):
-        image = None
-
-        if ctx.message.attachments:
-            attachment = ctx.message.attachments[0]
-            if attachment.content_type and "image" in attachment.content_type:
-                image = attachment
-        elif ctx.message.reference:
-            replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            if replied.attachments:
-                attachment = replied.attachments[0]
-                if attachment.content_type and "image" in attachment.content_type:
-                    image = attachment
+        image = await extract_image_attachment(ctx)
 
         if image is None:
             await ctx.send("❌ Tidak ada gambar yang bisa diupload. Kirim gambar atau reply ke gambar.")
             return
 
         filename = os.path.join(self.download_folder, image.filename)
-        await image.save(fp=filename)
+        # await image.save(fp=filename) 
 
         link = await self.upload_to_imgur(filename)
 
@@ -106,7 +101,7 @@ class image_cog(commands.Cog):
             await ctx.send("❌ Gagal mengupload gambar ke Imgur.")
 
     @commands.command(name="avatar", help="Menampilkan avatar dan banner user (jika ada) dalam gaya profil Discord")
-    async def avatar(self, ctx, member: discord.Member = None):
+    async def avatar(self, ctx, member: discord.Member | None = None):
         member = member or ctx.author
         user_id = member.id
         token = ctx.bot.http.token
@@ -183,7 +178,7 @@ class image_cog(commands.Cog):
 
 
     @commands.command(name="sticker", help="Download sticker dari ID atau dari pesan yang di-reply")
-    async def sticker(self, ctx, sticker_id: int = None):
+    async def sticker(self, ctx, sticker_id: int | None = None):
         try:
             if sticker_id is None:
                 if ctx.message.reference is None:
@@ -193,8 +188,8 @@ class image_cog(commands.Cog):
                 if not replied_msg.stickers:
                     await ctx.send("❌ Pesan yang direply tidak mengandung sticker.")
                     return
-                sticker = replied_msg.stickers[0]  # ambil sticker pertama
-                sticker_id = sticker.id
+                _sticker = replied_msg.stickers[0]  # ambil sticker pertama
+                sticker_id = _sticker.id
 
             await ctx.send(f"🔍 Mengambil data stiker untuk ID `{sticker_id}`...")
 
@@ -318,8 +313,70 @@ class image_cog(commands.Cog):
             print(f"[ERROR] {e}")
             await ctx.send(f"❌ Terjadi kesalahan: `{e}`")
 
+    @commands.command(name="caption", help="Berikan caption pada gambar yang kamu kirim")
+    async def caption(self, ctx, args: str = ""):
+        image = await extract_image_attachment(ctx)
 
+        if image is None:
+            await ctx.send("❌ Tidak ada gambar yang bisa dicaption. Kirim gambar atau reply ke gambar.")
+            return
+        
+        ZONE_THRESHOLD = 0.5
 
+        placement: Placement = "bottom"
+        case_type: CaseType = "caption"
 
+        flags = {
+            "--top": "top",
+            "--bottom": "bottom",
+            "--uppercase": "uppercase",
+            "--lowercase": "lowercase",
+            "--caption": "caption"
+        }
 
+        found_flags = re.findall(r"--\w+", args)
 
+        for flag in found_flags:
+            if flag in ("--top", "--bottom"):
+                placement = cast(Placement, flags[flag])
+                
+            elif flag in ("--uppercase", "--lowercase", "--caption"):
+                case_type = cast(CaseType, flags[flag])
+
+        clean_text = re.sub(r"--\w+", "", args).strip()
+
+        if not clean_text:
+            await ctx.send("❌ Caption tidak boleh kosong.")
+            return
+
+        image_bytes = BytesIO()
+        await image.save(image_bytes)
+        image_bytes.seek(0)
+
+        try:
+            with Image.open(image_bytes) as img:
+                img = img.convert("RGB")
+                result = crop_to_square(img, zoom_threshold=ZONE_THRESHOLD)
+
+                result = place_text(
+                    result,
+                    text=clean_text,
+                    placement=placement,
+                    settings={
+                        "text_color": (255, 255, 255),
+                        "stroke_color": (0, 0, 0),
+                        "stroke_width": 4,
+                        "type": case_type,
+                    },
+                )
+
+                buffer = BytesIO()
+                result.save(buffer, format="JPEG", quality=80, optimize=True)
+                buffer.seek(0)
+
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                filename = f"img_{timestamp}.jpg"
+                await ctx.send(file=discord.File(fp=buffer, filename=filename))
+
+        except Exception as e:
+            await ctx.send(f"❌ Terjadi kesalahan saat memproses gambar: {e}")

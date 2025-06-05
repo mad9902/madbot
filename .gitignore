@@ -1,5 +1,6 @@
 __pycache__
 downloads
+private
 .vscode
 ffmpeg.exe
 
@@ -16,3 +17,4 @@ nugasinn.7.session
 .cache
 .env
 requirements_backup.txt
+.python-version
