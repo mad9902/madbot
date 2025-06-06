@@ -1,21 +1,22 @@
+import os
+import re
+from io import BytesIO
+import shutil
+from datetime import datetime
+from typing import cast
+
 import discord
 from discord.ext import commands
-from PIL import Image, ImageOps
-import subprocess
+from PIL import Image
+
+import aiohttp
 from bs4 import BeautifulSoup
-import io
-import aiohttp
-import os
-import shutil
-import re
-import aiohttp
 from dotenv import load_dotenv
+
 from utils.get_attachments import extract_image_attachment
 from utils.image_tools import crop_to_square
 from utils.text_tools import place_text, Placement, CaseType
-from io import BytesIO
-from datetime import datetime
-from typing import cast
+
 
 load_dotenv()
 IMGUR_CLIENT_ID = os.getenv("IMGUR_CLIENT_ID")
@@ -315,38 +316,44 @@ class image_cog(commands.Cog):
 
     @commands.command(name="caption", help="Berikan caption pada gambar yang kamu kirim")
     async def caption(self, ctx, *, args: str = ""):
-        image = await extract_image_attachment(ctx)
+        if not args:
+            await ctx.send("❌ Gunakan: `!caption --top --uppercase Teks kamu di sini`\nKirim gambar atau balas gambar.")
+            return
 
+        image = await extract_image_attachment(ctx)
         if image is None:
             await ctx.send("❌ Tidak ada gambar yang bisa dicaption. Kirim gambar atau reply ke gambar.")
             return
-        
+
         ZONE_THRESHOLD = 0.5
+        MAX_FILE_SIZE = 8 * 1024 * 1024  # 8 MB
 
-        placement: Placement = "bottom"
-        case_type: CaseType | None = None
+        def parse_args(args: str):
+            flags = {
+                "--top": "top",
+                "--bottom": "bottom",
+                "--uppercase": "uppercase",
+                "--lowercase": "lowercase",
+                "--caption": "caption"
+            }
 
-        flags = {
-            "--top": "top",
-            "--bottom": "bottom",
-            "--uppercase": "uppercase",
-            "--lowercase": "lowercase",
-            "--caption": "caption"
-        }
+            placement: Placement = "bottom"
+            case_type: CaseType | None = None
 
-        found_flags = re.findall(r"--\w+", args)
+            found_flags = re.findall(r"--\w+", args)
+            for flag in found_flags:
+                if flag in ("--top", "--bottom"):
+                    placement = cast(Placement, flags[flag])
+                elif flag in ("--uppercase", "--lowercase", "--caption"):
+                    case_type = cast(CaseType, flags[flag])
 
-        for flag in found_flags:
-            if flag in ("--top", "--bottom"):
-                placement = cast(Placement, flags[flag])
-                
-            elif flag in ("--uppercase", "--lowercase", "--caption"):
-                case_type = cast(CaseType, flags[flag])
+            clean_text = re.sub(r"--\w+", "", args).strip()
+            return clean_text, placement, case_type
 
-        clean_text = re.sub(r"--\w+", "", args).strip()
+        clean_text, placement, case_type = parse_args(args)
 
         if not clean_text:
-            await ctx.send("❌ Caption tidak boleh kosong.")
+            await ctx.send("❌ Caption tidak boleh kosong. Contoh: `!caption --top Hello Dunia`")
             return
 
         image_bytes = BytesIO()
@@ -355,30 +362,79 @@ class image_cog(commands.Cog):
 
         try:
             with Image.open(image_bytes) as img:
-                img = img.convert("RGB")
-                result = crop_to_square(img, output_size=640, zoom_threshold=ZONE_THRESHOLD)
+                is_gif = img.format == "GIF" and getattr(img, "is_animated", False)
 
-                result = place_text(
-                    result,
-                    text=clean_text,
-                    placement=placement,
-                    settings={
-                        "text_color": (255, 255, 255),
-                        "stroke_color": (0, 0, 0),
-                        "stroke_width": 4,
-                        "type": case_type,
-                    },
-                )
+                if is_gif:
+                    frames = []
+                    durations = []
+                    frame_count = img.n_frames
+                    step = 2 if frame_count > 30 else 1  # Skip frame untuk GIF besar
 
-                result = result.convert("RGB")
+                    for frame in range(0, frame_count, step):
+                        img.seek(frame)
+                        frame_img = img.convert("RGB").copy()
+                        frame_img = frame_img.resize((480, 480))  # Resize untuk kurangi ukuran
 
-                buffer = BytesIO()
-                result.save(buffer, format="JPEG", quality=80, optimize=True)
-                buffer.seek(0)
+                        processed = crop_to_square(frame_img, output_size=480, zoom_threshold=ZONE_THRESHOLD)
+                        processed = place_text(
+                            processed,
+                            text=clean_text,
+                            placement=placement,
+                            settings={
+                                "text_color": (255, 255, 255),
+                                "stroke_color": (0, 0, 0),
+                                "stroke_width": 4,
+                                "type": case_type,
+                            },
+                        )
 
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                filename = f"img_{timestamp}.jpg"
-                await ctx.send(file=discord.File(fp=buffer, filename=filename))
+                        frames.append(processed)
+                        durations.append(img.info.get("duration", 100))
+
+                    output = BytesIO()
+                    frames[0].save(
+                        output,
+                        format="GIF",
+                        save_all=True,
+                        append_images=frames[1:],
+                        duration=durations,
+                        loop=0,
+                        optimize=True,
+                    )
+                    output.seek(0)
+
+                    if output.getbuffer().nbytes > MAX_FILE_SIZE:
+                        await ctx.send("❌ GIF hasil terlalu besar untuk dikirim (maks 8MB). Coba dengan gambar lebih kecil atau lebih sedikit frame.")
+                        return
+
+                    filename = f"caption_{datetime.now().strftime('%Y%m%d%H%M%S')}.gif"
+                    await ctx.send(file=discord.File(fp=output, filename=filename))
+
+                else:
+                    img = img.convert("RGB")
+                    result = crop_to_square(img, output_size=640, zoom_threshold=ZONE_THRESHOLD)
+                    result = place_text(
+                        result,
+                        text=clean_text,
+                        placement=placement,
+                        settings={
+                            "text_color": (255, 255, 255),
+                            "stroke_color": (0, 0, 0),
+                            "stroke_width": 4,
+                            "type": case_type,
+                        },
+                    )
+
+                    buffer = BytesIO()
+                    result.save(buffer, format="JPEG", quality=75, optimize=True)
+                    buffer.seek(0)
+
+                    if buffer.getbuffer().nbytes > MAX_FILE_SIZE:
+                        await ctx.send("❌ Gambar hasil terlalu besar untuk dikirim (maks 8MB).")
+                        return
+
+                    filename = f"caption_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+                    await ctx.send(file=discord.File(fp=buffer, filename=filename))
 
         except Exception as e:
-            await ctx.send(f"❌ Terjadi kesalahan saat memproses gambar: {e}")
+            await ctx.send(f"❌ Terjadi kesalahan saat memproses gambar:\n```{e}```")
