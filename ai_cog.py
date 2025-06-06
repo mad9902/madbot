@@ -89,21 +89,3 @@ class GeminiCog(commands.Cog):
             except Exception as e:
                 print(f"[Dare ERROR] {e}")
                 await ctx.send(f"❌ Terjadi error: {str(e)}")
-
-    @commands.command(name="neverhaveiever", aliases=["nhie"], help="Dapatkan satu 'Never Have I Ever' dari AI")
-    async def never_have_i_ever_command(self, ctx):
-        prompt = (
-            "Buat satu kalimat 'Never have I ever' yang unik, lucu, atau aneh. "
-            "Tampilkan hanya kalimatnya saja, dalam bahasa Indonesia. "
-            "Contoh format output: 'pernah ngga makan mie instan pakai selai cokelat.'"
-        )
-        print(f"[NHIE COMMAND] Called by {ctx.author}")
-        async with ctx.typing():
-            try:
-                response = self.model.generate_content(prompt)
-                nhie_text = response.candidates[0].content.parts[0].text.strip()
-                await ctx.send(f"**Never Have I Ever:** {nhie_text}")
-            except Exception as e:
-                print(f"[NHIE ERROR] {e}")
-                await ctx.send(f"❌ Terjadi error: {str(e)}")
-
