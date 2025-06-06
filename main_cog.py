@@ -63,6 +63,15 @@ class main_cog(commands.Cog):
         )
 
         embed.add_field(
+            name="🕹️ Game",
+            value=(
+                "`sambungkata     - game sambung kata multiplayer\n"
+                "`stopgame`       - stop game yang sudah dimulai (host only)"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
             name="🎵 Music Commands",
             value=(
                 "`p / play <lagu>`          - Putar lagu dari YouTube\n"
