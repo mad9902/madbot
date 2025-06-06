@@ -65,7 +65,7 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🕹️ Game",
             value=(
-                "`sambungkata     - game sambung kata multiplayer\n"
+                " sambungkata - game sambung kata multiplayer\n"
                 "`stopgame`       - stop game yang sudah dimulai (host only)"
             ),
             inline=False
@@ -106,7 +106,7 @@ class main_cog(commands.Cog):
 
         embed.add_field(
             name="📤 Auto Send",
-            value="Auto konversi link Instagram/TikTok ke video/gambar",
+            value="Auto konversi link Instagram reels/video TikTok ke video",
             inline=False
         )
 
