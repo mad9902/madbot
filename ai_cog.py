@@ -55,3 +55,55 @@ class GeminiCog(commands.Cog):
             except Exception as e:
                 print(f"[Anomali ERROR] {e}")
                 await ctx.send(f"❌ Terjadi error: {str(e)}")
+
+    @commands.command(name="truth", help="Dapatkan pertanyaan truth dari AI")
+    async def truth_command(self, ctx):
+        prompt = (
+            "Beri aku **satu pertanyaan truth** yang lucu, menantang, atau memalukan. "
+            "Hanya tampilkan pertanyaan saja tanpa penjelasan atau kata pembuka/penutup. "
+            "Contoh format output: 'Apa hal paling memalukan yang pernah kamu lakukan?'"
+        )
+        print(f"[Truth COMMAND] Called by {ctx.author}")
+        async with ctx.typing():
+            try:
+                response = self.model.generate_content(prompt)
+                truth_question = response.candidates[0].content.parts[0].text.strip()
+                await ctx.send(f"**Truth:** {truth_question}")
+            except Exception as e:
+                print(f"[Truth ERROR] {e}")
+                await ctx.send(f"❌ Terjadi error: {str(e)}")
+
+    @commands.command(name="dare", help="Dapatkan tantangan dare dari AI")
+    async def dare_command(self, ctx):
+        prompt = (
+            "Beri aku **satu tantangan dare** yang lucu, aneh, atau memalukan. "
+            "Hanya tampilkan dare-nya saja tanpa kata lain. "
+            "Contoh format output: 'Cium benda terdekat dan kirim fotonya.'"
+        )
+        print(f"[Dare COMMAND] Called by {ctx.author}")
+        async with ctx.typing():
+            try:
+                response = self.model.generate_content(prompt)
+                dare_text = response.candidates[0].content.parts[0].text.strip()
+                await ctx.send(f"**Dare:** {dare_text}")
+            except Exception as e:
+                print(f"[Dare ERROR] {e}")
+                await ctx.send(f"❌ Terjadi error: {str(e)}")
+
+    @commands.command(name="neverhaveiever", aliases=["nhie"], help="Dapatkan satu 'Never Have I Ever' dari AI")
+    async def never_have_i_ever_command(self, ctx):
+        prompt = (
+            "Buat satu kalimat 'Never have I ever' yang unik, lucu, atau aneh. "
+            "Tampilkan hanya kalimatnya saja, dalam bahasa Indonesia. "
+            "Contoh format output: 'Aku belum pernah makan mie instan pakai selai cokelat.'"
+        )
+        print(f"[NHIE COMMAND] Called by {ctx.author}")
+        async with ctx.typing():
+            try:
+                response = self.model.generate_content(prompt)
+                nhie_text = response.candidates[0].content.parts[0].text.strip()
+                await ctx.send(f"**Never Have I Ever:** {nhie_text}")
+            except Exception as e:
+                print(f"[NHIE ERROR] {e}")
+                await ctx.send(f"❌ Terjadi error: {str(e)}")
+
