@@ -95,7 +95,7 @@ class GeminiCog(commands.Cog):
         prompt = (
             "Buat satu kalimat 'Never have I ever' yang unik, lucu, atau aneh. "
             "Tampilkan hanya kalimatnya saja, dalam bahasa Indonesia. "
-            "Contoh format output: 'Aku belum pernah makan mie instan pakai selai cokelat.'"
+            "Contoh format output: 'pernah ngga makan mie instan pakai selai cokelat.'"
         )
         print(f"[NHIE COMMAND] Called by {ctx.author}")
         async with ctx.typing():
