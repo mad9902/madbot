@@ -47,7 +47,17 @@ class main_cog(commands.Cog):
                 "`emoji <emoji or id>`   - Ambil emoji sebagai gambar\n"
                 "`sticker <reply or id>` - Ambil stiker sebagai gambar\n"
                 "`avatar <tag optional>` - Ambil avatar user\n"
-                "`upload <image>`        - Upload gambar ke link"
+                "`upload <image>`        - Upload gambar ke link\n"
+                "`caption <reply image>` - add caption ke gambar (additional command --uppercase --lowercase --top --bottom)"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🤖 AI",
+            value=(
+                "`ai (question) - generate ai berdasarkan pertanyaanr\n"
+                "`anomali (name)` - generate nama dan kisah anomali dari nama"
             ),
             inline=False
         )
@@ -78,8 +88,8 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🆙 XP System",
             value=(
-                "`level` - Lihat level XP kamu\n"
-                "`setrolelvl <level> <id role>` - Auto-role saat level tertentu\n"
+                "`level`                           - Lihat level XP kamu\n"
+                "`setrolelvl <level> <id role>`    - Auto-role saat level tertentu\n"
                 "`removerolelvl <level> <id role>` - Hapus auto-role"
             ),
             inline=False
@@ -94,7 +104,7 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="ℹ️ Info",
             value=(
-                "`serverinfo` - Info server\n"
+                "`serverinfo`     - Info server\n"
                 "`userinfo <tag>` - Info user"
             ),
             inline=False
