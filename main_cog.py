@@ -11,9 +11,9 @@ class main_cog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # Set status dan activity
-        activity = discord.Activity(type=discord.ActivityType.listening, name="mad |md |m")
+        activity = discord.Game(name="mad |md |m")
         await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
+
 
         # Simpan semua text channels di semua guild
         for guild in self.bot.guilds:
