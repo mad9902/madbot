@@ -324,7 +324,7 @@ class image_cog(commands.Cog):
         ZONE_THRESHOLD = 0.5
 
         placement: Placement = "bottom"
-        case_type: CaseType = "caption"
+        case_type: CaseType | None = None
 
         flags = {
             "--top": "top",
