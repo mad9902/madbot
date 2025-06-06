@@ -11,7 +11,7 @@ def get_scaled_font(
     image_width: int,
     image_height: int,
     font_path: str = "assets/Inter.ttf",
-    max_text_height_ratio: float = 0.25,
+    max_text_height_ratio: float = 0.15,
 ) -> tuple[ImageFont.FreeTypeFont | ImageFont.ImageFont, list[str]]:
     max_font_size = int(image_height * max_text_height_ratio)
     min_font_size = 10
@@ -113,9 +113,9 @@ def place_text(
 
         # Calculate starting y position
         y = (
-            height * 0.1
+            height * 0.125
             if placement == "top"
-            else height - total_text_height - height * 0.1
+            else height - total_text_height - height * 0.125
         )
 
         # Draw each line
@@ -130,7 +130,7 @@ def place_text(
                 stroke_fill=stroke_color,
                 stroke_width=stroke_width,
             )
-            y += lh
+            y += lh + lh * 0.5
 
         return image
 

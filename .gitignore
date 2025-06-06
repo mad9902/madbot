@@ -1,6 +1,7 @@
 __pycache__
 downloads
 private
+tests
 .vscode
 ffmpeg.exe
 

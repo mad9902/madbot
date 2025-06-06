@@ -133,13 +133,11 @@ def crop_to_square(
     top = max(0, bottom - desired_crop_size)
 
     cropped = img.crop((left, top, right, bottom))
+    pad_cropped = pad_to_square_with_blur(cropped)
 
     if output_size:
-        cropped = cropped.resize((output_size, output_size), Image.Resampling.LANCZOS)
+        pad_width, pad_height = pad_cropped.size
+        if pad_width < output_size or pad_height < output_size:
+            pad_cropped = pad_cropped.resize((output_size, output_size), Image.Resampling.LANCZOS)
 
-    cropped = img.crop((left, top, right, bottom))
-
-    # * Pad image with blur bg
-    final_cropped = pad_to_square_with_blur(cropped)
-
-    return final_cropped
+    return pad_cropped

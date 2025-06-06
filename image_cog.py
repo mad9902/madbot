@@ -314,7 +314,7 @@ class image_cog(commands.Cog):
             await ctx.send(f"❌ Terjadi kesalahan: `{e}`")
 
     @commands.command(name="caption", help="Berikan caption pada gambar yang kamu kirim")
-    async def caption(self, ctx, args: str = ""):
+    async def caption(self, ctx, *, args: str = ""):
         image = await extract_image_attachment(ctx)
 
         if image is None:
@@ -356,7 +356,7 @@ class image_cog(commands.Cog):
         try:
             with Image.open(image_bytes) as img:
                 img = img.convert("RGB")
-                result = crop_to_square(img, zoom_threshold=ZONE_THRESHOLD)
+                result = crop_to_square(img, output_size=640, zoom_threshold=ZONE_THRESHOLD)
 
                 result = place_text(
                     result,
@@ -369,6 +369,8 @@ class image_cog(commands.Cog):
                         "type": case_type,
                     },
                 )
+
+                result = result.convert("RGB")
 
                 buffer = BytesIO()
                 result.save(buffer, format="JPEG", quality=80, optimize=True)
