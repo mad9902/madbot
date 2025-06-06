@@ -38,7 +38,7 @@ def get_scaled_font(
     return fallback_font, lines
 
 
-def apply_text_case(text: str, case: CaseType) -> str:
+def apply_text_case(text: str, case: CaseType | None) -> str:
     if case == "uppercase":
         return text.upper()
     elif case == "lowercase":
@@ -93,7 +93,7 @@ def place_text(
         text_color = (255, 255, 255)
         stroke_color = (0, 0, 0)
         stroke_width = 2
-        case_type: CaseType = "caption"
+        case_type: CaseType | None = None
 
         if settings:
             text_color = settings.get("text_color", text_color)
