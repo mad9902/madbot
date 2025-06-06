@@ -104,8 +104,6 @@ class JoinSambungKata(View):
         await interaction.response.defer()
         await self.start_game(interaction)
 
-    # Tombol skip dihapus, jadi gak ada method skip_button lagi
-
     async def update_embed(self):
         desc = "\n".join(f"- {user.name}" for user in self.players.values()) or "Belum ada pemain."
         embed = discord.Embed(
@@ -137,12 +135,14 @@ class JoinSambungKata(View):
             akhir = potong_suku(kata_terakhir)
 
             if index == 0:
+                sorted_players = sorted(players, key=lambda p: poin[p.id], reverse=True)
                 poin_embed = discord.Embed(
                     title="📊 Skor Sementara",
-                    description="\n".join(f"**{p.name}**: {poin[p.id]} poin" for p in players),
+                    description="\n".join(f"**{p.name}**: {poin[p.id]} poin" for p in sorted_players),
                     color=discord.Color.green()
                 )
                 await interaction.followup.send(embed=poin_embed)
+
 
             await interaction.followup.send(
                 f"{player.mention}, giliranmu! Kata harus diawali dengan **'{akhir}'**. (15 detik)\n"
@@ -157,25 +157,29 @@ class JoinSambungKata(View):
                 msg = await self.bot.wait_for("message", check=check, timeout=15.0)
                 kata = msg.content.lower().strip()
 
+                if kata == "mstopgame":
+                    if player.id == self.host_id:
+                        await interaction.followup.send("🛑 Game dihentikan oleh host.")
+                        self.game_active = False
+                        break
+                    else:
+                        await interaction.followup.send("❌ Hanya host yang bisa menghentikan game.")
+                        continue
+
                 if kata == "skip":
                     if self.skip_counts.get(player.id, 0) >= 3:
                         await interaction.followup.send(f"❌ {player.mention}, skip kamu sudah habis. Kamu harus jawab kata atau tunggu timeout dan kamu akan kalah.")
-                        # beri kesempatan jawab lagi (loop ulang)
                         continue
-                    # skip valid
                     self.skip_counts[player.id] += 1
-                    # ganti kata terakhir dengan kata baru random yang belum dipakai
                     new_candidates = [w for w in ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"] if w not in used_words]
                     if not new_candidates:
                         new_candidates = ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"]
                     kata_terakhir = random.choice(new_candidates)
                     used_words.add(kata_terakhir)
-                    akhir = potong_suku(kata_terakhir)
-                    await interaction.followup.send(f"⏩ {player.mention} skip! Kata baru: **{kata_terakhir}**\nKata harus diawali dengan **'{akhir}'**. (Masih giliranmu)")
-                    # Giliran sama, ulangi input
-                    continue
+                    await interaction.followup.send(f"⏩ {player.mention} skip! Kata baru diganti: **{kata_terakhir}**")
+                    continue  # tetap pemain yang sama
 
-                # cek validasi kata biasa
+
                 if not kata.startswith(akhir):
                     await interaction.followup.send("❌ Kata tidak sesuai awalan.")
                     continue
@@ -196,15 +200,11 @@ class JoinSambungKata(View):
                         await interaction.followup.send(f"🏆 {player.mention} menang dengan 100 poin!")
                         self.game_active = False
                         break
-                    # lanjut ke pemain berikutnya
                     index = (index + 1) % len(players)
 
             except asyncio.TimeoutError:
-                # Timeout berarti pemain tidak menjawab
-                # Cek skip sisa, kalau habis maka eliminasi
                 if self.skip_counts.get(player.id, 0) >= 3:
                     await interaction.followup.send(f"⏰ {player.mention} tidak merespon dan sudah tidak punya skip tersisa. Kamu kalah dan dikeluarkan dari game.")
-                    # hapus pemain dari list
                     poin.pop(player.id, None)
                     players.remove(player)
                     self.players.pop(player.id, None)
@@ -217,19 +217,18 @@ class JoinSambungKata(View):
 
                     if index >= len(players):
                         index = 0
-                    # lanjut ke giliran berikutnya (index tetap sama karena pemain ini dihapus)
                 else:
-                    # Masih punya skip, tapi tidak skip atau jawab dalam waktu
-                    await interaction.followup.send(f"⏰ {player.mention} tidak merespon. Kamu bisa ketik 'skip' sebelum waktu habis untuk melewatkan giliran.")
-                    # ulangi giliran yang sama (loop continue)
-                    continue
+                    new_candidates = [w for w in ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"] if w not in used_words]
+                    if not new_candidates:
+                        new_candidates = ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"]
+                    kata_terakhir = random.choice(new_candidates)
+                    used_words.add(kata_terakhir)
+                    await interaction.followup.send(
+                        f"⏰ {player.mention} tidak merespon. Kata diganti menjadi **{kata_terakhir}**.\n➡️ Giliran berpindah ke pemain berikutnya."
+                    )
+                    index = (index + 1) % len(players)
 
-        # Bersihkan setelah selesai
+
         if self.guild_id in self.game_dict:
             self.game_dict.pop(self.guild_id)
         self.stop()
-
-    def stop(self):
-        if not self.stop_event.is_set():
-            self.stop_event.set()
-        super().stop()
