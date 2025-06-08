@@ -295,10 +295,14 @@ class music_cog(commands.Cog):
             if not tracks:
                 await ctx.send("❌ Tidak bisa mengambil lagu dari Spotify.")
                 return
+            first_song_added = False  # flag
             for q in tracks:
                 song = self.search_yt(q)
                 if song:
                     self.music_queue.append([song, voice_channel])
+                    if not self.is_playing and not first_song_added:
+                        await self.play_music()
+                        first_song_added = True  # hanya panggil sekali saat lagu pertama
                     # Kirim embed untuk setiap lagu
                     embed = discord.Embed(
                         title="🎵 Lagu Ditambahkan ke Antrian",
@@ -309,6 +313,7 @@ class music_cog(commands.Cog):
                     embed.set_image(url=song.get('thumbnail', ''))
                     embed.set_footer(text=f"Ditambahkan oleh {ctx.author.display_name}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
                     await self.send_to_music_channel(ctx.guild, embed)
+
             await ctx.send(f"✅ Menambahkan {len(tracks)} lagu dari Spotify ke antrian.")
         else:
             song = self.search_yt(query)
