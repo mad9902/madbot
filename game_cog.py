@@ -30,7 +30,7 @@ class SambungKataMultiplayer(commands.Cog):
         for view in self.active_games.values():
             view.stop()
 
-    @commands.command(name="sambungkata2")
+    @commands.command(name="sambungkata")
     async def sambungkata_mp(self, ctx):
         if ctx.guild.id in self.active_games:
             await ctx.send("❌ Sudah ada game yang berjalan di server ini!")
