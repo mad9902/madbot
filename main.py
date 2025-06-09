@@ -3,6 +3,22 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import asyncio
+from rapidfuzz import process, fuzz
+
+
+# Database dan migrasi
+from database import connect_db, ensure_database_exists
+from migration import migrate
+
+# Import semua cog
+from main_cog import main_cog
+from image_cog import image_cog
+from music_cog import music_cog
+from link_cog import link_cog
+from ai_cog import GeminiCog
+from level_cog import LevelCog
+from game_cog import SambungKataMultiplayer
+
 
 # Load env
 load_dotenv()
@@ -19,35 +35,32 @@ def get_prefix(bot, message):
 # Inisialisasi bot
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 
-# Database dan migrasi
-from database import connect_db, ensure_database_exists
-from migration import migrate
-
-# Import semua cog
-from main_cog import main_cog
-from image_cog import image_cog
-from music_cog import music_cog
-from link_cog import link_cog
-from ai_cog import GeminiCog
-from level_cog import LevelCog
-from game_cog import SambungKataMultiplayer
-
-# Optional: Error handler global
 @bot.event
 async def on_command_error(ctx, error):
-    print(f"[ERROR] Di command {ctx.command}: {error}")
-    await ctx.send(f"❌ Terjadi error: {str(error)}")
+    if isinstance(error, commands.CommandNotFound):
+        attempted = ctx.message.content[len(ctx.prefix):].split()[0]
+        command_names = [command.name for command in bot.commands]
+
+        result = process.extractOne(
+            attempted,
+            command_names,
+            scorer=fuzz.ratio
+        )
+
+        if result is not None:
+            match, score, _ = result
+            if score >= 50:
+                await ctx.send(f"❓ Apakah maksudmu `m{match}`?")
+                return
+
+        await ctx.send(f"❌ Perintah `m{attempted}` tidak ditemukan.")
+    else:
+        await ctx.send(f"❌ Terjadi error: {error}")
 
 # Fungsi utama
 async def main():
     # Hapus default help command
     bot.remove_command('help')
-
-    # @bot.event
-    # async def on_command_error(ctx, error):
-    #     print(f"Error di command {ctx.command}: {error}")
-    #     await ctx.send(f"Terjadi error: {error}")
-
 
     # Setup database
     ensure_database_exists()
