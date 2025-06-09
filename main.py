@@ -49,11 +49,9 @@ async def on_command_error(ctx, error):
 
         if result is not None:
             match, score, _ = result
-            if score >= 50:
-                await ctx.send(f"❓ Apakah maksudmu `m{match}`?")
+            if score >= 70:
+                await ctx.reply(f"❓ Apakah maksudmu `m{match}`?")
                 return
-
-        await ctx.send(f"❌ Perintah `m{attempted}` tidak ditemukan.")
     else:
         await ctx.send(f"❌ Terjadi error: {error}")
 
