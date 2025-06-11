@@ -50,10 +50,10 @@ async def on_command_error(ctx, error):
         if result is not None:
             match, score, _ = result
             if score >= 70:
-                await ctx.reply(f"❓ Apakah maksudmu `m{match}`?")
+                await ctx.reply(f"❓ Apakah maksudmu `m{match}`?", delete_after=5)
                 return
     else:
-        await ctx.send(f"❌ Terjadi error: {error}")
+        await ctx.send(f"❌ Terjadi error: {error}", delete_after=5)
 
 # Fungsi utama
 async def main():
