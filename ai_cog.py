@@ -2,6 +2,9 @@ import discord
 from discord.ext import commands
 import google.generativeai as genai
 import os
+import requests
+import uuid
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,6 +12,7 @@ load_dotenv()
 class GeminiCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.deepai_key = os.getenv("DEEPAI_API_KEY")
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         self.model = genai.GenerativeModel("models/gemini-2.0-flash-lite-001")
         print("[GeminiCog] Loaded successfully")
@@ -90,7 +94,7 @@ class GeminiCog(commands.Cog):
                 print(f"[Dare ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="rank", help="Buat ranking lucu berdasarkan topik yang kamu kasih")
+    @commands.command(name="mrank", help="Buat ranking lucu berdasarkan topik yang kamu kasih")
     async def mrank_command(self, ctx, *, topic: str):
         prompt = (
             f"Buat daftar ranking lucu berdasarkan topik: '{topic}'. "
@@ -98,6 +102,7 @@ class GeminiCog(commands.Cog):
             "1. [Item] - [Deskripsi singkat]\n"
             "2. ... sampai 5."
         )
+        print(f"[mrank COMMAND] Called by {ctx.author} with topic: {topic}")
         async with ctx.typing():
             try:
                 response = self.model.generate_content(prompt)
@@ -106,3 +111,78 @@ class GeminiCog(commands.Cog):
             except Exception as e:
                 print(f"[mrank ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
+
+    @commands.command(name="image", help="🖼️ Generate gambar AI gratis via Stable Horde")
+    async def mimage_command(self, ctx, *, prompt: str):
+        await ctx.typing()
+
+        horde_api_key = os.getenv("HORDE_API_KEY")
+        if not horde_api_key:
+            return await ctx.send("❌ HORDE_API_KEY belum disetel di .env", delete_after=5)
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "apikey": horde_api_key,
+            "Client-Agent": "madbot@mad99"
+        }
+
+        payload = {
+            "prompt": prompt,
+            "params": {
+                "sampler_name": "k_euler",
+                "cfg_scale": 7,
+                "steps": 20,
+                "width": 512,
+                "height": 512
+            },
+            "nsfw": False,
+            "models": ["stable_diffusion"],
+            "r2": True,
+            "trusted_workers": False,
+            "slow_workers": True
+        }
+
+        try:
+            res = requests.post("https://stablehorde.net/api/v2/generate/async", headers=headers, json=payload)
+            res.raise_for_status()
+            job_id = res.json()["id"]
+        except Exception as e:
+            print(f"[mimage ERROR] Submit failed: {e}")
+            return await ctx.send("❌ Gagal mengirim permintaan ke Stable Horde. Cek API key atau model.", delete_after=5)
+
+        await ctx.send("🎨 Membuat gambar... Mohon tunggu sebentar...")
+
+        # Poll status
+        for _ in range(60):  # max 5 menit
+            await asyncio.sleep(5)
+            try:
+                status = requests.get(f"https://stablehorde.net/api/v2/generate/status/{job_id}", headers=headers)
+                status.raise_for_status()
+                data = status.json()
+                if data.get("done"):
+                    break
+            except:
+                pass
+        else:
+            return await ctx.send("⏰ Timeout. Server terlalu lama memproses gambar.", delete_after=5)
+
+        try:
+            result = requests.get(f"https://stablehorde.net/api/v2/generate/status/{job_id}", headers=headers)
+            generations = result.json().get("generations", [])
+            if not generations:
+                return await ctx.send("⚠️ Tidak ada gambar yang dihasilkan.", delete_after=5)
+
+            image_url = generations[0]["img"]
+            img_data = requests.get(image_url).content
+            filename = f"{uuid.uuid4().hex}.png"
+            with open(filename, "wb") as f:
+                f.write(img_data)
+
+            await ctx.send(file=discord.File(filename, filename="mimage.png"))
+            os.remove(filename)
+
+        except Exception as e:
+            print(f"[mimage ERROR] {e}")
+            await ctx.send("❌ Terjadi error saat mengunduh gambar.", delete_after=5)
+

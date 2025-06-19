@@ -69,9 +69,9 @@ class main_cog(commands.Cog):
             name="🤖 AI",
             value=(
                 "`ai (question)`  - generate ai berdasarkan pertanyaanr\n"
-                "`anomali (name)` - generate nama dan kisah anomali dari nama"
-                "`truth`          - memberikan pertanyaan untuk game (truth) or dare"
-                "`dare`           - memberikan pertanyaan untuk game truth or (dare)" 
+                "`anomali (name)` - generate nama dan kisah anomali dari nama\n"
+                "`truth`          - memberikan pertanyaan untuk game (truth) or dare\n"
+                "`dare`           - memberikan pertanyaan untuk game truth or (dare)\n" 
                 "`rank <topik>`   - memberikan rank untuk topik tertentu"
             ),
             inline=False
