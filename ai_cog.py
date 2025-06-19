@@ -29,7 +29,7 @@ class GeminiCog(commands.Cog):
 
             except Exception as e:
                 print(f"[Gemini ERROR] {e}")
-                await ctx.send(f"❌ Terjadi error: {str(e)}")
+                await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
     @commands.command(name="anomali", help="Generate kata anomali beserta kisah background berdasarkan nama")
     async def anomali_command(self, ctx, *, name: str):
@@ -54,7 +54,7 @@ class GeminiCog(commands.Cog):
 
             except Exception as e:
                 print(f"[Anomali ERROR] {e}")
-                await ctx.send(f"❌ Terjadi error: {str(e)}")
+                await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
     @commands.command(name="truth", help="Dapatkan pertanyaan truth dari AI")
     async def truth_command(self, ctx):
@@ -71,12 +71,12 @@ class GeminiCog(commands.Cog):
                 await ctx.send(f"**Truth:** {truth_question}")
             except Exception as e:
                 print(f"[Truth ERROR] {e}")
-                await ctx.send(f"❌ Terjadi error: {str(e)}")
+                await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
     @commands.command(name="dare", help="Dapatkan tantangan dare dari AI")
     async def dare_command(self, ctx):
         prompt = (
-            "Beri aku **satu tantangan dare** yang lucu, aneh, atau memalukan. "
+            "Beri aku **satu tantangan dare** yang lucu, aneh, atau memalukan serta unik, kalau bisa sangat random. "
             "Hanya tampilkan dare-nya saja tanpa kata lain. "
             "Contoh format output: 'Cium benda terdekat dan kirim fotonya.'"
         )
@@ -88,4 +88,21 @@ class GeminiCog(commands.Cog):
                 await ctx.send(f"**Dare:** {dare_text}")
             except Exception as e:
                 print(f"[Dare ERROR] {e}")
-                await ctx.send(f"❌ Terjadi error: {str(e)}")
+                await ctx.send(f"\u274c Terjadi error: {str(e)}")
+
+    @commands.command(name="rank", help="Buat ranking lucu berdasarkan topik yang kamu kasih")
+    async def mrank_command(self, ctx, *, topic: str):
+        prompt = (
+            f"Buat daftar ranking lucu berdasarkan topik: '{topic}'. "
+            "Tampilkan 5 urutan ranking dengan deskripsi singkat yang lucu atau satir. Gunakan format:"
+            "1. [Item] - [Deskripsi singkat]\n"
+            "2. ... sampai 5."
+        )
+        async with ctx.typing():
+            try:
+                response = self.model.generate_content(prompt)
+                ranking_text = response.candidates[0].content.parts[0].text.strip()
+                await ctx.send(f"**Ranking untuk topik:** {topic}\n{ranking_text}")
+            except Exception as e:
+                print(f"[mrank ERROR] {e}")
+                await ctx.send(f"\u274c Terjadi error: {str(e)}")

@@ -12,7 +12,7 @@ class main_cog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        activity = discord.Game(name="mad |md |m")
+        activity = discord.Game(name="mad help|md help|mhelp")
         await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
 
 
@@ -46,7 +46,9 @@ class main_cog(commands.Cog):
                 "`clear / cl <amount>`        - Hapus pesan (owner only)\n"
                 "`pick <opsi1, opsi2>`        - Pilih acak dari beberapa opsi\n"
                 "`giveaway <hadiah> <durasi>` - Buat giveaway\n"
-                "`poll <pertanyaan>`          - Buat polling ya/tidak"
+                "`poll <pertanyaan>`          - Buat polling ya/tidak\n"
+                "`ping`                       - Cek Ping Bot\n"
+                "`tts <teks>`                 - Ubah teks jadi text-to-speech\n"
             ),
             inline=False
         )
@@ -66,8 +68,11 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🤖 AI",
             value=(
-                "`ai (question) - generate ai berdasarkan pertanyaanr\n"
+                "`ai (question)`  - generate ai berdasarkan pertanyaanr\n"
                 "`anomali (name)` - generate nama dan kisah anomali dari nama"
+                "`truth`          - memberikan pertanyaan untuk game (truth) or dare"
+                "`dare`           - memberikan pertanyaan untuk game truth or (dare)" 
+                "`rank <topik>`   - memberikan rank untuk topik tertentu"
             ),
             inline=False
         )
@@ -75,7 +80,7 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🕹️ Game",
             value=(
-                " sambungkata - game sambung kata multiplayer\n"
+                "`sambungkata`    - game sambung kata multiplayer\n"
                 "`stopgame`       - stop game yang sudah dimulai (host only)"
             ),
             inline=False
@@ -87,7 +92,7 @@ class main_cog(commands.Cog):
                 "`p / play <lagu>`          - Putar lagu dari YouTube\n"
                 "`q / queue`                - Lihat antrian lagu\n"
                 "`skip`                     - Lewati lagu saat ini\n"
-                "`setch <id_channel>`       - Set channel musik (owner only)\n"
+                "`setchmusic <id_channel>`  - Set channel musik (owner only)\n"
                 "`leave / disconnect / dc`  - Hentikan dan keluar voice\n"
                 "`shuffle`                  - Acak antrian\n"
                 "`loop current / queue`     - Loop lagu atau antrian"
@@ -108,6 +113,7 @@ class main_cog(commands.Cog):
             name="🆙 XP System",
             value=(
                 "`level`                           - Lihat level XP kamu\n"
+                "`setchlevel <id channel>`         - Set Channel kirim leveling info (owner only)\n"
                 "`setrolelvl <level> <id role>`    - Auto-role saat level tertentu\n"
                 "`removerolelvl <level> <id role>` - Hapus auto-role"
             ),
@@ -115,8 +121,11 @@ class main_cog(commands.Cog):
         )
 
         embed.add_field(
-            name="📤 Auto Send",
-            value="Auto konversi link Instagram reels/video TikTok ke video",
+            name="📤 Download Video / Audio",
+            value=(
+                " Auto konversi link Instagram reels/video TikTok/Yt Shorts ke video saat kirim link\n"
+                "`mp3 <video>/<link>`         - ambil audio dari video/link\n"
+            ),
             inline=False
         )
 
