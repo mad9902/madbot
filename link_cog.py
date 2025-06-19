@@ -11,7 +11,6 @@ import re
 import logging
 import subprocess
 import uuid
-from gtts import gTTS
 
 logger = logging.getLogger('link_cog')
 logger.setLevel(logging.DEBUG)
