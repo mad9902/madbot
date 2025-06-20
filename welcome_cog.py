@@ -50,7 +50,6 @@ class WelcomeMessageConfig(commands.Cog):
             return await ctx.send("❌ Gagal mendapatkan channel.")
 
         embed = discord.Embed(
-            title=f"👋 Selamat Datang di {ctx.guild.name}!",
             description=message.replace("{guild}", ctx.guild.name),
             color=discord.Color.blurple()
         )
@@ -78,7 +77,6 @@ class WelcomeMessageConfig(commands.Cog):
             return
 
         embed = discord.Embed(
-            title=f"👋 Selamat Datang di {member.guild.name}!",
             description=message.replace("{guild}", member.guild.name),
             color=discord.Color.blurple()
         )
