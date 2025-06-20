@@ -106,9 +106,11 @@ def migrate(db):
         guild_id BIGINT NOT NULL,
         word VARCHAR(100) NOT NULL,
         response TEXT NOT NULL,
+        type ENUM('female', 'partnership', 'pelanggaran') DEFAULT NULL,
         PRIMARY KEY (guild_id, word)
     );
     """)
+
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS welcome_messages (

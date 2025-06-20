@@ -228,22 +228,33 @@ def get_all_birthdays(db, guild_id):
     cursor.close()
     return result
 
-def add_banned_word(db, guild_id, word, response):
+def add_banned_word(db, guild_id, word, response, word_type=None):
     cursor = db.cursor()
-    cursor.execute("""
-        INSERT INTO banned_words (guild_id, word, response)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE response = VALUES(response)
-    """, (guild_id, word.lower(), response))
+    if word_type:
+        cursor.execute("""
+            INSERT INTO banned_words (guild_id, word, response, type)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                response = VALUES(response),
+                type = VALUES(type)
+        """, (guild_id, word.lower(), response, word_type))
+    else:
+        cursor.execute("""
+            INSERT INTO banned_words (guild_id, word, response)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE response = VALUES(response)
+        """, (guild_id, word.lower(), response))
     db.commit()
     cursor.close()
 
+
 def get_all_banned_words(db, guild_id):
     cursor = db.cursor()
-    cursor.execute("SELECT word, response FROM banned_words WHERE guild_id = %s", (guild_id,))
+    cursor.execute("SELECT word, response, type FROM banned_words WHERE guild_id = %s", (guild_id,))
     results = cursor.fetchall()
     cursor.close()
-    return results
+    return results  # list of tuples: (word, response, type)
+
 
 def set_welcome_message(db, guild_id: int, message: str):
     cursor = db.cursor()
