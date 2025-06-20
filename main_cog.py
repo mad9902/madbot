@@ -1,9 +1,11 @@
 import discord
 import random
 import asyncio
-
 from discord.ext import commands
 from discord import app_commands
+
+DISABLED_GUILDS = set()
+OWNER_ID = 416234104317804544
 
 class main_cog(commands.Cog):
     def __init__(self, bot):
@@ -15,181 +17,32 @@ class main_cog(commands.Cog):
         activity = discord.Game(name="mad help|md help|mhelp")
         await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
 
-
-        # Simpan semua text channels di semua guild
         for guild in self.bot.guilds:
             for channel in guild.text_channels:
                 self.text_channel_list.append(channel)
-                
-    @app_commands.command(name="ping", description="Cek latensi bot.")
-    async def slash_ping(self, interaction: discord.Interaction):
-        latency = round(self.bot.latency * 1000)
-        await interaction.response.send_message(f"[SLASH] Pong! 🏓 Latensi: {latency}ms")
 
-    @commands.command(name="ping", help="Cek latensi bot.")
-    async def prefix_ping(self, ctx):
-        latency = round(self.bot.latency * 1000)
-        await ctx.send(f"Pong! 🏓 Latensi: {latency}ms")
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.guild and message.guild.id in DISABLED_GUILDS:
+            return  # ⛔ bot nonaktif di server ini
+        await self.bot.process_commands(message)
 
-    @commands.command(name="help", aliases=["h"], help="Displays all the available commands")
-    async def help(self, ctx):
-        embed = discord.Embed(
-            title="📜 MAD BOT HELP",
-            description="Daftar command yang tersedia:\nGunakan prefix `mad , md , m` sebelum command.\nContoh: `mad play | md play | mplay`",
-            color=discord.Color.purple()
-        )
+    @commands.command(name="botoff", help="Nonaktifkan sementara bot di server ini.")
+    async def botoff(self, ctx):
+        if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
+            return await ctx.send("❌ Hanya admin atau owner bot yang dapat menonaktifkan bot.")
+        DISABLED_GUILDS.add(ctx.guild.id)
+        await ctx.send("🛑 Bot telah dinonaktifkan sementara di server ini.")
 
-        embed.add_field(
-            name="💬 General Commands",
-            value=(
-                "`help`                       - Tampilkan semua command\n"
-                "`clear / cl <amount>`        - Hapus pesan (owner only)\n"
-                "`pick <opsi1, opsi2>`        - Pilih acak dari beberapa opsi\n"
-                "`giveaway <hadiah> <durasi>` - Buat giveaway\n"
-                "`poll <pertanyaan>`          - Buat polling ya/tidak\n"
-                "`ping`                       - Cek Ping Bot\n"
-                "`tts <teks>`                 - Ubah teks jadi text-to-speech\n"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🖼️ Image Commands",
-            value=(
-                "`emoji <emoji or id>`   - Ambil emoji sebagai gambar\n"
-                "`sticker <reply or id>` - Ambil stiker sebagai gambar\n"
-                "`avatar <tag optional>` - Ambil avatar user\n"
-                "`upload <image>`        - Upload gambar ke link\n"
-                "`caption <reply image>` - add caption ke gambar (additional command --uppercase --lowercase --top --bottom)"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🤖 AI",
-            value=(
-                "`ai (question)`  - generate ai berdasarkan pertanyaan\n"
-                "`anomali (name)` - generate nama dan kisah anomali dari nama\n"
-                "`truth`          - memberikan pertanyaan untuk game (truth) or dare\n"
-                "`dare`           - memberikan pertanyaan untuk game truth or (dare)\n"
-                "`rank <topik>`   - memberikan rank untuk topik tertentu"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🕹️ Game",
-            value=(
-                "`sambungkata`    - game sambung kata multiplayer\n"
-                "`stopgame`       - stop game yang sudah dimulai (host only)"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🎵 Music Commands",
-            value=(
-                "`p / play <lagu>`          - Putar lagu dari YouTube\n"
-                "`q / queue`                - Lihat antrian lagu\n"
-                "`skip`                     - Lewati lagu saat ini\n"
-                "`setchmusic <id_channel>`  - Set channel musik (owner only)\n"
-                "`leave / disconnect / dc`  - Hentikan dan keluar voice\n"
-                "`shuffle`                  - Acak antrian\n"
-                "`loop current / queue`     - Loop lagu atau antrian"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="📌 Role Reaction (owner only)",
-            value=(
-                "`rolemenu <emoji> <nama role>`\n"
-                "Contoh: `mad rolemenu 🎮 Gamer, 🧱 Minecraft`"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🆙 XP System",
-            value=(
-                "`level`                           - Lihat level XP kamu\n"
-                "`leaderboard`                     - Lihat top 10 leaderboard XP\n"
-                "`setchlevel <id channel>`         - Set Channel kirim leveling info (owner only)\n"
-                "`setrolelvl <level> <id role>`    - Auto-role saat level tertentu\n"
-                "`removerolelvl <level>`           - Hapus auto-role"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🎂 Birthday",
-            value=(
-                "`setbirthday [@user|nama] <tanggal>` - Simpan ulang tahun kamu atau orang lain\n"
-                "`mybirthday`                         - Lihat ulang tahun kamu\n"
-                "`birthdaylist`                       - Daftar ulang tahun semua user\n"
-                "`nearestbirthday`                    - Ulang tahun terdekat\n"
-                "`deletebirthday [@user|nama]`        - Hapus ulang tahun (owner only)\n"
-                "`setbirthdaych <channel>`            - Set channel ucapan ulang tahun"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="😴 AFK",
-            value=(
-                "`afk <alasan>` - Tandai kamu AFK\n"
-                "AFK akan dihapus otomatis saat kamu kirim pesan"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🌐 Translate",
-            value=(
-                "`translate <teks> <kode_bahasa>` - Terjemahkan teks ke bahasa tertentu\n"
-                "Contoh: `mtranslate Aku suka kamu en`"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="📤 Download Video / Audio",
-            value=(
-                " Auto konversi link Instagram reels/video TikTok/Yt Shorts ke video saat kirim link\n"
-                "`mp3 <video>/<link>`         - ambil audio dari video/link\n"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="ℹ️ Info",
-            value=(
-                "`serverinfo`     - Info server\n"
-                "`userinfo <tag>` - Info user"
-            ),
-            inline=False
-        )
-
-        embed.set_footer(text="Gunakan command dengan bijak ✨")
-
-        await ctx.send(embed=embed)
-
-
-
-    @commands.command(name="clear", aliases=["cl"], help="Clears a specified amount of messages")
-    async def clear(self, ctx, arg):
-        # Cek apakah user adalah pemilik server atau user dengan ID tertentu
-        if ctx.author.id != 416234104317804544 and ctx.author != ctx.guild.owner:
-            await ctx.send("❌ Maaf, hanya pemilik server yang bisa menggunakan command ini.")
-            return
-        amount = 5
-        try:
-            amount = int(arg)
-        except Exception:
-            pass
-
-        await ctx.channel.purge(limit=amount)
-        await ctx.send(f"✅ Berhasil menghapus {amount} pesan.", delete_after=5)
+    @commands.command(name="boton", help="Aktifkan kembali bot di server ini.")
+    async def boton(self, ctx):
+        if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
+            return await ctx.send("❌ Hanya admin atau owner bot yang dapat mengaktifkan bot.")
+        if ctx.guild.id in DISABLED_GUILDS:
+            DISABLED_GUILDS.remove(ctx.guild.id)
+            await ctx.send("✅ Bot telah diaktifkan kembali di server ini.")
+        else:
+            await ctx.send("ℹ️ Bot memang sudah aktif di server ini.")
 
 
     # @commands.Cog.listener()

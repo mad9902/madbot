@@ -101,5 +101,15 @@ def migrate(db):
     );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS banned_words (
+        guild_id BIGINT NOT NULL,
+        word VARCHAR(100) NOT NULL,
+        response TEXT NOT NULL,
+        PRIMARY KEY (guild_id, word)
+    );
+    """)
+
     db.commit()
     cursor.close()
+    

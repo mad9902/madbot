@@ -20,6 +20,7 @@ from level_cog import LevelCog
 from game_cog import SambungKataMultiplayer
 from afk_cog import AFK
 from birthday_cog import Birthday
+from bannedwords_cog import BannedWordsCog
 
 # Load env
 load_dotenv()
@@ -76,6 +77,7 @@ async def main():
     await bot.add_cog(SambungKataMultiplayer(bot))
     await bot.add_cog(AFK(bot))
     await bot.add_cog(Birthday(bot))
+    await bot.add_cog(BannedWordsCog(bot))
 
     # Jalankan bot
     await bot.start(os.getenv("TOKEN"))

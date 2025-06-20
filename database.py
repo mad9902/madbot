@@ -227,3 +227,20 @@ def get_all_birthdays(db, guild_id):
     result = cursor.fetchall()
     cursor.close()
     return result
+
+def add_banned_word(db, guild_id, word, response):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO banned_words (guild_id, word, response)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE response = VALUES(response)
+    """, (guild_id, word.lower(), response))
+    db.commit()
+    cursor.close()
+
+def get_all_banned_words(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("SELECT word, response FROM banned_words WHERE guild_id = %s", (guild_id,))
+    results = cursor.fetchall()
+    cursor.close()
+    return results
