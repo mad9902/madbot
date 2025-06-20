@@ -8,166 +8,153 @@ from database import (
     set_channel_settings,
     get_channel_settings
 )
+import time
 
 class LevelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.guild_level_roles = {}  # Format: {guild_id(int): {level(int): role_id(int)}}
         self.db = bot.db
+        self.guild_level_roles = {}  # {guild_id: {level: role_id}}
+        self.last_xp = {}  # {(guild_id, user_id): timestamp}
 
     def calculate_level(self, xp: int) -> int:
         level = 0
-        required_xp = 100
-        while xp >= required_xp:
-            xp -= required_xp
+        required = 100
+        while xp >= required:
+            xp -= required
             level += 1
-            required_xp = int(required_xp * 1.5)
+            required = int(required * 1.5)
         return level
 
     async def load_level_roles(self):
-        if self.db is None:
-            print("[ERROR] Gagal connect ke DB saat load_level_roles")
-            return
         cursor = self.db.cursor()
         cursor.execute("SELECT guild_id, level, role_id FROM level_roles")
-        rows = cursor.fetchall()
+        for guild_id, level, role_id in cursor.fetchall():
+            self.guild_level_roles.setdefault(int(guild_id), {})[int(level)] = int(role_id)
         cursor.close()
-
-        self.guild_level_roles.clear()
-        for guild_id, level, role_id in rows:
-            guild_id = int(guild_id)
-            level = int(level)
-            role_id = int(role_id)
-            if guild_id not in self.guild_level_roles:
-                self.guild_level_roles[guild_id] = {}
-            self.guild_level_roles[guild_id][level] = role_id
 
     @commands.Cog.listener()
     async def on_ready(self):
         await self.load_level_roles()
 
-    @commands.command(name='level')
-    async def level(self, ctx):
-        user = ctx.author
-        user_id = user.id
-        guild_id = ctx.guild.id
-        xp = get_user_xp(self.db, user_id, guild_id)
+    @commands.command(name="level")
+    async def show_level(self, ctx):
+        xp = get_user_xp(self.db, ctx.author.id, ctx.guild.id)
         level = self.calculate_level(xp)
-        await ctx.send(f"🔢 {user.name}, kamu level {level} dengan {xp} XP.")
+        await ctx.send(f"🔢 {ctx.author.mention}, kamu level {level} dengan {xp} XP.")
 
     @commands.command(name="setrolelvl")
-    async def set_role_level(self, ctx, level: int, role_id: int):
-        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
-            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
-            return
+    async def set_role_level(self, ctx, level: int, role: discord.Role):
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
 
-        guild_id = ctx.guild.id
-
-        insert_level_role(self.db, guild_id, level, role_id)
-
-        if guild_id not in self.guild_level_roles:
-            self.guild_level_roles[guild_id] = {}
-        self.guild_level_roles[guild_id][level] = role_id
-
-        await ctx.send(f"✅ Role dengan ID `{role_id}` akan diberikan pada level `{level}`.")
+        insert_level_role(self.db, ctx.guild.id, level, role.id)
+        self.guild_level_roles.setdefault(ctx.guild.id, {})[level] = role.id
+        await ctx.send(f"✅ Role {role.mention} akan diberikan pada level {level}.")
 
     @commands.command(name="removerolelvl")
     async def remove_role_level(self, ctx, level: int):
-        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
-            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
-            return
-
-        guild_id = ctx.guild.id
-        if self.db is None:
-            await ctx.send("❌ Gagal koneksi ke database.")
-            return
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
         cursor = self.db.cursor()
-        cursor.execute("DELETE FROM level_roles WHERE guild_id=%s AND level=%s", (guild_id, level))
+        cursor.execute("DELETE FROM level_roles WHERE guild_id=%s AND level=%s", (ctx.guild.id, level))
         self.db.commit()
         cursor.close()
-
-        if guild_id in self.guild_level_roles and level in self.guild_level_roles[guild_id]:
-            del self.guild_level_roles[guild_id][level]
-
-        await ctx.send(f"✅ Role level untuk level `{level}` telah dihapus.")
+        self.guild_level_roles.get(ctx.guild.id, {}).pop(level, None)
+        await ctx.send(f"✅ Role untuk level {level} dihapus.")
 
     @commands.command(name="setchlevel")
     async def setchlevel(self, ctx, channel: discord.TextChannel):
-        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
-            await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
-            return
-
-        guild_id = ctx.guild.id  # gunakan int
-        channel_id = channel.id  # gunakan int
-
-        # Perbaikan: urutan argumen sesuai fungsi set_channel_settings(db, guild_id, setting_type, channel_id)
-        set_channel_settings(self.db, guild_id, "level", channel_id)
-        await ctx.send(f"✅ Channel khusus level-up telah disetel ke {channel.mention}")
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        set_channel_settings(self.db, ctx.guild.id, "level", channel.id)
+        await ctx.send(f"✅ Channel level-up diatur ke {channel.mention}")
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or message.guild is None:
+        if message.author.bot or not message.guild:
             return
 
-        # Skip jika pesan dimulai dengan prefix bot
-        prefix = "!"
-        if message.content.startswith(prefix):
+        now = time.time()
+        key = (message.guild.id, message.author.id)
+        if key in self.last_xp and now - self.last_xp[key] < 10:
             return
+        self.last_xp[key] = now
 
-        user = message.author
-        user_id = user.id
+        base_xp = 5
+        bonus = min(len(message.content) // 20, 10)
+        gained = base_xp + bonus
+
+        user_id = message.author.id
         guild_id = message.guild.id
 
-        previous_xp = get_user_xp(self.db, user_id, guild_id)
-        new_xp = previous_xp + 10
-        set_user_xp(self.db, user_id, guild_id, new_xp)
+        xp_before = get_user_xp(self.db, user_id, guild_id)
+        xp_after = xp_before + gained
+        set_user_xp(self.db, user_id, guild_id, xp_after)
 
-        old_level = self.calculate_level(previous_xp)
-        new_level = self.calculate_level(new_xp)
+        level_before = self.calculate_level(xp_before)
+        level_after = self.calculate_level(xp_after)
 
-        if new_level > old_level:
-            # Cek role dari cache dulu
-            role_id = None
-            guild_roles = self.guild_level_roles.get(guild_id)
-            if guild_roles:
-                role_id = guild_roles.get(new_level)
-
-            # Kalau belum ada, ambil dari DB lalu update cache
+        if level_after > level_before:
+            role_id = self.guild_level_roles.get(guild_id, {}).get(level_after)
             if role_id is None:
-                role_id = get_level_role(self.db, guild_id, new_level)
+                role_id = get_level_role(self.db, guild_id, level_after)
                 if role_id:
-                    if guild_id not in self.guild_level_roles:
-                        self.guild_level_roles[guild_id] = {}
-                    self.guild_level_roles[guild_id][new_level] = role_id
+                    self.guild_level_roles.setdefault(guild_id, {})[level_after] = role_id
 
-            message_content = f"🎉 {user.mention} naik ke level {new_level}!"
-
+            msg = f"🎉 {message.author.mention} naik ke level {level_after}!"
             if role_id:
+                role = message.guild.get_role(int(role_id))
+                if role and role not in message.author.roles:
+                    try:
+                        if message.guild.me.top_role.position > role.position:
+                            await message.author.add_roles(role)
+                            msg += f" Kamu mendapatkan role **{role.name}**!"
+                    except Exception as e:
+                        print(f"[ERROR] Memberi role gagal: {e}")
+
+            ch_id = get_channel_settings(self.db, guild_id, "level")
+            channel = message.guild.get_channel(int(ch_id)) if ch_id else message.channel
+            await channel.send(msg)
+
+    @commands.command(name="leaderboard", help="Menampilkan 10 user dengan XP tertinggi")
+    async def leaderboard(self, ctx):
+        cursor = self.db.cursor()
+        cursor.execute("""
+            SELECT user_id, xp FROM user_levels
+            WHERE guild_id = %s ORDER BY xp DESC LIMIT 10
+        """, (ctx.guild.id,))
+        results = cursor.fetchall()
+        cursor.close()
+
+        if not results:
+            return await ctx.send("📉 Tidak ada data XP untuk server ini.")
+
+        embed = discord.Embed(
+            title="🏆 Leaderboard Level",
+            description="Top 10 user berdasarkan XP",
+            color=discord.Color.gold()
+        )
+
+        for i, (user_id, xp) in enumerate(results, start=1):
+            user = ctx.guild.get_member(user_id)
+            if user:
+                name = user.display_name
+            else:
                 try:
-                    role_id_int = int(role_id)
-                    role = discord.utils.get(message.guild.roles, id=role_id_int)
-                    if role and role not in user.roles:
-                        bot_member = message.guild.me
-                        if bot_member.top_role.position > role.position:
-                            await user.add_roles(role)
-                            message_content += f" Kamu juga mendapatkan role **{role.name}**!"
-                except Exception as e:
-                    print(f"[ERROR] Gagal memberi role: {e}")
+                    user = await self.bot.fetch_user(user_id)
+                    name = f"{user.name}#{user.discriminator}"
+                except:
+                    name = f"`{user_id}`"
 
-            # Ambil channel khusus level dari DB
-            channel_id_str = get_channel_settings(self.db, guild_id, setting_type="level")
-            target_channel = None
-            if channel_id_str:
-                try:
-                    channel_id_int = int(channel_id_str)
-                    target_channel = message.guild.get_channel(channel_id_int)
-                except Exception as e:
-                    print(f"[ERROR] Gagal konversi channel_id: {e}")
+            level = self.calculate_level(xp)
+            embed.add_field(
+                name=f"#{i} {name}",
+                value=f"⭐ Level {level} – {xp} XP",
+                inline=False
+            )
 
-            if not target_channel:
-                target_channel = message.channel
-
-            await target_channel.send(message_content)
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(LevelCog(bot))

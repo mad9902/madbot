@@ -67,5 +67,38 @@ def migrate(db):
         );
         """)
 
+    # Tabel AFK
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS afk_status (
+        user_id BIGINT NOT NULL,
+        guild_id BIGINT NOT NULL,
+        reason TEXT,
+        since TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, guild_id)
+    );
+    """)
+
+    # # Tabel Statistik Pesan
+    # cursor.execute("""
+    # CREATE TABLE IF NOT EXISTS user_stats (
+    #     user_id BIGINT NOT NULL,
+    #     guild_id BIGINT NOT NULL,
+    #     message_count INT DEFAULT 0,
+    #     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    #     PRIMARY KEY (user_id, guild_id)
+    # );
+    # """)
+
+    # Tabel Birthday
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS birthdays (
+        user_id BIGINT NOT NULL,
+        guild_id BIGINT NOT NULL,
+        birthdate DATE NOT NULL,
+        display_name VARCHAR(100),
+        PRIMARY KEY (user_id, guild_id)
+    );
+    """)
+
     db.commit()
     cursor.close()

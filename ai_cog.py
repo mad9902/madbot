@@ -94,7 +94,7 @@ class GeminiCog(commands.Cog):
                 print(f"[Dare ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="mrank", help="Buat ranking lucu berdasarkan topik yang kamu kasih")
+    @commands.command(name="rank", help="Buat ranking lucu berdasarkan topik yang kamu kasih")
     async def mrank_command(self, ctx, *, topic: str):
         prompt = (
             f"Buat daftar ranking lucu berdasarkan topik: '{topic}'. "
@@ -102,14 +102,14 @@ class GeminiCog(commands.Cog):
             "1. [Item] - [Deskripsi singkat]\n"
             "2. ... sampai 5."
         )
-        print(f"[mrank COMMAND] Called by {ctx.author} with topic: {topic}")
+        print(f"[rank COMMAND] Called by {ctx.author} with topic: {topic}")
         async with ctx.typing():
             try:
                 response = self.model.generate_content(prompt)
                 ranking_text = response.candidates[0].content.parts[0].text.strip()
                 await ctx.send(f"**Ranking untuk topik:** {topic}\n{ranking_text}")
             except Exception as e:
-                print(f"[mrank ERROR] {e}")
+                print(f"[rank ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
     @commands.command(name="image", help="🖼️ Generate gambar AI gratis via Stable Horde")
@@ -186,3 +186,26 @@ class GeminiCog(commands.Cog):
             print(f"[mimage ERROR] {e}")
             await ctx.send("❌ Terjadi error saat mengunduh gambar.", delete_after=5)
 
+
+    @commands.command(name="translate", help="Terjemahkan teks ke bahasa lain. Bisa pakai nama atau kode bahasa.")
+    async def translate_command(self, ctx, *, arg: str):
+        args = arg.strip().rsplit(" ", 1)
+        if len(args) < 2:
+            return await ctx.send("❗ Format salah.\nContoh: `mad translate aku lapar en` atau `mad translate aku lapar jepang`")
+
+        text, target_lang = args
+        prompt = (
+            f"Terjemahkan kalimat berikut ke dalam bahasa '{target_lang}'. "
+            f"Tampilkan hanya hasil terjemahannya, tanpa penjelasan atau embel-embel:\n\n"
+            f"Teks: {text}"
+        )
+
+        print(f"[Translate COMMAND] Called by {ctx.author} → '{text}' → {target_lang}")
+        async with ctx.typing():
+            try:
+                response = self.model.generate_content(prompt)
+                translated = response.candidates[0].content.parts[0].text.strip()
+                await ctx.send(f"**Hasil terjemahan ke {target_lang}:**\n{translated}")
+            except Exception as e:
+                print(f"[Translate ERROR] {e}")
+                await ctx.send("❌ Terjadi error saat menerjemahkan.")

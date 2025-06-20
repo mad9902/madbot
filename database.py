@@ -139,4 +139,91 @@ def set_channel_settings(db, guild_id, setting_type, channel_id):
     cursor.close()
 
 
+def set_afk(db, user_id, guild_id, reason):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO afk_status (user_id, guild_id, reason)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE reason=VALUES(reason), since=CURRENT_TIMESTAMP
+    """, (user_id, guild_id, reason))
+    db.commit()
+    cursor.close()
+
+def get_afk(db, user_id, guild_id):
+    cursor = db.cursor()
+    cursor.execute("SELECT reason FROM afk_status WHERE user_id=%s AND guild_id=%s", (user_id, guild_id))
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
+
+def clear_afk(db, user_id, guild_id):
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM afk_status WHERE user_id=%s AND guild_id=%s", (user_id, guild_id))
+    db.commit()
+    cursor.close()
+
+def get_xp_leaderboard(db, guild_id, limit=10):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT user_id, xp FROM user_levels
+        WHERE guild_id = %s
+        ORDER BY xp DESC
+        LIMIT %s
+    """, (guild_id, limit))
+    results = cursor.fetchall()
+    cursor.close()
+    return results
+
+def set_birthday(db, user_id, guild_id, birthdate, display_name=None):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO birthdays (user_id, guild_id, birthdate, display_name)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE birthdate = VALUES(birthdate), display_name = VALUES(display_name)
+    """, (user_id, guild_id, birthdate, display_name))
+    db.commit()
+    cursor.close()
+
+def delete_birthday(db, user_id, guild_id):
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM birthdays WHERE user_id=%s AND guild_id=%s", (user_id, guild_id))
+    db.commit()
+    cursor.close()
+
+def get_birthday(db, user_id, guild_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT birthdate FROM birthdays
+        WHERE user_id = %s AND guild_id = %s
+    """, (user_id, guild_id))
+    result = cursor.fetchone()
+    cursor.close()
+    return result[0] if result else None
+
+
+def get_today_birthdays(db):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT user_id, guild_id, display_name FROM birthdays
+        WHERE DAY(birthdate) = DAY(CURDATE()) AND MONTH(birthdate) = MONTH(CURDATE())
+    """)
+    result = cursor.fetchall()
+    cursor.close()
+    return result
+
+
+
+def get_all_birthdays(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT user_id, birthdate, display_name FROM birthdays
+        WHERE guild_id = %s
+        ORDER BY MONTH(birthdate), DAY(birthdate)
+    """, (guild_id,))
+    result = cursor.fetchall()
+    cursor.close()
+    return result
+
+
+
 

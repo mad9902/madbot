@@ -18,7 +18,8 @@ from link_cog import link_cog
 from ai_cog import GeminiCog
 from level_cog import LevelCog
 from game_cog import SambungKataMultiplayer
-
+from afk_cog import AFK
+from birthday_cog import Birthday
 
 # Load env
 load_dotenv()
@@ -72,7 +73,9 @@ async def main():
     await bot.add_cog(link_cog(bot))
     await bot.add_cog(LevelCog(bot))
     await bot.add_cog(GeminiCog(bot))
-    await bot.add_cog(SambungKataMultiplayer(bot))  # ✅ harus pakai await!
+    await bot.add_cog(SambungKataMultiplayer(bot))
+    await bot.add_cog(AFK(bot))
+    await bot.add_cog(Birthday(bot))
 
     # Jalankan bot
     await bot.start(os.getenv("TOKEN"))

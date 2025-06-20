@@ -68,10 +68,10 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🤖 AI",
             value=(
-                "`ai (question)`  - generate ai berdasarkan pertanyaanr\n"
+                "`ai (question)`  - generate ai berdasarkan pertanyaan\n"
                 "`anomali (name)` - generate nama dan kisah anomali dari nama\n"
                 "`truth`          - memberikan pertanyaan untuk game (truth) or dare\n"
-                "`dare`           - memberikan pertanyaan untuk game truth or (dare)\n" 
+                "`dare`           - memberikan pertanyaan untuk game truth or (dare)\n"
                 "`rank <topik>`   - memberikan rank untuk topik tertentu"
             ),
             inline=False
@@ -113,9 +113,41 @@ class main_cog(commands.Cog):
             name="🆙 XP System",
             value=(
                 "`level`                           - Lihat level XP kamu\n"
+                "`leaderboard`                     - Lihat top 10 leaderboard XP\n"
                 "`setchlevel <id channel>`         - Set Channel kirim leveling info (owner only)\n"
                 "`setrolelvl <level> <id role>`    - Auto-role saat level tertentu\n"
-                "`removerolelvl <level> <id role>` - Hapus auto-role"
+                "`removerolelvl <level>`           - Hapus auto-role"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎂 Birthday",
+            value=(
+                "`setbirthday [@user|nama] <tanggal>` - Simpan ulang tahun kamu atau orang lain\n"
+                "`mybirthday`                         - Lihat ulang tahun kamu\n"
+                "`birthdaylist`                       - Daftar ulang tahun semua user\n"
+                "`nearestbirthday`                    - Ulang tahun terdekat\n"
+                "`deletebirthday [@user|nama]`        - Hapus ulang tahun (owner only)\n"
+                "`setbirthdaych <channel>`            - Set channel ucapan ulang tahun"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="😴 AFK",
+            value=(
+                "`afk <alasan>` - Tandai kamu AFK\n"
+                "AFK akan dihapus otomatis saat kamu kirim pesan"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="🌐 Translate",
+            value=(
+                "`translate <teks> <kode_bahasa>` - Terjemahkan teks ke bahasa tertentu\n"
+                "Contoh: `mtranslate Aku suka kamu en`"
             ),
             inline=False
         )
@@ -141,6 +173,7 @@ class main_cog(commands.Cog):
         embed.set_footer(text="Gunakan command dengan bijak ✨")
 
         await ctx.send(embed=embed)
+
 
 
     @commands.command(name="clear", aliases=["cl"], help="Clears a specified amount of messages")
