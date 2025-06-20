@@ -50,7 +50,7 @@ class WelcomeMessageConfig(commands.Cog):
         db.close()
 
         if not message:
-            return await ctx.send("⚠️ Belum ada pesan welcome disetel. Gunakan `!setwelcomemsg`.")
+            return await ctx.send("⚠️ Belum ada pesan welcome disetel. Gunakan `msetwelcomemsg`.")
 
         try:
             channel = await self.bot.fetch_channel(ch_id) if ch_id else ctx.guild.system_channel or ctx.channel
