@@ -42,8 +42,13 @@ bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 # ✅ Global Check untuk blokir command di guild terlarang
 @bot.check
 async def block_disabled_guilds(ctx):
+    # Izinkan command `boton` tetap bisa dijalankan meskipun dinonaktifkan
     if ctx.guild and ctx.guild.id in DISABLED_GUILDS:
-        return False
+        if ctx.command.name == "boton" and (
+            ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID
+        ):
+            return True  # Izinkan `mboton` untuk mengaktifkan kembali
+        return False  # Blokir semua command lainnya
     return True
 
 # ✅ Blokir Slash Command jika guild diblokir
