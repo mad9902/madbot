@@ -20,7 +20,7 @@ from game_cog import SambungKataMultiplayer
 from afk_cog import AFK
 from birthday_cog import Birthday
 from bannedwords_cog import BannedWordsCog
-from bot_state import DISABLED_GUILDS
+from bot_state import DISABLED_GUILDS, OWNER_ID
 
 # Load env
 load_dotenv()
