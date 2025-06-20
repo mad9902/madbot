@@ -20,10 +20,9 @@ class main_cog(commands.Cog):
             for channel in guild.text_channels:
                 self.text_channel_list.append(channel)
 
+    # ✅ HAPUS pengecekan DISABLED_GUILDS agar @bot.check tetap bisa bekerja
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.guild and message.guild.id in DISABLED_GUILDS:
-            return  # ⛔ bot nonaktif di server ini
         await self.bot.process_commands(message)
 
     @commands.command(name="botoff")
@@ -33,7 +32,6 @@ class main_cog(commands.Cog):
         DISABLED_GUILDS.add(ctx.guild.id)
         await ctx.send("🛑 Bot dinonaktifkan di server ini. Tidak akan merespons command.")
 
-    # Command untuk mengaktifkan kembali bot
     @commands.command(name="boton")
     async def boton(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
