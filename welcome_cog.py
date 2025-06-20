@@ -8,15 +8,21 @@ from database import (
     get_welcome_message
 )
 
+# ✅ Check hanya untuk owner server atau dev ID kamu
 def is_owner_or_dev():
     async def predicate(ctx):
-        return ctx.author.id == ctx.guild.owner_id or ctx.author.id == 416234104317804544
+        return (
+            ctx.author.id == ctx.guild.owner_id or
+            ctx.author.id == 416234104317804544 or
+            ctx.author.guild_permissions.administrator
+        )
     return commands.check(predicate)
 
 class WelcomeMessageConfig(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # ✅ Set pesan welcome ke database
     @commands.command(name="setwelcomemsg")
     @is_owner_or_dev()
     async def set_welcome_msg(self, ctx, *, message: str):
@@ -25,6 +31,7 @@ class WelcomeMessageConfig(commands.Cog):
         db.close()
         await ctx.send("✅ Pesan welcome berhasil disimpan ke database.")
 
+    # ✅ Set channel khusus welcome
     @commands.command(name="setchwelcome", help="Set channel khusus untuk pesan welcome.")
     @is_owner_or_dev()
     async def set_welcome_channel(self, ctx, channel: discord.TextChannel):
@@ -33,6 +40,7 @@ class WelcomeMessageConfig(commands.Cog):
         db.close()
         await ctx.send(f"✅ Channel welcome disetel ke {channel.mention}")
 
+    # ✅ Command tes kirim welcome
     @commands.command(name="testwelcome")
     @is_owner_or_dev()
     async def test_welcome(self, ctx):
@@ -50,14 +58,22 @@ class WelcomeMessageConfig(commands.Cog):
             return await ctx.send("❌ Gagal mendapatkan channel.")
 
         embed = discord.Embed(
+            title=f"Welcome to {ctx.guild.name}!",
             description=message.replace("{guild}", ctx.guild.name),
-            color=discord.Color.blurple()
+            color=discord.Color(int("C9DFEC", 16))  # Warna pastel biru muda
         )
-        embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
-        embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
+        embed.set_author(
+            name=ctx.guild.name,
+            icon_url=ctx.guild.icon.url if ctx.guild.icon else None
+        )
+        embed.set_thumbnail(
+            url=ctx.author.avatar.url if ctx.author.avatar else None
+        )
+        embed.set_footer(text="Enjoy your time!")
 
         await channel.send(content=f"(Test) Welcome {ctx.author.mention} to **{ctx.guild.name}**!", embed=embed)
 
+    # ✅ Event listener ketika member join
     @commands.Cog.listener()
     async def on_member_join(self, member):
         db = connect_db()
@@ -77,13 +93,21 @@ class WelcomeMessageConfig(commands.Cog):
             return
 
         embed = discord.Embed(
+            title=f"Welcome to {member.guild.name}!",
             description=message.replace("{guild}", member.guild.name),
-            color=discord.Color.blurple()
+            color=discord.Color(int("C9DFEC", 16))
         )
-        embed.set_author(name=member.guild.name, icon_url=member.guild.icon.url if member.guild.icon else None)
-        embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
+        embed.set_author(
+            name=member.guild.name,
+            icon_url=member.guild.icon.url if member.guild.icon else None
+        )
+        embed.set_thumbnail(
+            url=member.avatar.url if member.avatar else None
+        )
+        embed.set_footer(text="Enjoy your time!")
 
         await channel.send(content=f"Welcome {member.mention} to **{member.guild.name}**!", embed=embed)
 
+# ✅ Setup function
 async def setup(bot):
     await bot.add_cog(WelcomeMessageConfig(bot))
