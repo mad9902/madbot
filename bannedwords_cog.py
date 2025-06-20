@@ -31,7 +31,6 @@ class BannedWordsCog(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        # ⛔ Abaikan command (jangan diperiksa kata terlarang)
         if message.content.startswith(tuple(await self.bot.get_prefix(message))):
             return
 
@@ -43,7 +42,13 @@ class BannedWordsCog(commands.Cog):
 
         for word, response in banned_words:
             if word in content_lower:
-                await message.channel.send(response, delete_after=10)
-                break  # hanya satu pelanggaran diproses
+                header = f"═══ {word.upper()} ═══"
+                embed = discord.Embed(
+                    title=header,
+                    description=response,
+                    color=discord.Color.red()
+                )
+                await message.channel.send(embed=embed)
+                break
 
         await self.bot.process_commands(message)
