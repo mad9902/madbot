@@ -6,9 +6,6 @@ from discord.ext import commands
 from discord import app_commands
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
-DISABLED_GUILDS = set()
-OWNER_ID = 416234104317804544
-
 class main_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
