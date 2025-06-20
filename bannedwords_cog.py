@@ -1,13 +1,69 @@
 import discord
 from discord.ext import commands
 from database import connect_db, add_banned_word, get_all_banned_words
+from discord import ui, Interaction
+
 
 ALLOWED_USER_ID = 416234104317804544
 VALID_TYPES = {"female", "partnership", "pelanggaran"}
 
+class PaginationView(ui.View):
+    def __init__(self, embeds):
+        super().__init__(timeout=60)
+        self.embeds = embeds
+        self.current = 0
+
+    @ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: Interaction, button: ui.Button):
+        if self.current > 0:
+            self.current -= 1
+            await interaction.response.edit_message(embed=self.embeds[self.current], view=self)
+
+    @ui.button(label="➡️", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: Interaction, button: ui.Button):
+        if self.current < len(self.embeds) - 1:
+            self.current += 1
+            await interaction.response.edit_message(embed=self.embeds[self.current], view=self)
+
+
 class BannedWordsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        
+    @commands.command(name="listreplywords", help="Menampilkan daftar kata terlarang yang disetel.")
+    async def list_banned_words(self, ctx):
+        db = connect_db()
+        banned_words = get_all_banned_words(db, ctx.guild.id)
+        db.close()
+
+        if not banned_words:
+            return await ctx.send("🚫 Belum ada kata terlarang yang disetel.")
+
+        # Bagi jadi beberapa halaman (misal 5 per embed)
+        pages = []
+        per_page = 5
+        for i in range(0, len(banned_words), per_page):
+            chunk = banned_words[i:i+per_page]
+            desc = ""
+            for word, response, word_type in chunk:
+                type_label = f"`{word_type}`" if word_type else "`-`"
+                desc += f"• **Kata:** `{word}`\n  🏷️ **Tipe:** {type_label}\n  💬 {response}\n\n"
+
+            embed = discord.Embed(
+                title=f"📋 Daftar Kata Terlarang ({i+1}–{min(i+per_page, len(banned_words))} dari {len(banned_words)})",
+                description=desc,
+                color=discord.Color(int("C9DFEC", 16))
+            )
+            embed.set_footer(text="Gunakan tombol ⬅️ ➡️ untuk pindah halaman.")
+            pages.append(embed)
+
+        # Jika hanya 1 halaman, langsung kirim
+        if len(pages) == 1:
+            return await ctx.send(embed=pages[0])
+
+        # Kalau >1 halaman → pakai UI Button
+        await ctx.send(embed=pages[0], view=PaginationView(pages))
+
 
     @commands.command(name="replywords", help="Tambah kata. Format: replywords <kata> | <respon> | <type (opsional)>")
     async def add_banned_word_cmd(self, ctx, *, arg: str = None):
