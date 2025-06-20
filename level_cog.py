@@ -65,10 +65,16 @@ class LevelCog(commands.Cog):
 
     @commands.command(name="setchlevel")
     async def setchlevel(self, ctx, channel: discord.TextChannel):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        allowed_user_id = 416234104317804544
+        is_admin = ctx.author.guild_permissions.administrator
+        is_owner = ctx.author.id == allowed_user_id
+
+        if not (is_admin or is_owner):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
+
         set_channel_settings(self.db, ctx.guild.id, "level", channel.id)
         await ctx.send(f"✅ Channel level-up diatur ke {channel.mention}")
+
 
     @commands.Cog.listener()
     async def on_message(self, message):
