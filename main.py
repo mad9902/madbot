@@ -22,36 +22,31 @@ from birthday_cog import Birthday
 from bannedwords_cog import BannedWordsCog
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
-# Load env
+# Load .env
 load_dotenv()
 
 # Intents
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # diperlukan untuk akses member dan role
+intents.members = True
 
-# ✅ Prefix Handler — disable prefix di guild yang diblok
 def get_prefix(bot, message):
     if message.guild and message.guild.id in DISABLED_GUILDS:
+        if message.content.strip().lower().startswith(("mad boton", "md boton", "mboton")):
+            return ['mad ', 'md ', 'm']
         return commands.when_mentioned(bot)
     return ['mad ', 'md ', 'm']
 
-# Inisialisasi bot
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 
-# ✅ Global Check untuk blokir command di guild terlarang
 @bot.check
 async def block_disabled_guilds(ctx):
-    # Izinkan command `boton` tetap bisa dijalankan meskipun dinonaktifkan
     if ctx.guild and ctx.guild.id in DISABLED_GUILDS:
-        if ctx.command.name == "boton" and (
-            ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID
-        ):
-            return True  # Izinkan `mboton` untuk mengaktifkan kembali
-        return False  # Blokir semua command lainnya
+        if ctx.command and ctx.command.name == "boton":
+            return True
+        return False
     return True
 
-# ✅ Blokir Slash Command jika guild diblokir
 @bot.event
 async def on_interaction(interaction):
     if interaction.guild and interaction.guild.id in DISABLED_GUILDS:
@@ -59,7 +54,6 @@ async def on_interaction(interaction):
         return
     await bot.process_application_commands(interaction)
 
-# ✅ Saran jika command salah ketik
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
@@ -74,15 +68,12 @@ async def on_command_error(ctx, error):
     else:
         await ctx.send(f"❌ Terjadi error: {error}", delete_after=5)
 
-# ✅ Fungsi utama untuk menjalankan bot
 async def main():
-    bot.remove_command('help')  # hapus default help
-
+    bot.remove_command("help")
     ensure_database_exists()
     bot.db = connect_db()
     migrate(bot.db)
 
-    # Tambahkan semua cog
     await bot.add_cog(main_cog(bot))
     await bot.add_cog(image_cog(bot))
     await bot.add_cog(music_cog(bot))
@@ -96,5 +87,4 @@ async def main():
 
     await bot.start(os.getenv("TOKEN"))
 
-# ✅ Jalankan event loop
 asyncio.run(main())

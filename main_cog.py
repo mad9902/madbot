@@ -20,10 +20,14 @@ class main_cog(commands.Cog):
             for channel in guild.text_channels:
                 self.text_channel_list.append(channel)
 
-    # ✅ HAPUS pengecekan DISABLED_GUILDS agar @bot.check tetap bisa bekerja
     @commands.Cog.listener()
     async def on_message(self, message):
+        if message.author.bot:
+            return
+        if hasattr(self.bot, "on_message"):
+            return
         await self.bot.process_commands(message)
+
 
     @commands.command(name="botoff")
     async def botoff(self, ctx):
