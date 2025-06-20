@@ -8,34 +8,34 @@ from database import (
     get_welcome_message
 )
 
+def is_owner_or_dev():
+    async def predicate(ctx):
+        return ctx.author.id == ctx.guild.owner_id or ctx.author.id == 416234104317804544
+    return commands.check(predicate)
+
 class WelcomeMessageConfig(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command(name="setwelcomemsg")
-    @commands.has_permissions(administrator=True)
+    @is_owner_or_dev()
     async def set_welcome_msg(self, ctx, *, message: str):
-        """Set pesan welcome untuk server ini. Gunakan \\n untuk baris baru. Gunakan {guild} untuk nama server."""
         db = connect_db()
         set_welcome_message(db, ctx.guild.id, message.replace("\\n", "\n"))
         db.close()
         await ctx.send("✅ Pesan welcome berhasil disimpan ke database.")
 
     @commands.command(name="setchwelcome", help="Set channel khusus untuk pesan welcome.")
+    @is_owner_or_dev()
     async def set_welcome_channel(self, ctx, channel: discord.TextChannel):
-        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
-            return await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
-
         db = connect_db()
         set_channel_settings(db, ctx.guild.id, "welcome", channel.id)
         db.close()
-
         await ctx.send(f"✅ Channel welcome disetel ke {channel.mention}")
 
     @commands.command(name="testwelcome")
-    @commands.has_permissions(administrator=True)
+    @is_owner_or_dev()
     async def test_welcome(self, ctx):
-        """Tes kirim pesan welcome ke channel yang disetel atau ke system_channel."""
         db = connect_db()
         message = get_welcome_message(db, ctx.guild.id)
         ch_id = get_channel_settings(db, ctx.guild.id, "welcome")
@@ -50,6 +50,7 @@ class WelcomeMessageConfig(commands.Cog):
             return await ctx.send("❌ Gagal mendapatkan channel.")
 
         embed = discord.Embed(
+            title=f"👋 Selamat Datang di {ctx.guild.name}!",
             description=message.replace("{guild}", ctx.guild.name),
             color=discord.Color.blurple()
         )
@@ -77,6 +78,7 @@ class WelcomeMessageConfig(commands.Cog):
             return
 
         embed = discord.Embed(
+            title=f"👋 Selamat Datang di {member.guild.name}!",
             description=message.replace("{guild}", member.guild.name),
             color=discord.Color.blurple()
         )
