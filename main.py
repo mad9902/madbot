@@ -21,6 +21,7 @@ from game_cog import SambungKataMultiplayer
 from afk_cog import AFK
 from birthday_cog import Birthday
 from bannedwords_cog import BannedWordsCog
+from bot_state import DISABLED_GUILDS
 
 # Load env
 load_dotenv()
@@ -37,6 +38,12 @@ def get_prefix(bot, message):
 # Inisialisasi bot
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 
+@bot.check
+async def block_disabled_guilds(ctx):
+    if ctx.guild and ctx.guild.id in DISABLED_GUILDS:
+        return False
+    return True
+    
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):

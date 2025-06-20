@@ -4,6 +4,7 @@ import asyncio
 
 from discord.ext import commands
 from discord import app_commands
+from bot_state import DISABLED_GUILDS, OWNER_ID
 
 DISABLED_GUILDS = set()
 OWNER_ID = 416234104317804544
@@ -28,22 +29,20 @@ class main_cog(commands.Cog):
             return  # ⛔ bot nonaktif di server ini
         await self.bot.process_commands(message)
 
-    @commands.command(name="botoff", help="Nonaktifkan sementara bot di server ini.")
+    @commands.command(name="botoff")
     async def botoff(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
-            return await ctx.send("❌ Hanya admin atau owner bot yang dapat menonaktifkan bot.")
+            return await ctx.send("❌ Hanya admin atau pemilik bot yang bisa menggunakan command ini.")
         DISABLED_GUILDS.add(ctx.guild.id)
-        await ctx.send("🛑 Bot telah dinonaktifkan sementara di server ini.")
+        await ctx.send("🛑 Bot dinonaktifkan di server ini. Tidak akan merespons command.")
 
-    @commands.command(name="boton", help="Aktifkan kembali bot di server ini.")
+    # Command untuk mengaktifkan kembali bot
+    @commands.command(name="boton")
     async def boton(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
-            return await ctx.send("❌ Hanya admin atau owner bot yang dapat mengaktifkan bot.")
-        if ctx.guild.id in DISABLED_GUILDS:
-            DISABLED_GUILDS.remove(ctx.guild.id)
-            await ctx.send("✅ Bot telah diaktifkan kembali di server ini.")
-        else:
-            await ctx.send("ℹ️ Bot memang sudah aktif di server ini.")
+            return await ctx.send("❌ Hanya admin atau pemilik bot yang bisa menggunakan command ini.")
+        DISABLED_GUILDS.discard(ctx.guild.id)
+        await ctx.send("✅ Bot diaktifkan kembali di server ini.")
                 
     @app_commands.command(name="ping", description="Cek latensi bot.")
     async def slash_ping(self, interaction: discord.Interaction):
