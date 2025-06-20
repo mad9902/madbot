@@ -57,7 +57,7 @@ class BannedWordsCog(commands.Cog):
                 desc += f"• **Kata:** `{word}`\n🏷️ **Tipe:** {type_label}\n💬 {response}\n\n"
 
             embed = discord.Embed(
-                title=f"📋 Daftar Kata Terlarang ({i+1}–{min(i+per_page, len(banned_words))} dari {len(banned_words)})",
+                title=f"📋 Daftar Kata ({i+1}–{min(i+per_page, len(banned_words))} dari {len(banned_words)})",
                 description=desc,
                 color=discord.Color(int("C9DFEC", 16))
             )
