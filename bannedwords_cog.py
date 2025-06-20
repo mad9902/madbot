@@ -37,14 +37,14 @@ class BannedWordsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="listreplywords", help="Menampilkan daftar kata terlarang yang disetel.")
+    @commands.command(name="listreplywords", help="Menampilkan daftar kata yang disetel.")
     async def list_banned_words(self, ctx):
         db = connect_db()
         banned_words = get_all_banned_words(db, ctx.guild.id)
         db.close()
 
         if not banned_words:
-            return await ctx.send("🚫 Belum ada kata terlarang yang disetel.")
+            return await ctx.send("🚫 Belum ada kata yang disetel.")
 
         # Bagi jadi beberapa halaman
         pages = []
@@ -73,7 +73,7 @@ class BannedWordsCog(commands.Cog):
             return await ctx.send("❗ Format salah. Contoh: `replywords doxxing | Jangan lakukan doxxing! | pelanggaran`")
 
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == ALLOWED_USER_ID):
-            return await ctx.send("❌ Hanya admin atau user tertentu yang boleh menambahkan kata terlarang.")
+            return await ctx.send("❌ Hanya admin atau user tertentu yang boleh menambahkan kata.")
 
         parts = [p.strip() for p in arg.split("|")]
         if len(parts) < 2:
@@ -100,19 +100,19 @@ class BannedWordsCog(commands.Cog):
 
         await ctx.send(embed=embed)
 
-    @commands.command(name="removereplywords", help="Hapus kata terlarang. Format: delword <kata>")
+    @commands.command(name="removereplywords", help="Hapus kata. Format: delword <kata>")
     async def delete_banned_word(self, ctx, *, word: str = None):
         if not word:
             return await ctx.send("❗ Format salah. Contoh: `delword spam`")
 
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == ALLOWED_USER_ID):
-            return await ctx.send("❌ Hanya admin atau user tertentu yang boleh menghapus kata terlarang.")
+            return await ctx.send("❌ Hanya admin atau user tertentu yang boleh menghapus kata.")
 
         db = connect_db()
         remove_banned_word(db, ctx.guild.id, word)
         db.close()
 
-        await ctx.send(f"✅ Kata terlarang '**{word}**' telah dihapus dari database.")
+        await ctx.send(f"✅ Kata '**{word}**' telah dihapus dari database.")
 
     @commands.Cog.listener()
     async def on_message(self, message):
