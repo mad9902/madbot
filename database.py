@@ -255,6 +255,12 @@ def get_all_banned_words(db, guild_id):
     cursor.close()
     return results  # list of tuples: (word, response, type)
 
+def remove_banned_word(db, guild_id, word):
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM banned_words WHERE guild_id = %s AND word = %s", (guild_id, word.lower()))
+    db.commit()
+    cursor.close()
+
 
 def set_welcome_message(db, guild_id: int, message: str):
     cursor = db.cursor()

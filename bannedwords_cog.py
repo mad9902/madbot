@@ -41,6 +41,22 @@ class BannedWordsCog(commands.Cog):
             embed.add_field(name="Tipe", value=word_type.capitalize(), inline=False)
 
         await ctx.send(embed=embed)
+    
+    @commands.command(name="removereplywords", help="Hapus kata terlarang. Format: delword <kata>")
+    async def delete_banned_word(self, ctx, *, word: str = None):
+        if not word:
+            return await ctx.send("❗ Format salah. Contoh: `delword spam`")
+
+        if not (ctx.author.guild_permissions.administrator or ctx.author.id == ALLOWED_USER_ID):
+            return await ctx.send("❌ Hanya admin atau user tertentu yang boleh menghapus kata terlarang.")
+
+        db = connect_db()
+        from database import remove_banned_word
+        remove_banned_word(db, ctx.guild.id, word)
+        db.close()
+
+        await ctx.send(f"✅ Kata terlarang '**{word}**' telah dihapus dari database.")
+
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -74,7 +90,7 @@ class BannedWordsCog(commands.Cog):
                     color = discord.Color.red()
                     footer = "Pelanggaran terhadap peraturan server."
                 else:
-                    title = f"⚠️ KATA `{word_upper}` TERDETEKSI"
+                    title = f"⚠️ `{word_upper}`"
                     color = discord.Color(int("C9DFEC", 16))
                     footer = "Harap berhati-hati menggunakan kata ini."
 
