@@ -174,15 +174,19 @@ def get_xp_leaderboard(db, guild_id, limit=10):
     cursor.close()
     return results
 
-def set_birthday(db, user_id, guild_id, birthdate, display_name=None):
+def set_birthday(db, user_id, guild_id, birthdate, display_name=None, wish=None):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO birthdays (user_id, guild_id, birthdate, display_name)
-        VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE birthdate = VALUES(birthdate), display_name = VALUES(display_name)
-    """, (user_id, guild_id, birthdate, display_name))
+        INSERT INTO birthdays (user_id, guild_id, birthdate, display_name, wish)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
+            birthdate = VALUES(birthdate),
+            display_name = VALUES(display_name),
+            wish = VALUES(wish)
+    """, (user_id, guild_id, birthdate, display_name, wish))
     db.commit()
     cursor.close()
+
 
 def delete_birthday(db, user_id, guild_id):
     cursor = db.cursor()
@@ -190,21 +194,22 @@ def delete_birthday(db, user_id, guild_id):
     db.commit()
     cursor.close()
 
+
 def get_birthday(db, user_id, guild_id):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT birthdate FROM birthdays
+        SELECT birthdate, display_name, wish FROM birthdays
         WHERE user_id = %s AND guild_id = %s
     """, (user_id, guild_id))
     result = cursor.fetchone()
     cursor.close()
-    return result[0] if result else None
+    return result if result else None
 
 
 def get_today_birthdays(db):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT user_id, guild_id, display_name FROM birthdays
+        SELECT user_id, guild_id, display_name, wish FROM birthdays
         WHERE DAY(birthdate) = DAY(CURDATE()) AND MONTH(birthdate) = MONTH(CURDATE())
     """)
     result = cursor.fetchall()
@@ -212,18 +217,13 @@ def get_today_birthdays(db):
     return result
 
 
-
 def get_all_birthdays(db, guild_id):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT user_id, birthdate, display_name FROM birthdays
+        SELECT user_id, birthdate, display_name, wish FROM birthdays
         WHERE guild_id = %s
         ORDER BY MONTH(birthdate), DAY(birthdate)
     """, (guild_id,))
     result = cursor.fetchall()
     cursor.close()
     return result
-
-
-
-

@@ -96,6 +96,7 @@ def migrate(db):
         guild_id BIGINT NOT NULL,
         birthdate DATE NOT NULL,
         display_name VARCHAR(100),
+        wish TEXT,
         PRIMARY KEY (user_id, guild_id)
     );
     """)
