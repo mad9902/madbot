@@ -1,5 +1,8 @@
 import discord
 from discord.ext import commands, tasks
+from discord.ui import View, Button
+from datetime import datetime
+import re
 from database import (
     connect_db,
     set_birthday,
@@ -10,8 +13,50 @@ from database import (
     get_all_birthdays,
     set_channel_settings
 )
-from datetime import datetime
-import re
+
+class BirthdayView(View):
+    def __init__(self, ctx, chunks):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.chunks = chunks
+        self.current_page = 0
+        self.message = None
+
+        self.prev_button = Button(label="⬅️ Previous", style=discord.ButtonStyle.secondary)
+        self.next_button = Button(label="➡️ Next", style=discord.ButtonStyle.secondary)
+
+        self.prev_button.callback = self.prev_page
+        self.next_button.callback = self.next_page
+
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+
+    async def send_initial(self):
+        embed = self.make_embed(self.current_page)
+        self.message = await self.ctx.send(embed=embed, view=self)
+
+    def make_embed(self, page_index):
+        embed = discord.Embed(
+            title=f"📅 Daftar Ulang Tahun (Halaman {page_index + 1}/{len(self.chunks)})",
+            color=discord.Color.blue()
+        )
+        for _, birthdate, display_name in self.chunks[page_index]:
+            embed.add_field(
+                name=display_name,
+                value=birthdate.strftime("%d %B"),
+                inline=False
+            )
+        return embed
+
+    async def prev_page(self, interaction: discord.Interaction):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.make_embed(self.current_page), view=self)
+
+    async def next_page(self, interaction: discord.Interaction):
+        if self.current_page < len(self.chunks) - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.make_embed(self.current_page), view=self)
 
 class Birthday(commands.Cog):
     def __init__(self, bot):
@@ -152,19 +197,12 @@ class Birthday(commands.Cog):
         if not data:
             return await ctx.send("📭 Belum ada ulang tahun yang tercatat.")
 
-        embed = discord.Embed(
-            title="📅 Daftar Ulang Tahun",
-            color=discord.Color.blue()
-        )
+        # Kelompokkan per 25 entri
+        batch_size = 10
+        chunks = [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
-        for _, birthdate, display_name in data:
-            embed.add_field(
-                name=display_name,
-                value=birthdate.strftime("%d %B"),
-                inline=False
-            )
-
-        await ctx.send(embed=embed)
+        view = BirthdayView(ctx, chunks)
+        await view.send_initial()
 
     @commands.command(name="nearestbirthday", help="Menampilkan ulang tahun terdekat")
     async def nearest_birthday(self, ctx):
