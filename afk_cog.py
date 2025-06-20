@@ -42,7 +42,11 @@ class AFK(commands.Cog):
                     await message.author.edit(nick=new_nick)
             except discord.Forbidden:
                 pass
-            await message.channel.send(f"✅ Selamat datang kembali, {message.author.mention}! Status AFK kamu telah dihapus.")
+            await message.channel.send(
+                f"✅ Selamat datang kembali, {message.author.mention}! Status AFK kamu telah dihapus.",
+                delete_after=5
+            )
+
 
         # ➤ Cek user yang di-mention
         afk_mentions = []
