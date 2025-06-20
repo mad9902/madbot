@@ -30,6 +30,21 @@ class link_cog(commands.Cog):
         os.makedirs(self.media_folder, exist_ok=True)
         logger.info(f"Folder media tersedia: {self.media_folder}")
 
+    def convert_to_gif(self, video_path):
+        gif_path = os.path.join(self.media_folder, f"{uuid.uuid4().hex}.gif")
+        try:
+            subprocess.run([
+                'ffmpeg', '-i', video_path,
+                '-vf', 'fps=10,scale=320:-1:flags=lanczos',
+                '-t', '10',  # Optional: batasi durasi GIF 10 detik
+                gif_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return gif_path
+        except Exception as e:
+            logger.error(f"Gagal konversi ke GIF: {e}")
+            return None
+
+
     def clean_media_folder(self):
         files = glob.glob(os.path.join(self.media_folder, '*'))
         for f in files:
@@ -149,6 +164,60 @@ class link_cog(commands.Cog):
             except Exception as e:
                 logger.error(f"Error saat proses video: {e}")
                 await message.channel.send("Gagal memproses video.", delete_after=5)
+
+    @commands.command(name="gif")
+    async def gif_command(self, ctx, *, url: str = None):
+        await ctx.typing()
+
+        try:
+            video_path = None
+
+            # Dari URL
+            if url and (url.startswith("http://") or url.startswith("https://")):
+                loop = asyncio.get_running_loop()
+                video_path = await loop.run_in_executor(None, self.download_media_yt_dlp, url, False)
+
+            # Dari attachment langsung
+            elif ctx.message.attachments:
+                for attachment in ctx.message.attachments:
+                    if attachment.filename.lower().endswith(('.mp4', '.mov', '.webm', '.mkv')):
+                        unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
+                        video_path = os.path.join(self.media_folder, unique_name)
+                        await attachment.save(video_path)
+                        break
+
+            # Dari reply ke pesan yang berisi attachment video
+            elif ctx.message.reference:
+                try:
+                    replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                    for attachment in replied.attachments:
+                        if attachment.filename.lower().endswith(('.mp4', '.mov', '.webm', '.mkv')):
+                            unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
+                            video_path = os.path.join(self.media_folder, unique_name)
+                            await attachment.save(video_path)
+                            break
+                except Exception as e:
+                    logger.warning(f"Gagal ambil pesan reply: {e}")
+
+            if not video_path or not os.path.exists(video_path):
+                await ctx.send("Video tidak ditemukan atau format tidak didukung.", delete_after=5)
+                return
+
+            gif_path = self.convert_to_gif(video_path)
+            if gif_path and os.path.getsize(gif_path) < 8 * 1024 * 1024:
+                await ctx.send(file=discord.File(gif_path, filename="output.gif"))
+            else:
+                await ctx.send("Gagal membuat GIF atau ukuran terlalu besar.", delete_after=5)
+
+            os.remove(video_path)
+            if gif_path and os.path.exists(gif_path):
+                os.remove(gif_path)
+
+        except Exception as e:
+            logger.error(f"Gagal proses GIF: {e}")
+            await ctx.send("Terjadi kesalahan saat membuat GIF.", delete_after=5)
+
+
 
     @commands.command(name="mp3")
     async def mp3_command(self, ctx, *, url: str = None):
