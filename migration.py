@@ -110,6 +110,13 @@ def migrate(db):
     );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS welcome_messages (
+        guild_id BIGINT PRIMARY KEY,
+        message TEXT NOT NULL
+    );
+    """)
+
     db.commit()
     cursor.close()
     

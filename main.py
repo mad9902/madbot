@@ -19,6 +19,7 @@ from level_cog import LevelCog
 from game_cog import SambungKataMultiplayer
 from afk_cog import AFK
 from birthday_cog import Birthday
+from welcome_cog import WelcomeMessageConfig
 from bannedwords_cog import BannedWordsCog
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
@@ -83,6 +84,7 @@ async def main():
     await bot.add_cog(SambungKataMultiplayer(bot))
     await bot.add_cog(AFK(bot))
     await bot.add_cog(Birthday(bot))
+    await bot.add_cog(WelcomeMessageConfig(bot))
     await bot.add_cog(BannedWordsCog(bot))
 
     await bot.start(os.getenv("TOKEN"))

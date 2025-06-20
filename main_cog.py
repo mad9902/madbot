@@ -214,18 +214,6 @@ class main_cog(commands.Cog):
         await ctx.send(f"✅ Berhasil menghapus {amount} pesan.", delete_after=5)
 
 
-    # @commands.Cog.listener()
-    # async def on_member_join(self, member):
-    #     embed = discord.Embed(
-    #         title="👋 Selamat Datang!",
-    #         description=f"Selamat datang di server, {member.mention}!",
-    #         color=discord.Color.green()
-    #     )
-    #     embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
-    #     channel = member.guild.system_channel
-    #     if channel:
-    #         await channel.send(embed=embed)
-
     @commands.command(name="serverinfo", help="Menampilkan info server.")
     async def serverinfo(self, ctx):
         guild = ctx.guild

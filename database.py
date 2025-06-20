@@ -244,3 +244,19 @@ def get_all_banned_words(db, guild_id):
     results = cursor.fetchall()
     cursor.close()
     return results
+
+def set_welcome_message(db, guild_id: int, message: str):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO welcome_messages (guild_id, message)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE message = VALUES(message)
+    """, (guild_id, message))
+    db.commit()
+
+def get_welcome_message(db, guild_id: int) -> str | None:
+    cursor = db.cursor()
+    cursor.execute("SELECT message FROM welcome_messages WHERE guild_id = %s", (guild_id,))
+    result = cursor.fetchone()
+    return result[0] if result else None
+
