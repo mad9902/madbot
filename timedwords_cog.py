@@ -73,7 +73,7 @@ class TimedWordsCog(commands.Cog):
 
             title, content = data["messages"][data["index"]]
             embed = Embed(
-                title=f"⏰ {title}",
+                title=f"📞 {title}",
                 description=content,
                 color=EMBED_COLOR
             )
