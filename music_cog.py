@@ -489,18 +489,32 @@ class music_cog(commands.Cog):
 
     @commands.command(name="song", help="Cari lagu berdasarkan lirik. Gunakan argumen atau reply.")
     async def msong_command(self, ctx, *, lyric_snippet: str = None):
+        # Ambil isi dari reply jika tidak ada argumen
         if not lyric_snippet and ctx.message.reference:
             try:
                 replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-                lyric_snippet = replied_message.content.strip()
-            except:
+                if replied_message.content:
+                    text = replied_message.content
+                elif replied_message.embeds:
+                    text = replied_message.embeds[0].description or ""
+                else:
+                    text = ""
+                # Bersihkan teks
+                text = re.sub(r"<@!?[0-9]+>", "", text)
+                text = re.sub(r"\s+", " ", text)
+                lyric_snippet = text.strip()
+            except Exception as e:
+                print(f"[msong ERROR] gagal ambil reply: {e}")
                 lyric_snippet = None
 
+        # Validasi input
         if not lyric_snippet or len(lyric_snippet.split()) < 4:
             return await ctx.send("❗ Berikan potongan lirik yang cukup melalui argumen atau reply.")
 
-        await ctx.send("🔎 Mencari lagu berdasarkan lirik...")
+        # Kirim pesan proses dan simpan referensinya untuk dihapus nanti
+        loading_msg = await ctx.send("🔎 Mencari lagu berdasarkan lirik...")
 
+        # Siapkan permintaan ke AudD API
         api_key = os.getenv("AUDD_API_KEY")
         params = {
             "q": lyric_snippet,
@@ -510,15 +524,19 @@ class music_cog(commands.Cog):
         try:
             res = requests.get("https://api.audd.io/findLyrics/", params=params)
             data = res.json()
+
             if data.get("status") != "success" or not data.get("result"):
+                await loading_msg.delete()
                 return await ctx.send("❌ Lagu tidak ditemukan.")
 
             song = data["result"][0]
             title = song.get("title", "Unknown")
             artist = song.get("artist", "Unknown")
 
+            await loading_msg.delete()
             await ctx.send(f"🎵 Dugaan lagu berdasarkan lirik:\n**{title} - {artist}**")
 
         except Exception as e:
             print(f"[msong ERROR] {e}")
+            await loading_msg.delete()
             await ctx.send("❌ Terjadi error saat menghubungi AudD API.")
