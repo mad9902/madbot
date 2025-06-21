@@ -5,6 +5,7 @@ import os
 import requests
 import uuid
 import asyncio
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -210,27 +211,34 @@ class GeminiCog(commands.Cog):
                 print(f"[Translate ERROR] {e}")
                 await ctx.send("❌ Terjadi error saat menerjemahkan.")
 
-
     @commands.command(name="song", help="Cari lagu berdasarkan lirik. Bisa lewat argumen atau reply.")
     async def msong_command(self, ctx, *, lyric_snippet: str = None):
         # Jika tidak ada argumen, cek apakah command ini membalas pesan (reply)
         if not lyric_snippet and ctx.message.reference:
             try:
                 replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-                lyric_snippet = replied_message.content.strip()
-            except:
-                pass
+                text = replied_message.content.strip()
+                text = re.sub(r"<@!?[0-9]+>", "", text)  # hapus mention
+                text = re.sub(r"\s+", " ", text)        # bersihkan newline dan spasi
+                lyric_snippet = text.strip()
+            except Exception as e:
+                print(f"[msong ERROR] Failed to fetch replied message: {e}")
+                lyric_snippet = None
 
-        # Kalau tetap tidak ada lirik
-        if not lyric_snippet:
-            return await ctx.send("❗ Berikan potongan lirik sebagai argumen atau reply pesan yang berisi lirik.")
+        # Validasi input minimal 4 kata
+        if not lyric_snippet or len(lyric_snippet.split()) < 4:
+            return await ctx.send("❗ Berikan potongan lirik yang cukup melalui argumen atau reply.\nContoh: `song I’m bulletproof, nothing to lose`")
 
+        # Prompt yang lebih diarahkan
         prompt = (
-            f"Saya akan memberikan potongan lirik lagu, dan kamu harus menebak lagu apa itu. "
-            f"Tampilkan hanya nama lagu dan penyanyinya, tanpa tambahan penjelasan atau teks lain. "
-            f"Contoh output: 'Titanium - David Guetta ft. Sia'\n\n"
-            f"Lirik: {lyric_snippet}"
+            f"Aku akan memberikan potongan lirik dari sebuah lagu populer. "
+            f"Tugasmu adalah mencocokkannya dengan judul lagu dan artis yang paling sesuai. "
+            f"Jawaban harus dalam format: Judul Lagu - Nama Artis. "
+            f"Jangan berikan penjelasan atau tambahan teks. Jika tidak yakin, katakan 'Tidak yakin'.\n\n"
+            f"Contoh:\nLirik: I'm bulletproof, nothing to lose\nJawaban: Titanium - David Guetta ft. Sia\n\n"
+            f"Lirik: {lyric_snippet}\nJawaban:"
         )
+
         print(f"[msong COMMAND] Called by {ctx.author} with lyric: {lyric_snippet}")
         async with ctx.typing():
             try:
@@ -240,4 +248,5 @@ class GeminiCog(commands.Cog):
             except Exception as e:
                 print(f"[msong ERROR] {e}")
                 await ctx.send("❌ Terjadi error saat mencari lagu.")
+
   
