@@ -45,7 +45,6 @@ class BannedWordsCog(commands.Cog):
         if not banned_words:
             return await ctx.send("🚫 Belum ada kata yang disetel.")
 
-        # Bagi jadi beberapa halaman
         pages = []
         per_page = 5
         for i in range(0, len(banned_words), per_page):
@@ -63,7 +62,6 @@ class BannedWordsCog(commands.Cog):
             embed.set_footer(text="Gunakan tombol ⬅️ ➡️ untuk pindah halaman.")
             pages.append(embed)
 
-        # Kirim dengan tombol, meskipun 1 halaman
         await ctx.send(embed=pages[0], view=PaginationView(pages))
 
     @commands.command(name="replywords", help="Tambah kata. Format: replywords <kata> | <respon> | <type (opsional)>")
@@ -146,7 +144,7 @@ class BannedWordsCog(commands.Cog):
                 else:
                     title = f"⚠️ `{word_upper}`"
                     color = discord.Color(int("C9DFEC", 16))
-                    footer = "Harap berhati-hati menggunakan kata ini."
+                    footer = "We hope you enjoy your time in this server!"
 
                 embed = discord.Embed(
                     title=title,
