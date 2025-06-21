@@ -4,6 +4,7 @@ from discord.ui import View, Button
 from datetime import datetime, timedelta, time as dt_time
 import asyncio
 import re
+import pytz
 from database import (
     connect_db,
     set_birthday,
@@ -14,6 +15,8 @@ from database import (
     get_all_birthdays,
     set_channel_settings
 )
+
+JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 
 class BirthdayView(View):
     def __init__(self, ctx, chunks):
@@ -167,9 +170,10 @@ class Birthday(commands.Cog):
         await ctx.send(f"🗑️ Ulang tahun untuk **{display_name}** telah dihapus.")
 
     def seconds_until_midnight(self):
-        now = datetime.now()
-        tomorrow = datetime.combine(now.date() + timedelta(days=1), dt_time.min)
+        now = datetime.now(JAKARTA_TZ)
+        tomorrow = datetime.combine(now.date() + timedelta(days=1), dt_time.min, tzinfo=JAKARTA_TZ)
         return (tomorrow - now).total_seconds()
+
 
     @tasks.loop(hours=24)
     async def birthday_loop(self):
