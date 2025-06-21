@@ -29,14 +29,14 @@ class main_cog(commands.Cog):
         await self.bot.process_commands(message)
 
 
-    @commands.command(name="botoff")
+    @commands.command(name="botoff2")
     async def botoff(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
             return await ctx.send("❌ Hanya admin atau pemilik bot yang bisa menggunakan command ini.")
         DISABLED_GUILDS.add(ctx.guild.id)
         await ctx.send("🛑 Bot dinonaktifkan di server ini. Tidak akan merespons command.")
 
-    @commands.command(name="boton")
+    @commands.command(name="boton2")
     async def boton(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
             return await ctx.send("❌ Hanya admin atau pemilik bot yang bisa menggunakan command ini.")

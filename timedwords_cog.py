@@ -6,7 +6,8 @@ from database import (
     add_timed_word,
     get_timed_words,
     set_channel_settings,
-    get_channel_settings
+    get_channel_settings,
+    remove_timed_word
 )
 
 ALLOWED_USER_ID = 416234104317804544
@@ -96,3 +97,84 @@ class TimedWordsCog(commands.Cog):
                     "messages": messages,
                     "index": 0
                 }
+
+    @commands.command(name="listtimedwords", help="Menampilkan semua pesan berkala yang telah ditambahkan.")
+    async def list_timedwords(self, ctx):
+        db = connect_db()
+        messages = get_timed_words(db, ctx.guild.id)
+        db.close()
+
+        if not messages:
+            return await ctx.send("🚫 Tidak ada pesan berkala yang tersimpan.")
+
+        pages = []
+        per_page = 5
+        for i in range(0, len(messages), per_page):
+            chunk = messages[i:i + per_page]
+            desc = ""
+            for title, content in chunk:
+                desc += f"📌 **{title}**\n{content}\n\n"
+
+            embed = Embed(
+                title=f"🗂️ Daftar Pesan Berkala ({i+1}–{min(i+per_page, len(messages))} dari {len(messages)})",
+                description=desc,
+                color=EMBED_COLOR
+            )
+            embed.set_footer(text="Gunakan `removetimedword <judul>` untuk menghapus pesan.")
+            pages.append(embed)
+
+        if len(pages) == 1:
+            await ctx.send(embed=pages[0])
+        else:
+            from discord import ui
+
+            class PaginationView(ui.View):
+                def __init__(self, embeds):
+                    super().__init__(timeout=60)
+                    self.embeds = embeds
+                    self.current = 0
+                    self.update_buttons()
+
+                def update_buttons(self):
+                    self.previous.disabled = self.current == 0
+                    self.next.disabled = self.current == len(self.embeds) - 1
+
+                @ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
+                async def previous(self, interaction: discord.Interaction, button: ui.Button):
+                    if self.current > 0:
+                        self.current -= 1
+                        self.update_buttons()
+                        await interaction.response.edit_message(embed=self.embeds[self.current], view=self)
+
+                @ui.button(label="➡️", style=discord.ButtonStyle.secondary)
+                async def next(self, interaction: discord.Interaction, button: ui.Button):
+                    if self.current < len(self.embeds) - 1:
+                        self.current += 1
+                        self.update_buttons()
+                        await interaction.response.edit_message(embed=self.embeds[self.current], view=self)
+
+            await ctx.send(embed=pages[0], view=PaginationView(pages))
+
+
+    @commands.command(name="removetimedwords", help="Hapus pesan berkala berdasarkan judul.")
+    async def remove_timedword(self, ctx, *, title: str = None):
+        if not title:
+            return await ctx.send("❗ Format salah. Contoh: `removetimedword Reminder`")
+
+        db = connect_db()
+        messages = get_timed_words(db, ctx.guild.id)
+        matched = [msg for msg in messages if msg[0].lower() == title.lower()]
+
+        if not matched:
+            db.close()
+            return await ctx.send("⚠️ Tidak ditemukan pesan dengan judul tersebut.")
+
+        remove_timed_word(db, ctx.guild.id, matched[0][0])
+        updated = get_timed_words(db, ctx.guild.id)
+        db.close()
+
+        if ctx.guild.id in self.guild_data:
+            self.guild_data[ctx.guild.id]["messages"] = updated
+            self.guild_data[ctx.guild.id]["index"] = 0
+
+        await ctx.send(f"🗑️ Pesan berkala dengan judul '**{matched[0][0]}**' berhasil dihapus.")

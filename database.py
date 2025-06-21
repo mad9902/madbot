@@ -287,4 +287,9 @@ def get_timed_words(db, guild_id):
     cursor.execute("SELECT title, content FROM timed_words WHERE guild_id = %s", (guild_id,))
     return cursor.fetchall()
 
+def remove_timed_word(db, guild_id, title):
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM timed_words WHERE guild_id = %s AND LOWER(title) = LOWER(%s)", (guild_id, title))
+    db.commit()
+
 
