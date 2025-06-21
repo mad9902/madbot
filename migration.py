@@ -118,6 +118,15 @@ def migrate(db):
         message TEXT NOT NULL
     );
     """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS timed_words (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    guild_id BIGINT NOT NULL,
+    title VARCHAR(255),
+    content TEXT
+    );
+    """)
 
     db.commit()
     cursor.close()

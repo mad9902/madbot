@@ -6,7 +6,6 @@ from discord import ui, Interaction
 ALLOWED_USER_ID = 416234104317804544
 VALID_TYPES = {"female", "partnership", "pelanggaran"}
 
-# ✅ Pagination Buttons View
 class PaginationView(ui.View):
     def __init__(self, embeds):
         super().__init__(timeout=60)

@@ -277,3 +277,14 @@ def get_welcome_message(db, guild_id: int) -> str | None:
     result = cursor.fetchone()
     return result[0] if result else None
 
+def add_timed_word(db, guild_id, title, content):
+    cursor = db.cursor()
+    cursor.execute("INSERT INTO timed_words (guild_id, title, content) VALUES (%s, %s, %s)", (guild_id, title, content))
+    db.commit()
+
+def get_timed_words(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("SELECT title, content FROM timed_words WHERE guild_id = %s", (guild_id,))
+    return cursor.fetchall()
+
+
