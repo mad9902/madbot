@@ -9,6 +9,7 @@ import json
 import os
 import re
 import random
+import requests
 from discord.ui import View, Button
 import spotipy
 from discord.ext import commands
@@ -484,3 +485,40 @@ class music_cog(commands.Cog):
             self.vc.stop()
         else:
             await ctx.send("❗ Tidak ada lagu yang sedang diputar.")
+
+
+    @commands.command(name="song", help="Cari lagu berdasarkan lirik. Gunakan argumen atau reply.")
+    async def msong_command(self, ctx, *, lyric_snippet: str = None):
+        if not lyric_snippet and ctx.message.reference:
+            try:
+                replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                lyric_snippet = replied_message.content.strip()
+            except:
+                lyric_snippet = None
+
+        if not lyric_snippet or len(lyric_snippet.split()) < 4:
+            return await ctx.send("❗ Berikan potongan lirik yang cukup melalui argumen atau reply.")
+
+        await ctx.send("🔎 Mencari lagu berdasarkan lirik...")
+
+        api_key = os.getenv("AUDD_API_KEY")
+        params = {
+            "q": lyric_snippet,
+            "api_token": api_key
+        }
+
+        try:
+            res = requests.get("https://api.audd.io/findLyrics/", params=params)
+            data = res.json()
+            if data.get("status") != "success" or not data.get("result"):
+                return await ctx.send("❌ Lagu tidak ditemukan.")
+
+            song = data["result"][0]
+            title = song.get("title", "Unknown")
+            artist = song.get("artist", "Unknown")
+
+            await ctx.send(f"🎵 Dugaan lagu berdasarkan lirik:\n**{title} - {artist}**")
+
+        except Exception as e:
+            print(f"[msong ERROR] {e}")
+            await ctx.send("❌ Terjadi error saat menghubungi AudD API.")

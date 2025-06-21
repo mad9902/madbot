@@ -209,35 +209,3 @@ class GeminiCog(commands.Cog):
             except Exception as e:
                 print(f"[Translate ERROR] {e}")
                 await ctx.send("❌ Terjadi error saat menerjemahkan.")
-
-
-    @commands.command(name="song", help="Cari lagu berdasarkan lirik. Bisa lewat argumen atau reply.")
-    async def msong_command(self, ctx, *, lyric_snippet: str = None):
-        # Jika tidak ada argumen, cek apakah command ini membalas pesan (reply)
-        if not lyric_snippet and ctx.message.reference:
-            try:
-                replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-                lyric_snippet = replied_message.content.strip()
-            except:
-                pass
-
-        # Kalau tetap tidak ada lirik
-        if not lyric_snippet:
-            return await ctx.send("❗ Berikan potongan lirik sebagai argumen atau reply pesan yang berisi lirik.")
-
-        prompt = (
-            f"Saya akan memberikan potongan lirik lagu, dan kamu harus menebak lagu apa itu. "
-            f"Tampilkan hanya nama lagu dan penyanyinya, tanpa tambahan penjelasan atau teks lain. "
-            f"Contoh output: 'Titanium - David Guetta ft. Sia'\n\n"
-            f"Lirik: {lyric_snippet}"
-        )
-        print(f"[msong COMMAND] Called by {ctx.author} with lyric: {lyric_snippet}")
-        async with ctx.typing():
-            try:
-                response = self.model.generate_content(prompt)
-                result = response.candidates[0].content.parts[0].text.strip()
-                await ctx.send(f"🎵 Dugaan lagu berdasarkan lirik:\n**{result}**")
-            except Exception as e:
-                print(f"[msong ERROR] {e}")
-                await ctx.send("❌ Terjadi error saat mencari lagu.")
-  
