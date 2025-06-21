@@ -162,12 +162,20 @@ class Birthday(commands.Cog):
                 user_id = member.id
                 display_name = member.display_name
             else:
-                user_id = abs(hash(name.lower())) % (10**18)
-                display_name = name
+                all_birthdays = get_all_birthdays(db, ctx.guild.id)
+                match = next((row for row in all_birthdays if row[2].lower() == name.lower()), None)
+
+                if match:
+                    user_id = match[0]
+                    display_name = match[2]
+                else:
+                    db.close()
+                    return await ctx.send("❌ Tidak ditemukan user atau nama dengan data ulang tahun tersebut.")
 
         delete_birthday(db, user_id, ctx.guild.id)
         db.close()
         await ctx.send(f"🗑️ Ulang tahun untuk **{display_name}** telah dihapus.")
+
 
     def seconds_until_midnight(self):
         now = datetime.now(JAKARTA_TZ)
