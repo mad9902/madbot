@@ -69,7 +69,35 @@ class BirthdayView(View):
 class Birthday(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.birthday_loop.start()
+
+    def seconds_until_midnight(self):
+        now = datetime.now(JAKARTA_TZ)
+        tomorrow = datetime.combine(now.date() + timedelta(days=1), dt_time.min, tzinfo=JAKARTA_TZ)
+        return (tomorrow - now).total_seconds()
+
+    async def start_birthday_loop(self):
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(self.seconds_until_midnight())  # Tunggu hingga jam 00:00
+        self.birthday_loop.start()  # Mulai loop
+
+    @tasks.loop(hours=24)
+    async def birthday_loop(self):
+        db = connect_db()
+        birthdays = get_today_birthdays(db)
+        db.close()
+
+        for user_id, guild_id, display_name, wish in birthdays:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                continue
+
+            channel_id = get_channel_settings(connect_db(), guild_id, "birthday")
+            channel = guild.get_channel(int(channel_id)) if channel_id else guild.system_channel
+
+            if channel:
+                await channel.send(f"🎉 Selamat ulang tahun **{display_name}**! 🎂 Semoga harimu menyenangkan!")
+                if wish:
+                    await channel.send(f"💬 Pesan ulang tahun: _{wish}_")
 
     @commands.command(name="setbirthday", help="Set ulang tahun kamu (format: dd-mm-yyyy). Tambahkan -wish untuk ucapan spesial.")
     async def set_birthday(self, ctx, *, arg: str = None):
@@ -177,59 +205,32 @@ class Birthday(commands.Cog):
         await ctx.send(f"🗑️ Ulang tahun untuk **{display_name}** telah dihapus.")
 
 
-    def seconds_until_midnight(self):
-        now = datetime.now(JAKARTA_TZ)
-        tomorrow = datetime.combine(now.date() + timedelta(days=1), dt_time.min, tzinfo=JAKARTA_TZ)
-        return (tomorrow - now).total_seconds()
 
+    # async def before_birthday_loop(self):
+    #     await self.bot.wait_until_ready()
 
-    @tasks.loop(hours=24)
-    async def birthday_loop(self):
-        await self.bot.wait_until_ready()
-        await asyncio.sleep(self.seconds_until_midnight())
+    #     if datetime.now().time() < dt_time(1):
+    #         await self.check_birthdays_now()
 
-        db = connect_db()
-        birthdays = get_today_birthdays(db)
-        db.close()
+    #     await asyncio.sleep(self.seconds_until_midnight())
 
-        for user_id, guild_id, display_name, wish in birthdays:
-            guild = self.bot.get_guild(guild_id)
-            if not guild:
-                continue
+    # async def check_birthdays_now(self):
+    #     db = connect_db()
+    #     birthdays = get_today_birthdays(db)
+    #     db.close()
 
-            channel_id = get_channel_settings(connect_db(), guild_id, "birthday")
-            channel = guild.get_channel(int(channel_id)) if channel_id else guild.system_channel
+    #     for user_id, guild_id, display_name, wish in birthdays:
+    #         guild = self.bot.get_guild(guild_id)
+    #         if not guild:
+    #             continue
 
-            if channel:
-                await channel.send(f"🎉 Selamat ulang tahun **{display_name}**! 🎂 Semoga harimu menyenangkan!")
-                if wish:
-                    await channel.send(f"💬 Pesan ulang tahun: _{wish}_")
+    #         channel_id = get_channel_settings(connect_db(), guild_id, "birthday")
+    #         channel = guild.get_channel(int(channel_id)) if channel_id else guild.system_channel
 
-    async def before_birthday_loop(self):
-        await self.bot.wait_until_ready()
-
-        if datetime.now().time() < dt_time(1):
-            await self.check_birthdays_now()
-
-        await asyncio.sleep(self.seconds_until_midnight())
-
-    async def check_birthdays_now(self):
-        db = connect_db()
-        birthdays = get_today_birthdays(db)
-        db.close()
-
-        for user_id, guild_id, display_name, wish in birthdays:
-            guild = self.bot.get_guild(guild_id)
-            if not guild:
-                continue
-
-            channel_id = get_channel_settings(connect_db(), guild_id, "birthday")
-            channel = guild.get_channel(int(channel_id)) if channel_id else guild.system_channel
-
-            if channel:
-                await channel.send(f"🎉 Selamat ulang tahun **{display_name}**! 🎂 Semoga harimu menyenangkan!")
-                if wish:
-                    await channel.send(f"💬 Pesan ulang tahun: _{wish}_")
+    #         if channel:
+    #             await channel.send(f"🎉 Selamat ulang tahun **{display_name}**! 🎂 Semoga harimu menyenangkan!")
+    #             if wish:
+    #                 await channel.send(f"💬 Pesan ulang tahun: _{wish}_")
 
     @commands.command(name="birthdaylist", help="Menampilkan daftar ulang tahun semua member server")
     async def birthdaylist(self, ctx):
@@ -291,3 +292,10 @@ class Birthday(commands.Cog):
         db.close()
 
         await ctx.send(f"✅ Channel ulang tahun disetel ke {channel.mention}")
+
+
+    @commands.command(name="testclock")
+    async def test_clock(self, ctx):
+        now_jakarta = datetime.now(JAKARTA_TZ)
+        formatted = now_jakarta.strftime("%Y-%m-%d %H:%M:%S")
+        await ctx.send(f"🕒 Waktu sekarang (Asia/Jakarta): `{formatted}` WIB")

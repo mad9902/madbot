@@ -39,7 +39,37 @@ def get_prefix(bot, message):
         return commands.when_mentioned(bot)
     return ['mad ', 'md ', 'm']
 
-bot = commands.Bot(command_prefix=get_prefix, intents=intents)
+# Gunakan subclass untuk akses loop dengan aman
+class MadBot(commands.Bot):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    async def setup_hook(self):
+        self.remove_command("help")
+        ensure_database_exists()
+        self.db = connect_db()
+        migrate(self.db)
+
+        await self.add_cog(main_cog(self))
+        await self.add_cog(image_cog(self))
+        await self.add_cog(music_cog(self))
+        await self.add_cog(link_cog(self))
+        await self.add_cog(LevelCog(self))
+        await self.add_cog(GeminiCog(self))
+        await self.add_cog(SambungKataMultiplayer(self))
+        await self.add_cog(AFK(self))
+
+        birthday_cog = Birthday(self)
+        await self.add_cog(birthday_cog)
+        self.loop.create_task(birthday_cog.start_birthday_loop()) 
+
+        await self.add_cog(WelcomeMessageConfig(self))
+        await self.add_cog(BannedWordsCog(self))
+        await self.add_cog(TimedWordsCog(self))
+
+
+bot = MadBot(command_prefix=get_prefix, intents=intents)
+
 
 @bot.check
 async def block_disabled_guilds(ctx):
@@ -49,6 +79,7 @@ async def block_disabled_guilds(ctx):
         return False
     return True
 
+# Blok interaksi juga kalau disable
 @bot.event
 async def on_interaction(interaction):
     if interaction.guild and interaction.guild.id in DISABLED_GUILDS:
@@ -56,6 +87,7 @@ async def on_interaction(interaction):
         return
     await bot.process_application_commands(interaction)
 
+# Fitur typo autocorrect
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
@@ -70,25 +102,8 @@ async def on_command_error(ctx, error):
     else:
         await ctx.send(f"❌ Terjadi error: {error}", delete_after=5)
 
+# Jalankan bot
 async def main():
-    bot.remove_command("help")
-    ensure_database_exists()
-    bot.db = connect_db()
-    migrate(bot.db)
-
-    await bot.add_cog(main_cog(bot))
-    await bot.add_cog(image_cog(bot))
-    await bot.add_cog(music_cog(bot))
-    await bot.add_cog(link_cog(bot))
-    await bot.add_cog(LevelCog(bot))
-    await bot.add_cog(GeminiCog(bot))
-    await bot.add_cog(SambungKataMultiplayer(bot))
-    await bot.add_cog(AFK(bot))
-    await bot.add_cog(Birthday(bot))
-    await bot.add_cog(WelcomeMessageConfig(bot))
-    await bot.add_cog(BannedWordsCog(bot))
-    await bot.add_cog(TimedWordsCog(bot))
-
     await bot.start(os.getenv("TOKEN"))
 
 asyncio.run(main())
