@@ -25,6 +25,9 @@ class LevelCog(commands.Cog):
         self.disabled_guilds = set()
         self.no_xp_roles = {} 
 
+    def is_admin_or_owner(self, ctx):
+        return ctx.author.guild_permissions.administrator or ctx.author.id == 416234104317804544
+
     def calculate_level(self, xp: int) -> int:
         level = 0
         required = 100
@@ -68,17 +71,16 @@ class LevelCog(commands.Cog):
 
     @commands.command(name="setrolelvl")
     async def set_role_level(self, ctx, level: int, role: discord.Role):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
-
+        if not self.is_admin_or_owner(ctx):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         insert_level_role(self.db, ctx.guild.id, level, role.id)
         self.guild_level_roles.setdefault(ctx.guild.id, {})[level] = role.id
         await ctx.send(f"✅ Role {role.mention} akan diberikan pada level {level}.")
 
     @commands.command(name="removerolelvl")
     async def remove_role_level(self, ctx, level: int):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        if not self.is_admin_or_owner(ctx):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         cursor = self.db.cursor()
         cursor.execute("DELETE FROM level_roles WHERE guild_id=%s AND level=%s", (ctx.guild.id, level))
         self.db.commit()
@@ -88,44 +90,39 @@ class LevelCog(commands.Cog):
 
     @commands.command(name="setchlevel")
     async def setchlevel(self, ctx, channel: discord.TextChannel):
-        allowed_user_id = 416234104317804544
-        is_admin = ctx.author.guild_permissions.administrator
-        is_owner = ctx.author.id == allowed_user_id
-
-        if not (is_admin or is_owner):
+        if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
-
         set_channel_settings(self.db, ctx.guild.id, "level", channel.id)
         await ctx.send(f"✅ Channel level-up diatur ke {channel.mention}")
 
     @commands.command(name="leveloff")
     async def leveloff(self, ctx):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        if not self.is_admin_or_owner(ctx):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         disable_level(self.db, ctx.guild.id)
         self.disabled_guilds.add(ctx.guild.id)
         await ctx.send("🛑 Sistem level dinonaktifkan di server ini.")
 
     @commands.command(name="levelon")
     async def levelon(self, ctx):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        if not self.is_admin_or_owner(ctx):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         enable_level(self.db, ctx.guild.id)
         self.disabled_guilds.discard(ctx.guild.id)
         await ctx.send("✅ Sistem level diaktifkan kembali di server ini.")
 
     @commands.command(name="setnoxprole")
     async def set_no_xp_role(self, ctx, role: discord.Role):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        if not self.is_admin_or_owner(ctx):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         add_no_xp_role(self.db, ctx.guild.id, role.id)
         self.no_xp_roles.setdefault(ctx.guild.id, set()).add(role.id)
         await ctx.send(f"🚫 Role {role.mention} tidak akan mendapatkan XP.")
 
     @commands.command(name="removenoxprole")
     async def remove_no_xp_role_cmd(self, ctx, role: discord.Role):
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        if not self.is_admin_or_owner(ctx):
+            return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         remove_no_xp_role(self.db, ctx.guild.id, role.id)
         self.no_xp_roles.get(ctx.guild.id, set()).discard(role.id)
         await ctx.send(f"✅ Role {role.mention} kembali bisa mendapatkan XP.")
