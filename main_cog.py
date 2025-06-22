@@ -117,7 +117,8 @@ class main_cog(commands.Cog):
                 "`setchmusic <id_channel>`  - Set channel musik (owner only)\n"
                 "`leave / disconnect / dc`  - Hentikan dan keluar voice\n"
                 "`shuffle`                  - Acak antrian\n"
-                "`loop current / queue`     - Loop lagu atau antrian"
+                "`loop current / queue`     - Loop lagu atau antrian\n"
+                "`song <lyrics>`            - Cari lagu berdasarkan lyrics"
             ),
             inline=False
         )
