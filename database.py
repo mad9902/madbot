@@ -112,6 +112,44 @@ def get_level_role(db, guild_id, level):
         return int(result[0])
     return None
 
+def is_level_disabled(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("SELECT 1 FROM disabled_levels WHERE guild_id = %s", (guild_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    return result is not None
+
+def disable_level(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("INSERT IGNORE INTO disabled_levels (guild_id) VALUES (%s)", (guild_id,))
+    db.commit()
+    cursor.close()
+
+def enable_level(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM disabled_levels WHERE guild_id = %s", (guild_id,))
+    db.commit()
+    cursor.close()
+
+def get_no_xp_roles(db, guild_id):
+    cursor = db.cursor()
+    cursor.execute("SELECT role_id FROM no_xp_roles WHERE guild_id = %s", (guild_id,))
+    roles = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    return roles
+
+def add_no_xp_role(db, guild_id, role_id):
+    cursor = db.cursor()
+    cursor.execute("INSERT IGNORE INTO no_xp_roles (guild_id, role_id) VALUES (%s, %s)", (guild_id, role_id))
+    db.commit()
+    cursor.close()
+
+def remove_no_xp_role(db, guild_id, role_id):
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM no_xp_roles WHERE guild_id = %s AND role_id = %s", (guild_id, role_id))
+    db.commit()
+    cursor.close()
+
 def get_channel_settings(db, guild_id, setting_type):
     if db is None:
         return None

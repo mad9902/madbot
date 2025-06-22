@@ -6,7 +6,13 @@ from database import (
     get_level_role,
     insert_level_role,
     set_channel_settings,
-    get_channel_settings
+    get_channel_settings,
+    is_level_disabled,
+    disable_level,
+    enable_level,
+    get_no_xp_roles,
+    add_no_xp_role,
+    remove_no_xp_role
 )
 import time
 
@@ -14,8 +20,10 @@ class LevelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db = bot.db
-        self.guild_level_roles = {}  # {guild_id: {level: role_id}}
-        self.last_xp = {}  # {(guild_id, user_id): timestamp}
+        self.guild_level_roles = {} 
+        self.last_xp = {} 
+        self.disabled_guilds = set()
+        self.no_xp_roles = {} 
 
     def calculate_level(self, xp: int) -> int:
         level = 0
@@ -33,9 +41,24 @@ class LevelCog(commands.Cog):
             self.guild_level_roles.setdefault(int(guild_id), {})[int(level)] = int(role_id)
         cursor.close()
 
+    async def load_disabled_guilds(self):
+        cursor = self.db.cursor()
+        cursor.execute("SELECT guild_id FROM disabled_levels")
+        self.disabled_guilds = {row[0] for row in cursor.fetchall()}
+        cursor.close()
+
+    async def load_no_xp_roles(self):
+        cursor = self.db.cursor()
+        cursor.execute("SELECT guild_id, role_id FROM no_xp_roles")
+        for guild_id, role_id in cursor.fetchall():
+            self.no_xp_roles.setdefault(guild_id, set()).add(role_id)
+        cursor.close()
+
     @commands.Cog.listener()
     async def on_ready(self):
         await self.load_level_roles()
+        await self.load_disabled_guilds()
+        await self.load_no_xp_roles()
 
     @commands.command(name="level")
     async def show_level(self, ctx):
@@ -75,14 +98,55 @@ class LevelCog(commands.Cog):
         set_channel_settings(self.db, ctx.guild.id, "level", channel.id)
         await ctx.send(f"✅ Channel level-up diatur ke {channel.mention}")
 
+    @commands.command(name="leveloff")
+    async def leveloff(self, ctx):
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        disable_level(self.db, ctx.guild.id)
+        self.disabled_guilds.add(ctx.guild.id)
+        await ctx.send("🛑 Sistem level dinonaktifkan di server ini.")
+
+    @commands.command(name="levelon")
+    async def levelon(self, ctx):
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        enable_level(self.db, ctx.guild.id)
+        self.disabled_guilds.discard(ctx.guild.id)
+        await ctx.send("✅ Sistem level diaktifkan kembali di server ini.")
+
+    @commands.command(name="setnoxprole")
+    async def set_no_xp_role(self, ctx, role: discord.Role):
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        add_no_xp_role(self.db, ctx.guild.id, role.id)
+        self.no_xp_roles.setdefault(ctx.guild.id, set()).add(role.id)
+        await ctx.send(f"🚫 Role {role.mention} tidak akan mendapatkan XP.")
+
+    @commands.command(name="removenoxprole")
+    async def remove_no_xp_role_cmd(self, ctx, role: discord.Role):
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang bisa menggunakan command ini.")
+        remove_no_xp_role(self.db, ctx.guild.id, role.id)
+        self.no_xp_roles.get(ctx.guild.id, set()).discard(role.id)
+        await ctx.send(f"✅ Role {role.mention} kembali bisa mendapatkan XP.")
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild:
             return
 
+        guild_id = message.guild.id
+        user_id = message.author.id
+
+        if guild_id in self.disabled_guilds:
+            return
+
+        no_xp_roles = self.no_xp_roles.get(guild_id, set())
+        if any(role.id in no_xp_roles for role in message.author.roles):
+            return
+
         now = time.time()
-        key = (message.guild.id, message.author.id)
+        key = (guild_id, user_id)
         if key in self.last_xp and now - self.last_xp[key] < 10:
             return
         self.last_xp[key] = now
@@ -90,9 +154,6 @@ class LevelCog(commands.Cog):
         base_xp = 5
         bonus = min(len(message.content) // 20, 10)
         gained = base_xp + bonus
-
-        user_id = message.author.id
-        guild_id = message.guild.id
 
         xp_before = get_user_xp(self.db, user_id, guild_id)
         xp_after = xp_before + gained

@@ -127,6 +127,20 @@ def migrate(db):
     content TEXT
     );
     """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS disabled_levels (
+    guild_id BIGINT PRIMARY KEY
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS no_xp_roles (
+    guild_id BIGINT,
+    role_id BIGINT,
+    PRIMARY KEY (guild_id, role_id)
+    );
+    """)
 
     db.commit()
     cursor.close()
