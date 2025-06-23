@@ -143,9 +143,10 @@ def migrate(db):
     """)
     
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS confessions (
+        CREATE TABLE IF NOT EXISTS confessions (
             id INT AUTO_INCREMENT PRIMARY KEY,
             guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
             confession_id VARCHAR(100) NOT NULL,
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
