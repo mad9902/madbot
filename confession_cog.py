@@ -66,8 +66,9 @@ class ConfessionView(discord.ui.View):
         self.channel = target_channel
         self.is_thread = is_thread
 
-        self.add_item(ReplyButton(bot))
-        if not self.is_thread:
+        if self.is_thread:
+            self.add_item(ReplyButton(bot))
+        else:
             self.add_item(SubmitButton(bot))
 
     def is_persistent(self) -> bool:
