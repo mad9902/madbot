@@ -141,6 +141,16 @@ def migrate(db):
     PRIMARY KEY (guild_id, role_id)
     );
     """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS confessions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            confession_id VARCHAR(100) NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
 
     db.commit()
     cursor.close()

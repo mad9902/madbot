@@ -22,6 +22,7 @@ from birthday_cog import Birthday
 from welcome_cog import WelcomeMessageConfig
 from timedwords_cog import TimedWordsCog
 from bannedwords_cog import BannedWordsCog
+from confession_cog import ConfessionCog, ConfessionView
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
 # Load .env
@@ -32,6 +33,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
+# Prefix logic
 def get_prefix(bot, message):
     if message.guild and message.guild.id in DISABLED_GUILDS:
         if message.content.strip().lower().startswith(("mad boton", "md boton", "mboton")):
@@ -39,10 +41,11 @@ def get_prefix(bot, message):
         return commands.when_mentioned(bot)
     return ['mad ', 'md ', 'm']
 
-# Gunakan subclass untuk akses loop dengan aman
+# Subclass Bot
 class MadBot(commands.Bot):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.db = None
 
     async def setup_hook(self):
         self.remove_command("help")
@@ -50,6 +53,7 @@ class MadBot(commands.Bot):
         self.db = connect_db()
         migrate(self.db)
 
+        # Load semua cog
         await self.add_cog(main_cog(self))
         await self.add_cog(image_cog(self))
         await self.add_cog(music_cog(self))
@@ -61,16 +65,23 @@ class MadBot(commands.Bot):
 
         birthday_cog = Birthday(self)
         await self.add_cog(birthday_cog)
-        self.loop.create_task(birthday_cog.start_birthday_loop()) 
+        self.loop.create_task(birthday_cog.start_birthday_loop())
 
         await self.add_cog(WelcomeMessageConfig(self))
         await self.add_cog(BannedWordsCog(self))
         await self.add_cog(TimedWordsCog(self))
+        await self.add_cog(ConfessionCog(self))
 
+        # Tambahkan view global untuk tombol confession agar tetap hidup setelah restart
+        self.add_view(ConfessionView(self))  # PENTING
 
+    async def on_ready(self):
+        print(f"✅ Bot aktif sebagai {self.user}")
+
+# Buat bot instance
 bot = MadBot(command_prefix=get_prefix, intents=intents)
 
-
+# Cek disable per guild
 @bot.check
 async def block_disabled_guilds(ctx):
     if ctx.guild and ctx.guild.id in DISABLED_GUILDS:
@@ -79,7 +90,7 @@ async def block_disabled_guilds(ctx):
         return False
     return True
 
-# Blok interaksi juga kalau disable
+# Blok interaksi juga kalau dinonaktifkan
 @bot.event
 async def on_interaction(interaction):
     if interaction.guild and interaction.guild.id in DISABLED_GUILDS:
@@ -106,4 +117,5 @@ async def on_command_error(ctx, error):
 async def main():
     await bot.start(os.getenv("TOKEN"))
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

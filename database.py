@@ -330,4 +330,11 @@ def remove_timed_word(db, guild_id, title):
     cursor.execute("DELETE FROM timed_words WHERE guild_id = %s AND LOWER(title) = LOWER(%s)", (guild_id, title))
     db.commit()
 
+def save_confession(db, guild_id, confession_id, content):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO confessions (guild_id, confession_id, content)
+        VALUES (%s, %s, %s)
+    """, (guild_id, confession_id, content))
+    db.commit()
 
