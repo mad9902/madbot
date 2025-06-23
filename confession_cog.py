@@ -7,11 +7,7 @@ from database import (
     set_channel_settings,
 )
 
-# Mapping untuk menyimpan ID message -> ID thread
 CONFESSION_THREAD_MAP = {}
-
-# ID yang dianggap sebagai admin tambahan selain owner server
-OWNER_IDS = {416234104317804544}
 
 class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
     confession_input = discord.ui.TextInput(
@@ -73,9 +69,9 @@ class ConfessionView(discord.ui.View):
         if not self.is_thread:
             self.add_item(SubmitButton(bot, self.channel))
 
-    @property
     def is_persistent(self) -> bool:
         return True
+
 
 
 class SubmitButton(discord.ui.Button):
@@ -127,8 +123,10 @@ class ConfessionCog(commands.Cog):
         self.bot = bot
 
     @commands.command(name="sendconfessbutton")
-    @commands.has_permissions(manage_guild=True)
     async def send_confess_button(self, ctx):
+        if not ctx.author.guild_permissions.manage_guild and ctx.author.id != 416234104317804544:
+            return await ctx.send("❌ Hanya admin server yang bisa menggunakan command ini.")
+
         """Kirim tombol confession ke channel saat ini"""
         view = ConfessionView(self.bot, ctx.channel, is_thread=False)
         embed = discord.Embed(
@@ -140,7 +138,7 @@ class ConfessionCog(commands.Cog):
 
     @commands.command(name="setconfessch", help="Set channel khusus untuk tombol confession")
     async def set_confession_channel(self, ctx, channel: discord.TextChannel):
-        if ctx.author.id != ctx.guild.owner_id and ctx.author.id not in OWNER_IDS:
+        if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
             return await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
 
         db = connect_db()

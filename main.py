@@ -75,9 +75,6 @@ class MadBot(commands.Bot):
         # Tambahkan view global untuk tombol confession agar tetap hidup setelah restart
         self.add_view(ConfessionView(self))  # PENTING
 
-    async def on_ready(self):
-        print(f"✅ Bot aktif sebagai {self.user}")
-
 # Buat bot instance
 bot = MadBot(command_prefix=get_prefix, intents=intents)
 
