@@ -37,7 +37,7 @@ class TimedWordsCog(commands.Cog):
         db.close()
 
         if not channel_id:
-            channel_id = ctx.channel.id  # fallback
+            channel_id = ctx.channel.id
 
         self.guild_data[ctx.guild.id] = {
             "channel": channel_id,
@@ -48,10 +48,10 @@ class TimedWordsCog(commands.Cog):
 
         await ctx.send(f"✅ Pesan berkala ditambahkan:\n**{title}**\n{content}")
 
-    @commands.command(name="mtimedwords", help="Tambah pesan berkala dengan interval menit. Contoh: mtimedwords 5 Judul | Isi")
+    @commands.command(name="timedwords", help="Tambah pesan berkala dengan interval menit. Contoh: mtimedwords 5 Judul | Isi")
     async def add_timed_word_with_interval(self, ctx, interval: int, *, arg: str = None):
         if not arg or "|" not in arg:
-            return await ctx.send("❗ Format salah. Contoh: `mtimedwords 5 Reminder | Jangan spam!`")
+            return await ctx.send("❗ Format salah. Contoh: `timedwords 5 Reminder | Jangan spam!`")
 
         if not ctx.author.guild_permissions.administrator:
             return await ctx.send("❌ Hanya admin yang dapat menambahkan pesan rutin.")
