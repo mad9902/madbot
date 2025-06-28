@@ -121,10 +121,11 @@ def migrate(db):
     
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS timed_words (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    guild_id BIGINT NOT NULL,
-    title VARCHAR(255),
-    content TEXT
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        guild_id BIGINT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        interval_minutes INT NOT NULL DEFAULT 30
     );
     """)
     

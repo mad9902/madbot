@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import Embed, Color
+from datetime import datetime, timedelta
 from database import (
     connect_db,
     add_timed_word,
@@ -11,7 +12,7 @@ from database import (
 )
 
 ALLOWED_USER_ID = 416234104317804544
-EMBED_COLOR = Color(int("C9DFEC", 16))  # Warna embed #C9DFEC
+EMBED_COLOR = Color(int("C9DFEC", 16))
 
 class TimedWordsCog(commands.Cog):
     def __init__(self, bot):
@@ -30,7 +31,7 @@ class TimedWordsCog(commands.Cog):
         title, content = [x.strip() for x in arg.split("|", 1)]
 
         db = connect_db()
-        add_timed_word(db, ctx.guild.id, title, content)
+        add_timed_word(db, ctx.guild.id, title, content, 30)
         messages = get_timed_words(db, ctx.guild.id)
         channel_id = get_channel_settings(db, ctx.guild.id, "timedwords")
         db.close()
@@ -41,10 +42,42 @@ class TimedWordsCog(commands.Cog):
         self.guild_data[ctx.guild.id] = {
             "channel": channel_id,
             "messages": messages,
-            "index": 0
+            "index": 0,
+            "last_sent": None
         }
 
         await ctx.send(f"✅ Pesan berkala ditambahkan:\n**{title}**\n{content}")
+
+    @commands.command(name="mtimedwords", help="Tambah pesan berkala dengan interval menit. Contoh: mtimedwords 5 Judul | Isi")
+    async def add_timed_word_with_interval(self, ctx, interval: int, *, arg: str = None):
+        if not arg or "|" not in arg:
+            return await ctx.send("❗ Format salah. Contoh: `mtimedwords 5 Reminder | Jangan spam!`")
+
+        if not ctx.author.guild_permissions.administrator:
+            return await ctx.send("❌ Hanya admin yang dapat menambahkan pesan rutin.")
+
+        if interval < 1 or interval > 1440:
+            return await ctx.send("⚠️ Interval harus antara 1–1440 menit.")
+
+        title, content = [x.strip() for x in arg.split("|", 1)]
+
+        db = connect_db()
+        add_timed_word(db, ctx.guild.id, title, content, interval)
+        messages = get_timed_words(db, ctx.guild.id)
+        channel_id = get_channel_settings(db, ctx.guild.id, "timedwords")
+        db.close()
+
+        if not channel_id:
+            channel_id = ctx.channel.id
+
+        self.guild_data[ctx.guild.id] = {
+            "channel": channel_id,
+            "messages": messages,
+            "index": 0,
+            "last_sent": None
+        }
+
+        await ctx.send(f"✅ Pesan berkala ditambahkan setiap {interval} menit:\n**{title}**\n{content}")
 
     @commands.command(name="setchtimedwords", help="Set channel untuk pengiriman timedwords otomatis.")
     async def set_timedwords_channel(self, ctx, channel: discord.TextChannel):
@@ -60,28 +93,35 @@ class TimedWordsCog(commands.Cog):
             self.guild_data[ctx.guild.id] = {
                 "channel": channel.id,
                 "messages": messages,
-                "index": 0
+                "index": 0,
+                "last_sent": None
             }
 
         await ctx.send(f"✅ Channel untuk timedwords telah disetel ke {channel.mention}")
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=1)
     async def send_timed_word(self):
+        now = datetime.utcnow()
         for guild_id, data in self.guild_data.items():
             channel = self.bot.get_channel(int(data["channel"]))
             if not channel or not data["messages"]:
                 continue
 
-            title, content = data["messages"][data["index"]]
-            embed = Embed(
-                title=f"📞 {title}",
-                description=content,
-                color=EMBED_COLOR
-            )
-            embed.set_footer(text="Pesan berkala otomatis setiap 30 menit.")
+            index = data["index"]
+            title, content, interval = data["messages"][index]
+            last_sent = data.get("last_sent")
 
-            await channel.send(embed=embed)
-            data["index"] = (data["index"] + 1) % len(data["messages"])
+            if last_sent is None or now - last_sent >= timedelta(minutes=interval):
+                embed = Embed(
+                    title=f"📞 {title}",
+                    description=content,
+                    color=EMBED_COLOR
+                )
+                embed.set_footer(text=f"Pesan otomatis setiap {interval} menit.")
+
+                await channel.send(embed=embed)
+                data["index"] = (index + 1) % len(data["messages"])
+                data["last_sent"] = now
 
     @send_timed_word.before_loop
     async def before_send_timed_word(self):
@@ -95,7 +135,8 @@ class TimedWordsCog(commands.Cog):
                 self.guild_data[guild.id] = {
                     "channel": int(channel_id),
                     "messages": messages,
-                    "index": 0
+                    "index": 0,
+                    "last_sent": None
                 }
 
     @commands.command(name="listtimedwords", help="Menampilkan semua pesan berkala yang telah ditambahkan.")
@@ -112,8 +153,8 @@ class TimedWordsCog(commands.Cog):
         for i in range(0, len(messages), per_page):
             chunk = messages[i:i + per_page]
             desc = ""
-            for title, content in chunk:
-                desc += f"📌 **{title}**\n{content}\n\n"
+            for title, content, interval in chunk:
+                desc += f"📌 **{title}** ({interval} menit)\n{content}\n\n"
 
             embed = Embed(
                 title=f"🗂️ Daftar Pesan Berkala ({i+1}–{min(i+per_page, len(messages))} dari {len(messages)})",
@@ -155,7 +196,6 @@ class TimedWordsCog(commands.Cog):
 
             await ctx.send(embed=pages[0], view=PaginationView(pages))
 
-
     @commands.command(name="removetimedwords", help="Hapus pesan berkala berdasarkan judul.")
     async def remove_timedword(self, ctx, *, title: str = None):
         if not title:
@@ -176,5 +216,6 @@ class TimedWordsCog(commands.Cog):
         if ctx.guild.id in self.guild_data:
             self.guild_data[ctx.guild.id]["messages"] = updated
             self.guild_data[ctx.guild.id]["index"] = 0
+            self.guild_data[ctx.guild.id]["last_sent"] = None
 
         await ctx.send(f"🗑️ Pesan berkala dengan judul '**{matched[0][0]}**' berhasil dihapus.")

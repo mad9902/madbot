@@ -315,20 +315,31 @@ def get_welcome_message(db, guild_id: int) -> str | None:
     result = cursor.fetchone()
     return result[0] if result else None
 
-def add_timed_word(db, guild_id, title, content):
+def add_timed_word(db, guild_id, title, content, interval=30):
     cursor = db.cursor()
-    cursor.execute("INSERT INTO timed_words (guild_id, title, content) VALUES (%s, %s, %s)", (guild_id, title, content))
+    cursor.execute(
+        "INSERT INTO timed_words (guild_id, title, content, interval_minutes) VALUES (%s, %s, %s, %s)",
+        (guild_id, title, content, interval)
+    )
     db.commit()
 
 def get_timed_words(db, guild_id):
     cursor = db.cursor()
-    cursor.execute("SELECT title, content FROM timed_words WHERE guild_id = %s", (guild_id,))
-    return cursor.fetchall()
+    cursor.execute("SELECT title, content, interval_minutes FROM timed_words WHERE guild_id = %s", (guild_id,))
+    return cursor.fetchall() 
 
 def remove_timed_word(db, guild_id, title):
     cursor = db.cursor()
-    cursor.execute("DELETE FROM timed_words WHERE guild_id = %s AND LOWER(title) = LOWER(%s)", (guild_id, title))
-    db.commit()
+    cursor.execute("SELECT title FROM timed_words WHERE guild_id = %s", (guild_id,))
+    rows = cursor.fetchall()
+    for row in rows:
+        if row[0].lower() == title.lower():
+            cursor.execute(
+                "DELETE FROM timed_words WHERE guild_id = %s AND title = %s",
+                (guild_id, row[0])
+            )
+            db.commit()
+            break
 
 def save_confession(db, guild_id, user_id, confession_id, content):
     cursor = db.cursor()
