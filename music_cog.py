@@ -540,3 +540,42 @@ class music_cog(commands.Cog):
             print(f"[msong ERROR] {e}")
             await loading_msg.delete()
             await ctx.send("❌ Terjadi error saat menghubungi AudD API.")
+
+
+    @commands.command(name="lyrics", help="Cari lirik berdasarkan judul lagu.")
+    async def lyrics_command(self, ctx, *, song_title: str = None):
+        if not song_title:
+            return await ctx.send("❗ Berikan judul lagu untuk mencari lirik.")
+
+        loading_msg = await ctx.send("🔎 Mencari lirik lagu...")
+
+        api_key = os.getenv("AUDD_API_KEY")
+        params = {
+            "q": song_title,
+            "api_token": api_key
+        }
+
+        try:
+            res = requests.get("https://api.audd.io/lyrics/", params=params)
+            data = res.json()
+
+            if data.get("status") != "success" or not data.get("result"):
+                await loading_msg.delete()
+                return await ctx.send("❌ Lirik tidak ditemukan.")
+
+            song = data["result"]
+            title = song.get("title", "Unknown")
+            artist = song.get("artist", "Unknown")
+            lyrics = song.get("lyrics", "Lirik tidak tersedia.")
+
+            await loading_msg.delete()
+            # Potong jika terlalu panjang
+            if len(lyrics) > 1900:
+                lyrics = lyrics[:1900] + "\n...(dipotong)"
+
+            await ctx.send(f"🎶 **{title} - {artist}**\n\n{lyrics}")
+
+        except Exception as e:
+            print(f"[lyrics ERROR] {e}")
+            await loading_msg.delete()
+            await ctx.send("❌ Terjadi error saat menghubungi AudD API.")
