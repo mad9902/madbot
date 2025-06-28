@@ -556,19 +556,29 @@ class music_cog(commands.Cog):
         }
 
         try:
+            # Coba endpoint utama: /lyrics
             res = requests.get("https://api.audd.io/lyrics/", params=params)
             data = res.json()
 
-            if data.get("status") != "success" or not data.get("result"):
-                await loading_msg.delete()
-                return await ctx.send("❌ Lirik tidak ditemukan.")
+            if data.get("status") == "success" and data.get("result"):
+                song = data["result"]
+            else:
+                # Fallback ke /findLyrics
+                res = requests.get("https://api.audd.io/findLyrics/", params=params)
+                data = res.json()
 
-            song = data["result"]
+                if data.get("status") == "success" and data.get("result"):
+                    song = data["result"][0]
+                else:
+                    await loading_msg.delete()
+                    return await ctx.send("❌ Lirik tidak ditemukan.")
+
             title = song.get("title", "Unknown")
             artist = song.get("artist", "Unknown")
             lyrics = song.get("lyrics", "Lirik tidak tersedia.")
 
             await loading_msg.delete()
+
             # Potong jika terlalu panjang
             if len(lyrics) > 1900:
                 lyrics = lyrics[:1900] + "\n...(dipotong)"
@@ -579,3 +589,4 @@ class music_cog(commands.Cog):
             print(f"[lyrics ERROR] {e}")
             await loading_msg.delete()
             await ctx.send("❌ Terjadi error saat menghubungi AudD API.")
+
