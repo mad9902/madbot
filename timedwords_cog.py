@@ -20,46 +20,30 @@ class TimedWordsCog(commands.Cog):
         self.guild_data = {}
         self.send_timed_word.start()
 
-    @commands.command(name="timedwords", help="Tambah pesan rutin: timedwords Judul | Isi")
+    @commands.command(name="timedwords", help="Tambah pesan rutin: timedwords [interval] Judul | Isi\nContoh: `timedwords 5 Reminder | Jangan spam!` atau `timedwords Reminder | Jangan spam!` (default 30 menit)")
     async def add_timed_word_cmd(self, ctx, *, arg: str = None):
         if not arg or "|" not in arg:
-            return await ctx.send("❗ Format salah. Contoh: `timedwords Reminder | Jangan spam!`")
+            return await ctx.send("❗ Format salah. Contoh: `timedwords [5] Reminder | Jangan spam!`")
 
         if not ctx.author.guild_permissions.administrator:
             return await ctx.send("❌ Hanya admin yang dapat menambahkan pesan rutin.")
 
-        title, content = [x.strip() for x in arg.split("|", 1)]
+        parts = arg.split("|", 1)
+        left = parts[0].strip()
+        content = parts[1].strip()
 
-        db = connect_db()
-        add_timed_word(db, ctx.guild.id, title, content, 30)
-        messages = get_timed_words(db, ctx.guild.id)
-        channel_id = get_channel_settings(db, ctx.guild.id, "timedwords")
-        db.close()
-
-        if not channel_id:
-            channel_id = ctx.channel.id
-
-        self.guild_data[ctx.guild.id] = {
-            "channel": channel_id,
-            "messages": messages,
-            "index": 0,
-            "last_sent": None
-        }
-
-        await ctx.send(f"✅ Pesan berkala ditambahkan:\n**{title}**\n{content}")
-
-    @commands.command(name="timedwords", help="Tambah pesan berkala dengan interval menit. Contoh: mtimedwords 5 Judul | Isi")
-    async def add_timed_word_with_interval(self, ctx, interval: int, *, arg: str = None):
-        if not arg or "|" not in arg:
-            return await ctx.send("❗ Format salah. Contoh: `timedwords 5 Reminder | Jangan spam!`")
-
-        if not ctx.author.guild_permissions.administrator:
-            return await ctx.send("❌ Hanya admin yang dapat menambahkan pesan rutin.")
-
-        if interval < 1 or interval > 1440:
-            return await ctx.send("⚠️ Interval harus antara 1–1440 menit.")
-
-        title, content = [x.strip() for x in arg.split("|", 1)]
+        # Coba deteksi jika ada angka interval di depan
+        try:
+            first_space = left.index(" ")
+            possible_interval = left[:first_space]
+            interval = int(possible_interval)
+            if interval < 1 or interval > 1440:
+                return await ctx.send("⚠️ Interval harus antara 1–1440 menit.")
+            title = left[first_space:].strip()
+        except (ValueError, IndexError):
+            # Tidak ada angka di awal → pakai default 30
+            interval = 30
+            title = left
 
         db = connect_db()
         add_timed_word(db, ctx.guild.id, title, content, interval)
@@ -78,6 +62,7 @@ class TimedWordsCog(commands.Cog):
         }
 
         await ctx.send(f"✅ Pesan berkala ditambahkan setiap {interval} menit:\n**{title}**\n{content}")
+
 
     @commands.command(name="setchtimedwords", help="Set channel untuk pengiriman timedwords otomatis.")
     async def set_timedwords_channel(self, ctx, channel: discord.TextChannel):
