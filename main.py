@@ -4,6 +4,8 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from rapidfuzz import process, fuzz
+import sys
+from db_seeder import seed_data
 
 # Database dan migrasi
 from database import connect_db, ensure_database_exists
@@ -15,6 +17,7 @@ from image_cog import image_cog
 from music_cog import music_cog
 from link_cog import link_cog
 from ai_cog import GeminiCog
+from train_cog import TrainCog
 from level_cog import LevelCog
 from game_cog import SambungKataMultiplayer
 from afk_cog import AFK
@@ -73,6 +76,7 @@ class MadBot(commands.Bot):
         await self.add_cog(TimedWordsCog(self))
         await self.add_cog(ConfessionCog(self))
         await self.add_cog(MassDM(self))
+        await self.add_cog(TrainCog(self))
 
         # Tambahkan view global untuk tombol confession agar tetap hidup setelah restart
         self.add_view(ConfessionView(self))  # PENTING
@@ -114,7 +118,12 @@ async def on_command_error(ctx, error):
 
 # Jalankan bot
 async def main():
-    await bot.start(os.getenv("TOKEN"))
+    if len(sys.argv) > 1 and sys.argv[1] == "seed":
+        print("🌱 Menjalankan seeder...")
+        seed_data()
+        print("✅ Seeder selesai.")
+    else:
+        await bot.start(os.getenv("TOKEN"))
 
 if __name__ == "__main__":
     asyncio.run(main())

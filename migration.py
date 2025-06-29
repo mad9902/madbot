@@ -154,6 +154,131 @@ def migrate(db):
         );
     """)
 
+        # Tabel untuk menyimpan karakter pemain
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_characters (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            character_name VARCHAR(100) NOT NULL UNIQUE,
+            level INT DEFAULT 1,
+            exp INT DEFAULT 0,
+            exp_to_next INT DEFAULT 100,
+            base_hp INT DEFAULT 100,
+            base_atk INT DEFAULT 20,
+            base_def INT DEFAULT 10,
+            base_spd INT DEFAULT 10,
+            win_streak INT DEFAULT 0,
+            train_level INT DEFAULT 1,
+            last_checkpoint INT DEFAULT 1,
+            skill_point INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+
+    # Tabel untuk musuh-musuh preset di arena training
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS enemy_pool (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            base_hp INT NOT NULL,
+            base_atk INT NOT NULL,
+            base_def INT NOT NULL,
+            base_spd INT NOT NULL,
+            ai_type VARCHAR(50) DEFAULT 'random',
+            skill_json TEXT,
+            reward_json TEXT,
+            min_level INT DEFAULT 1,
+            max_level INT DEFAULT 100
+        );
+    """)
+
+    # Tabel log pertarungan latihan
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS train_battle_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            character_id INT NOT NULL,
+            enemy_id INT NOT NULL,
+            result ENUM('win', 'lose') NOT NULL,
+            exp_gain INT DEFAULT 0,
+            coin_gain INT DEFAULT 0,
+            skill_point_gain INT DEFAULT 0,
+            turn_log_json LONGTEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (character_id) REFERENCES user_characters(id) ON DELETE CASCADE,
+            FOREIGN KEY (enemy_id) REFERENCES enemy_pool(id) ON DELETE SET NULL
+        );
+    """)
+
+        # Tabel skill global
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS skills (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            type ENUM('active', 'passive') DEFAULT 'active',
+            unlock_level INT DEFAULT 1,
+            mana_cost INT DEFAULT 0,
+            cooldown INT DEFAULT 0,
+            effect_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    # Tabel relasi karakter dan skill
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS character_skills (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            character_id INT NOT NULL,
+            skill_id INT NOT NULL,
+            is_equipped BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (character_id) REFERENCES user_characters(id) ON DELETE CASCADE,
+            FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
+        );
+    """)
+
+    # Tabel item global
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            type ENUM('stat_boost', 'special_effect') DEFAULT 'stat_boost', -- 👈 Tambahkan ini
+            description TEXT,
+            slot ENUM('weapon', 'armor', 'accessory') NOT NULL,
+            stat_bonus_json TEXT,
+            rarity ENUM('common', 'uncommon', 'rare', 'epic', 'legendary') DEFAULT 'common',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    # Tabel relasi karakter dan item
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS character_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            character_id INT NOT NULL,
+            item_id INT NOT NULL,
+            is_equipped BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (character_id) REFERENCES user_characters(id) ON DELETE CASCADE,
+            FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+    """)
+
+    # Tabel log tambahan
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            character_id INT NOT NULL,
+            log_type ENUM('level_up', 'skill_unlock', 'item_drop') NOT NULL,
+            description TEXT,
+            metadata_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (character_id) REFERENCES user_characters(id) ON DELETE CASCADE
+        );
+    """)
+
     db.commit()
     cursor.close()
     
