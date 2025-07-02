@@ -3,8 +3,6 @@ from discord.ext import commands, tasks
 import random
 import asyncio
 from datetime import datetime, timedelta
-
-# Simulasi database (pakai modul database sesuai implementasimu)
 from database import (
     create_new_game, update_game_status, get_active_game,
     add_player, get_alive_players, get_players_by_role,
@@ -14,15 +12,13 @@ from database import (
 )
 
 ROLE_POOL = {
-    5: ["werewolf", "seer", "villager"],
-    5: ["werewolf", "seer", "villager", "villager"],
     5: ["werewolf", "seer", "villager", "villager", "villager"],
     6: ["werewolf", "werewolf", "seer", "villager", "villager", "villager"],
     7: ["werewolf", "werewolf", "seer", "villager", "villager", "villager", "guardian"],
     8: ["werewolf", "werewolf", "seer", "guardian", "witch", "villager", "villager", "villager"]
 }
 
-MIN_PLAYERS = 3
+MIN_PLAYERS = 5
 MAX_PLAYERS = 8
 TIMEOUT_DURATION = timedelta(days=2)
 
