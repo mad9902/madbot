@@ -443,6 +443,10 @@ def get_alive_players(game_id):
     finally:
         close_connection(conn)
 
+def get_players_by_game(game_id):
+    cursor.execute("SELECT user_id, username, role, alive FROM players WHERE game_id = %s", (game_id,))
+    return cursor.fetchall()
+
 def get_players_by_role(game_id, role):
     conn = connect_db()
     if not conn:

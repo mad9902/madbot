@@ -8,7 +8,7 @@ from database import (
     add_player, get_alive_players, get_players_by_role,
     kill_player, reset_players, set_roles_config,
     save_vote, get_votes_for_round, log_event,
-    update_leaderboard, get_game_logs
+    update_leaderboard, get_game_logs, get_players_by_game
 )
 
 ROLE_POOL = {
@@ -545,12 +545,39 @@ class Werewolf(commands.Cog):
             await self.send_embed(ctx, "Warga Menang", "\U0001F389 Semua werewolf telah dieliminasi.")
             for p in get_alive_players(game_id):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] != 'werewolf'))
+
+            # 🟢 Tampilkan semua peran
+            players = get_players_by_role(game_id, None)  # Ambil semua role
+            embed = discord.Embed(
+                title="🎭 Peran Semua Pemain",
+                description="Inilah peran masing-masing pemain:",
+                color=discord.Color.orange()
+            )
+            for p in players:
+                status = "☠️ Mati" if not p['alive'] else "🟢 Hidup"
+                embed.add_field(name=p['username'], value=f"**{p['role'].capitalize()}** - {status}", inline=False)
+            await ctx.send(embed=embed)
+
             update_game_status(game_id, 'ended')
             reset_players(game_id)
+
         elif len(werewolves) >= len(villagers):
             await self.send_embed(ctx, "Werewolf Menang", "\U0001F480 Mereka menguasai desa.")
             for p in get_alive_players(game_id):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] == 'werewolf'))
+
+            # 🟥 Tampilkan semua peran
+            players = get_players_by_role(game_id, None)
+            embed = discord.Embed(
+                title="🎭 Peran Semua Pemain",
+                description="Inilah peran masing-masing pemain:",
+                color=discord.Color.orange()
+            )
+            for p in players:
+                status = "☠️ Mati" if not p['alive'] else "🟢 Hidup"
+                embed.add_field(name=p['username'], value=f"**{p['role'].capitalize()}** - {status}", inline=False)
+            await ctx.send(embed=embed)
+
             update_game_status(game_id, 'ended')
             reset_players(game_id)
 
