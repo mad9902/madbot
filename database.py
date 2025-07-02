@@ -444,8 +444,18 @@ def get_alive_players(game_id):
         close_connection(conn)
 
 def get_players_by_game(game_id):
-    cursor.execute("SELECT user_id, username, role, alive FROM players WHERE game_id = %s", (game_id,))
-    return cursor.fetchall()
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT user_id, username, role, alive FROM werewolf_players WHERE game_id = %s", (game_id,))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"[DB] get_players_by_game: {e}")
+        return []
+    finally:
+        close_connection(conn)
 
 def get_players_by_role(game_id, role):
     conn = connect_db()
