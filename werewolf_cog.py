@@ -541,13 +541,18 @@ class Werewolf(commands.Cog):
         werewolves = [p for p in get_players_by_role(game_id, 'werewolf') if p['alive']]
         villagers = [p for p in get_alive_players(game_id) if p['role'] != 'werewolf']
 
+        print(f"[DEBUG] Cek hasil game {game_id}")
+        print(f"[DEBUG] Werewolves hidup: {[p['username'] for p in werewolves]}")
+        print(f"[DEBUG] Villagers hidup: {[p['username'] for p in villagers]}")
+
         if not werewolves:
             await self.send_embed(ctx, "Warga Menang", "\U0001F389 Semua werewolf telah dieliminasi.")
             for p in get_alive_players(game_id):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] != 'werewolf'))
 
-            # 🟢 Tampilkan semua peran
-            players = get_players_by_role(game_id, None)  # Ambil semua role
+            players = get_players_by_game(game_id)
+            print(f"[DEBUG] Semua pemain (warga menang): {players}")
+
             embed = discord.Embed(
                 title="🎭 Peran Semua Pemain",
                 description="Inilah peran masing-masing pemain:",
@@ -566,8 +571,9 @@ class Werewolf(commands.Cog):
             for p in get_alive_players(game_id):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] == 'werewolf'))
 
-            # 🟥 Tampilkan semua peran
             players = get_players_by_game(game_id)
+            print(f"[DEBUG] Semua pemain (werewolf menang): {players}")
+
             embed = discord.Embed(
                 title="🎭 Peran Semua Pemain",
                 description="Inilah peran masing-masing pemain:",
@@ -578,9 +584,9 @@ class Werewolf(commands.Cog):
                 embed.add_field(name=p['username'], value=f"**{p['role'].capitalize()}** - {status}", inline=False)
             await ctx.send(embed=embed)
 
-
             update_game_status(game_id, 'ended')
             reset_players(game_id)
+
 
     @commands.command()
     async def vote(self, ctx, target: discord.Member):
