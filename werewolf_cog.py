@@ -12,15 +12,13 @@ from database import (
 )
 
 ROLE_POOL = {
-    3: ["werewolf", "seer", "villager"],
-    5: ["werewolf", "seer", "villager", "villager", "villager"],
     5: ["werewolf", "seer", "villager", "villager", "villager"],
     6: ["werewolf", "werewolf", "seer", "villager", "villager", "villager"],
     7: ["werewolf", "werewolf", "seer", "villager", "villager", "villager", "guardian"],
     8: ["werewolf", "werewolf", "seer", "guardian", "witch", "villager", "villager", "villager"]
 }
 
-MIN_PLAYERS = 3
+MIN_PLAYERS = 5
 MAX_PLAYERS = 8
 TIMEOUT_DURATION = timedelta(days=2)
 
