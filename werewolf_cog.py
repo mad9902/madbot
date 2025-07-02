@@ -12,13 +12,15 @@ from database import (
 )
 
 ROLE_POOL = {
+    3: ["werewolf", "seer", "villager"],
+    5: ["werewolf", "seer", "villager", "villager", "villager"],
     5: ["werewolf", "seer", "villager", "villager", "villager"],
     6: ["werewolf", "werewolf", "seer", "villager", "villager", "villager"],
     7: ["werewolf", "werewolf", "seer", "villager", "villager", "villager", "guardian"],
     8: ["werewolf", "werewolf", "seer", "guardian", "witch", "villager", "villager", "villager"]
 }
 
-MIN_PLAYERS = 5
+MIN_PLAYERS = 3
 MAX_PLAYERS = 8
 TIMEOUT_DURATION = timedelta(days=2)
 
@@ -567,7 +569,7 @@ class Werewolf(commands.Cog):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] == 'werewolf'))
 
             # 🟥 Tampilkan semua peran
-            players = get_players_by_role(game_id, None)
+            players = get_players_by_game(game_id)
             embed = discord.Embed(
                 title="🎭 Peran Semua Pemain",
                 description="Inilah peran masing-masing pemain:",
@@ -577,6 +579,7 @@ class Werewolf(commands.Cog):
                 status = "☠️ Mati" if not p['alive'] else "🟢 Hidup"
                 embed.add_field(name=p['username'], value=f"**{p['role'].capitalize()}** - {status}", inline=False)
             await ctx.send(embed=embed)
+
 
             update_game_status(game_id, 'ended')
             reset_players(game_id)
