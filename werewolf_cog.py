@@ -14,13 +14,15 @@ from database import (
 )
 
 ROLE_POOL = {
+    5: ["werewolf", "seer", "villager"],
+    5: ["werewolf", "seer", "villager", "villager"],
     5: ["werewolf", "seer", "villager", "villager", "villager"],
     6: ["werewolf", "werewolf", "seer", "villager", "villager", "villager"],
     7: ["werewolf", "werewolf", "seer", "villager", "villager", "villager", "guardian"],
     8: ["werewolf", "werewolf", "seer", "guardian", "witch", "villager", "villager", "villager"]
 }
 
-MIN_PLAYERS = 5
+MIN_PLAYERS = 3
 MAX_PLAYERS = 8
 TIMEOUT_DURATION = timedelta(days=2)
 
@@ -249,7 +251,7 @@ class Werewolf(commands.Cog):
     async def startwerewolf_cmd(self, ctx):
         game = get_active_game(ctx.guild.id)
         if game:
-            await self.send_embed(ctx, "Game Aktif", "Sudah ada game aktif. Gunakan `!stopwerewolf` untuk mengakhiri.")
+            await self.send_embed(ctx, "Game Aktif", "Sudah ada game aktif. Gunakan `mstopwerewolf` untuk mengakhiri.")
             return
 
         game_id = create_new_game(ctx.guild.id, ctx.channel.id)
@@ -481,7 +483,7 @@ class Werewolf(commands.Cog):
 
     async def handle_day_phase(self, ctx, game_id, round_number):
         print(f"[DAY] Mulai siang {round_number} untuk game {game_id}")
-        await self.send_embed(ctx, f"\u2600\ufe0f Siang {round_number}", "Diskusi dan voting dimulai. Kirim `!vote @user`.")
+        await self.send_embed(ctx, f"\u2600\ufe0f Siang {round_number}", "Diskusi dan voting dimulai. Kirim `mvote @user`.")
         await asyncio.sleep(30)
 
         # ⛔ STOP jika game dihentikan
@@ -516,8 +518,28 @@ class Werewolf(commands.Cog):
             print(f"[DAY END] Game {game_id} dihentikan, tidak lanjut malam berikutnya.")
             return
 
+        # ✅ Tambahan: hentikan jika tidak ada aksi malam DAN tidak ada vote siang
+        last_night_actions = self.night_actions.get(game_id, {})
+        no_night_action = (
+            not last_night_actions.get('werewolf') and
+            not last_night_actions.get('seer') and
+            not last_night_actions.get('guardian') and
+            not last_night_actions.get('witch', {}).get('heal') and
+            not last_night_actions.get('witch', {}).get('kill')
+        )
+
+        if no_night_action and not votes:
+            await self.send_embed(ctx, "Game Dihentikan", "🔕 Tidak ada aksi malam dan tidak ada voting siang.\nGame diberhentikan otomatis karena tidak ada partisipasi.")
+            update_game_status(game_id, 'ended')
+            reset_players(game_id)
+            self.active_games.pop(ctx.guild.id, None)
+            self.hosts.pop(ctx.guild.id, None)
+            print(f"[AUTO-END] Game {game_id} dihentikan karena inaktivitas.")
+            return
+
         update_game_status(game_id, 'night', round_number + 1)
         await self.handle_night_phase(ctx, game_id, round_number + 1)
+
 
     async def check_game_result(self, ctx, game_id):
         werewolves = [p for p in get_players_by_role(game_id, 'werewolf') if p['alive']]
