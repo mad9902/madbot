@@ -47,6 +47,11 @@ def connect_db():
     )
     return db
 
+def close_connection(conn):
+    if conn and conn.is_connected():
+        conn.close()
+
+
 def get_user_xp(db, user_id, guild_id):
     if db is None:
         return 0
@@ -348,5 +353,268 @@ def save_confession(db, guild_id, user_id, confession_id, content):
         VALUES (%s, %s, %s, %s)
     """, (guild_id, user_id, confession_id, content))
     db.commit()
+# ==================== GAME CORE ====================
+def create_new_game(guild_id, channel_id):
+    conn = connect_db()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO werewolf_games (guild_id, channel_id)
+            VALUES (%s, %s)
+        """, (guild_id, channel_id))
+        conn.commit()
+        return cursor.lastrowid
+    except Error as e:
+        print(f"[DB] create_new_game: {e}")
+        return None
+    finally:
+        close_connection(conn)
 
+def update_game_status(game_id, status, round_number=None):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        if round_number is not None:
+            cursor.execute("""
+                UPDATE werewolf_games SET status = %s, current_round = %s WHERE id = %s
+            """, (status, round_number, game_id))
+        else:
+            cursor.execute("""
+                UPDATE werewolf_games SET status = %s WHERE id = %s
+            """, (status, game_id))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] update_game_status: {e}")
+    finally:
+        close_connection(conn)
+
+def get_active_game(guild_id):
+    conn = connect_db()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM werewolf_games
+            WHERE guild_id = %s AND status != 'ended'
+            ORDER BY id DESC LIMIT 1
+        """, (guild_id,))
+        return cursor.fetchone()
+    except Error as e:
+        print(f"[DB] get_active_game: {e}")
+        return None
+    finally:
+        close_connection(conn)
+
+# ==================== PLAYERS ====================
+def add_player(game_id, user_id, username, role):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO werewolf_players (game_id, user_id, username, role)
+            VALUES (%s, %s, %s, %s)
+        """, (game_id, user_id, username, role))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] add_player: {e}")
+    finally:
+        close_connection(conn)
+
+def get_alive_players(game_id):
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM werewolf_players WHERE game_id = %s AND alive = TRUE
+        """, (game_id,))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"[DB] get_alive_players: {e}")
+        return []
+    finally:
+        close_connection(conn)
+
+def get_players_by_role(game_id, role):
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM werewolf_players WHERE game_id = %s AND role = %s
+        """, (game_id, role))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"[DB] get_players_by_role: {e}")
+        return []
+    finally:
+        close_connection(conn)
+
+def kill_player(game_id, user_id):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE werewolf_players SET alive = FALSE WHERE game_id = %s AND user_id = %s
+        """, (game_id, user_id))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] kill_player: {e}")
+    finally:
+        close_connection(conn)
+
+def reset_players(game_id):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM werewolf_players WHERE game_id = %s", (game_id,))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] reset_players: {e}")
+    finally:
+        close_connection(conn)
+
+# ==================== ROLES CONFIG ====================
+def set_roles_config(game_id, roles_dict):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        for role, count in roles_dict.items():
+            cursor.execute("""
+                INSERT INTO werewolf_roles_config (game_id, role, count)
+                VALUES (%s, %s, %s)
+            """, (game_id, role, count))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] set_roles_config: {e}")
+    finally:
+        close_connection(conn)
+
+# ==================== VOTES ====================
+def save_vote(game_id, round_number, voter_id, voted_id, phase):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO werewolf_votes (game_id, round, voter_id, voted_id, phase)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (game_id, round_number, voter_id, voted_id, phase))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] save_vote: {e}")
+    finally:
+        close_connection(conn)
+
+def get_votes_for_round(game_id, round_number, phase):
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM werewolf_votes
+            WHERE game_id = %s AND round = %s AND phase = %s
+        """, (game_id, round_number, phase))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"[DB] get_votes_for_round: {e}")
+        return []
+    finally:
+        close_connection(conn)
+
+# ==================== LOGS ====================
+def log_event(game_id, round_number, event_type, target_id, actor_id=None, message=None):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO werewolf_logs (game_id, round, event_type, target_id, actor_id, message)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (game_id, round_number, event_type, target_id, actor_id, message))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] log_event: {e}")
+    finally:
+        close_connection(conn)
+
+def get_game_logs(game_id):
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM werewolf_logs
+            WHERE game_id = %s
+            ORDER BY round ASC, id ASC
+        """, (game_id,))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"[DB] get_game_logs: {e}")
+        return []
+    finally:
+        close_connection(conn)
+
+# ==================== LEADERBOARD ====================
+def update_leaderboard(user_id, guild_id, won):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        if won:
+            cursor.execute("""
+                INSERT INTO werewolf_leaderboards (user_id, guild_id, win_count, lose_count)
+                VALUES (%s, %s, 1, 0)
+                ON DUPLICATE KEY UPDATE win_count = win_count + 1, last_played = CURRENT_TIMESTAMP
+            """, (user_id, guild_id))
+        else:
+            cursor.execute("""
+                INSERT INTO werewolf_leaderboards (user_id, guild_id, win_count, lose_count)
+                VALUES (%s, %s, 0, 1)
+                ON DUPLICATE KEY UPDATE lose_count = lose_count + 1, last_played = CURRENT_TIMESTAMP
+            """, (user_id, guild_id))
+        conn.commit()
+    except Error as e:
+        print(f"[DB] update_leaderboard: {e}")
+    finally:
+        close_connection(conn)
+
+def get_leaderboard(guild_id, limit=10):
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT * FROM werewolf_leaderboards
+            WHERE guild_id = %s
+            ORDER BY win_count DESC, last_played DESC
+            LIMIT %s
+        """, (guild_id, limit))
+        return cursor.fetchall()
+    except Error as e:
+        print(f"[DB] get_leaderboard: {e}")
+        return []
+    finally:
+        close_connection(conn)
 

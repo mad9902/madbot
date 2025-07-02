@@ -23,6 +23,7 @@ from welcome_cog import WelcomeMessageConfig
 from timedwords_cog import TimedWordsCog
 from bannedwords_cog import BannedWordsCog
 from broadcast_cog import MassDM
+from werewolf_cog import Werewolf
 from confession_cog import ConfessionCog, ConfessionView
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
@@ -73,6 +74,7 @@ class MadBot(commands.Bot):
         await self.add_cog(TimedWordsCog(self))
         await self.add_cog(ConfessionCog(self))
         await self.add_cog(MassDM(self))
+        await self.add_cog(Werewolf(self))
 
         # Tambahkan view global untuk tombol confession agar tetap hidup setelah restart
         self.add_view(ConfessionView(self))  # PENTING

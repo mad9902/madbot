@@ -154,6 +154,80 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS werewolf_games (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            channel_id BIGINT NOT NULL,
+            status ENUM('waiting', 'night', 'day', 'ended') NOT NULL DEFAULT 'waiting',
+            current_round INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS werewolf_players (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            game_id INT NOT NULL,
+            user_id BIGINT NOT NULL,
+            username VARCHAR(100) NOT NULL,
+            role VARCHAR(50) NOT NULL,
+            alive BOOLEAN DEFAULT TRUE,
+            revealed BOOLEAN DEFAULT FALSE,
+            FOREIGN KEY (game_id) REFERENCES werewolf_games(id) ON DELETE CASCADE
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS werewolf_votes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            game_id INT NOT NULL,
+            round INT NOT NULL,
+            voter_id BIGINT NOT NULL,
+            voted_id BIGINT NOT NULL,
+            phase ENUM('day', 'night') NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (game_id) REFERENCES werewolf_games(id) ON DELETE CASCADE
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS werewolf_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            game_id INT NOT NULL,
+            round INT NOT NULL,
+            event_type VARCHAR(50), -- e.g., 'killed', 'voted', 'revealed'
+            target_id BIGINT,
+            actor_id BIGINT,
+            message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (game_id) REFERENCES werewolf_games(id) ON DELETE CASCADE
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS werewolf_leaderboards (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            guild_id BIGINT NOT NULL,
+            win_count INT DEFAULT 0,
+            lose_count INT DEFAULT 0,
+            last_played TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, guild_id)
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS werewolf_roles_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            game_id INT NOT NULL,
+            role VARCHAR(50) NOT NULL,
+            count INT DEFAULT 1,
+            FOREIGN KEY (game_id) REFERENCES werewolf_games(id) ON DELETE CASCADE
+        );
+    """)
+
+
     db.commit()
     cursor.close()
     
