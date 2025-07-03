@@ -24,6 +24,7 @@ from timedwords_cog import TimedWordsCog
 from bannedwords_cog import BannedWordsCog
 from broadcast_cog import MassDM
 from werewolf_cog import Werewolf
+from lastActive_cog import LastActive
 from confession_cog import ConfessionCog, ConfessionView
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
@@ -34,6 +35,7 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.presences = True
 
 # Prefix logic
 def get_prefix(bot, message):
@@ -62,6 +64,7 @@ class MadBot(commands.Bot):
         await self.add_cog(link_cog(self))
         await self.add_cog(LevelCog(self))
         await self.add_cog(GeminiCog(self))
+        await self.add_cog(LastActive(self))
         await self.add_cog(SambungKataMultiplayer(self))
         await self.add_cog(AFK(self))
 

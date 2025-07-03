@@ -2,6 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 import os
 import time
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -639,3 +640,82 @@ def get_leaderboard(guild_id, limit=10):
     finally:
         close_connection(conn)
 
+def update_last_active(user_id, status):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO user_last_active (user_id, last_seen, last_status)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                last_seen = VALUES(last_seen),
+                last_status = VALUES(last_status)
+        """, (user_id, datetime.utcnow(), str(status)))
+        conn.commit()
+    except Exception as e:
+        print(f"[DB] update_last_active: {e}")
+    finally:
+        close_connection(conn)
+
+def get_last_active(user_id):
+    conn = connect_db()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT last_seen, last_status FROM user_last_active
+            WHERE user_id = %s
+        """, (user_id,))
+        result = cursor.fetchone()
+        return result if result else None
+    except Exception as e:
+        print(f"[DB] get_last_active: {e}")
+        return None
+    finally:
+        close_connection(conn)
+
+def is_tracked(user_id):
+    conn = connect_db()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM tracked_users WHERE user_id = %s", (user_id,))
+        return cursor.fetchone() is not None
+    except Exception as e:
+        print(f"[DB] is_tracked: {e}")
+        return False
+    finally:
+        close_connection(conn)
+
+def add_tracked_user(user_id):
+    conn = connect_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT IGNORE INTO tracked_users (user_id) VALUES (%s)
+        """, (user_id,))
+        conn.commit()
+    except Exception as e:
+        print(f"[DB] add_tracked_user: {e}")
+    finally:
+        close_connection(conn)
+
+def get_all_tracked_users():
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM tracked_users")
+        return [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"[DB] get_all_tracked_users: {e}")
+        return []
+    finally:
+        close_connection(conn)

@@ -227,6 +227,23 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_last_active (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            last_seen DATETIME NOT NULL,
+            last_status VARCHAR(20),
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_user (user_id)
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tracked_users (
+            user_id BIGINT PRIMARY KEY
+        );
+    """)
+
 
     db.commit()
     cursor.close()
