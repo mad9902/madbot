@@ -5,21 +5,23 @@ import asyncio
 from datetime import datetime, timedelta
 from database import (
     create_new_game, update_game_status, get_active_game,
-    add_player, get_alive_players, get_players_by_role,
+    add_player, get_alive_players, get_players_by_role, get_player,
     kill_player, reset_players, set_roles_config,
     save_vote, get_votes_for_round, log_event,
     update_leaderboard, get_game_logs, get_players_by_game
 )
 
 ROLE_POOL = {
-    5: ["werewolf", "seer", "villager", "villager", "villager"],
-    6: ["werewolf", "werewolf", "seer", "villager", "villager", "villager"],
-    7: ["werewolf", "werewolf", "seer", "villager", "villager", "villager", "guardian"],
-    8: ["werewolf", "werewolf", "seer", "guardian", "witch", "villager", "villager", "villager"]
+    5: ["werewolf", "seer", "cupid", "villager", "villager"],
+    6: ["werewolf", "werewolf", "seer", "cupid", "villager", "villager"],
+    7: ["werewolf", "werewolf", "seer", "cupid", "guardian", "villager", "villager"],
+    8: ["werewolf", "werewolf", "seer", "cupid", "guardian", "witch", "villager", "villager"],
+    9: ["werewolf", "werewolf", "seer", "cupid", "guardian", "witch", "villager", "villager", "villager"],
+    10: ["werewolf", "werewolf", "seer", "cupid", "guardian", "witch", "villager", "villager", "villager", "villager"]
 }
 
 MIN_PLAYERS = 5
-MAX_PLAYERS = 8
+MAX_PLAYERS = 10
 TIMEOUT_DURATION = timedelta(days=2)
 
 class TargetSelect(discord.ui.Select):
@@ -31,6 +33,55 @@ class TargetSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         target_id = int(self.values[0])
         await self.callback_func(interaction, self.role, target_id)
+
+
+class CupidPairView(discord.ui.View):
+    def __init__(self, game_id, cupid_id, cog):
+        super().__init__(timeout=60)
+        self.game_id = game_id
+        self.cupid_id = cupid_id
+        self.cog = cog
+
+        players = get_alive_players(game_id)
+        options = [
+            discord.SelectOption(label=p['username'], value=str(p['user_id']))
+            for p in players if p['user_id'] != cupid_id
+        ]
+
+        self.select = discord.ui.Select(
+            placeholder="Pilih 2 pemain untuk dijadikan Lovers",
+            min_values=2,
+            max_values=2,
+            options=options
+        )
+        self.select.callback = self.select_callback
+        self.add_item(self.select)
+
+    async def select_callback(self, interaction):
+        if interaction.user.id != self.cupid_id:
+            await interaction.response.send_message("Ini bukan untukmu.", ephemeral=True)
+            return
+
+        if self.game_id in self.cog.lovers:
+            await interaction.response.send_message("Kamu sudah memilih pasangan.", ephemeral=True)
+            return
+
+        id1, id2 = map(int, self.select.values)
+        if id1 == id2:
+            await interaction.response.send_message("Tidak boleh memilih orang yang sama.", ephemeral=True)
+            return
+
+        self.cog.lovers[self.game_id] = (int(id1), int(id2))
+        if hasattr(self.cog, 'lovers'):
+            print(f"[CHECK] Lovers diset di cog: {self.cog.lovers}")
+        else:
+            print("[CHECK] WARNING! 'lovers' tidak ada di cog.")
+
+        await interaction.response.send_message(
+            f"❤️ <@{id1}> dan <@{id2}> kini adalah *lovers*. Jika satu mati, yang lain ikut mati.",
+            ephemeral=True
+        )
+        print(f"[CUPID] Game {self.game_id}: Lovers => {id1} ❤️ {id2}")
 
 class TargetView(discord.ui.View):
     def __init__(self, role, players, callback_func):
@@ -116,9 +167,12 @@ class WitchActionButtons(discord.ui.View):
 
 
 
+
 class Werewolf(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.cog = self
+        self.lovers = {}
         self.active_games = {}  # guild_id: game_id
         self.night_actions = {}  # game_id: dict
         self.hosts = {}
@@ -370,17 +424,20 @@ class Werewolf(commands.Cog):
         await self.send_embed(ctx, "Game Dihentikan", "Game berhasil dihentikan dan semua data direset.")
 
     async def handle_night_phase(self, ctx, game_id, round_number):
+        channel = ctx if isinstance(ctx, discord.abc.Messageable) else ctx.channel
+        guild = ctx.guild if hasattr(ctx, 'guild') else ctx.channel.guild
         print(f"[NIGHT] Mulai malam {round_number} untuk game {game_id}")
         update_game_status(game_id, 'night', round_number)
+        
         if game_id not in self.night_actions:
             self.night_actions[game_id] = {}
 
-        # Reset aksi malam tapi simpan status potion Witch
         previous_witch = self.night_actions[game_id].get('witch', {})
         self.night_actions[game_id] = {
             'werewolf': {},
             'seer': None,
             'guardian': None,
+            'cupid': None,
             'witch': {
                 'heal': None,
                 'kill': None,
@@ -394,9 +451,7 @@ class Werewolf(commands.Cog):
         except Exception as e:
             print(f"[ERROR] Gagal kirim embed malam: {e}")
 
-        guild = ctx.guild if hasattr(ctx, 'guild') else ctx.channel.guild
-
-        roles = ["werewolf", "seer", "guardian", "witch"]
+        roles = ["werewolf", "seer", "guardian", "witch", "cupid"]
         for role in roles:
             players = get_players_by_role(game_id, role)
             for p in players:
@@ -405,7 +460,6 @@ class Werewolf(commands.Cog):
                     continue
                 try:
                     if role == 'werewolf':
-                        # Ambil semua werewolf (kecuali dia sendiri)
                         others = [w for w in players if w['user_id'] != p['user_id']]
                         others_text = "\n".join(f"- {w['username']}" for w in others) if others else "Hanya kamu."
                         await member.send(embed=discord.Embed(
@@ -415,59 +469,82 @@ class Werewolf(commands.Cog):
                         ), view=TargetView(role, get_alive_players(game_id), self.handle_dm_selection))
                     elif role == 'witch':
                         await self.send_witch_dm(member, game_id)
+                    elif role == 'cupid':
+                        if round_number > 1 or self.lovers.get(game_id):
+                            continue
+                        await member.send(
+                            embed=discord.Embed(
+                                title="Peranmu: Cupid 💘",
+                                description="Pilih dua pemain untuk dijadikan pasangan sejati. Jika salah satu mati, yang lain ikut mati.",
+                                color=discord.Color.pink()
+                            ),
+                            view=CupidPairView(game_id, member.id, self)
+                        )
+                        continue
                     else:
                         await self.send_dm_with_dropdown(member, role, get_alive_players(game_id), self.handle_dm_selection)
-                    print(f"[NIGHT] DM ke {member.name} sebagai {role}")
                 except Exception as e:
                     print(f"[NIGHT ERROR] Gagal kirim DM ke {member.name}: {e}")
 
         await asyncio.sleep(30)
 
-        # ⛔ STOP jika game sudah dihentikan saat tidur
         game = get_active_game(ctx.guild.id)
         if not game or game['status'] == 'ended':
             print(f"[NIGHT] Game {game_id} sudah dihentikan, tidak lanjut evaluasi.")
             return
 
-        print("[NIGHT] Waktu malam habis, evaluasi aksi.")
         actions = self.night_actions[game_id]
         target_to_kill = None
-
-        # 1. Werewolf kill result
+        witch_msg = ""
         votes = list(actions['werewolf'].values())
         if votes:
             target_to_kill = max(set(votes), key=votes.count)
 
-        # 2. Witch heal cancels kill
-        heal_target = actions['witch'].get('heal')
-        if heal_target and heal_target == target_to_kill:
-            print("[NIGHT] Witch menyembuhkan target werewolf.")
+        if actions['witch'].get('heal') == target_to_kill:
+            witch_msg = f"\nNamun beruntung, <@{target_to_kill}> berhasil diselamatkan oleh sang Witch! 🧪"
             target_to_kill = None
 
-        # 3. Guardian protection
-        if actions['guardian'] and actions['guardian'] == target_to_kill:
-            print("[NIGHT] Guardian melindungi target.")
+        if actions['guardian'] == target_to_kill:
             target_to_kill = None
 
-        # 4. Witch kill overrides all
         if actions['witch']['kill']:
-            print("[NIGHT] Witch membunuh target override.")
             target_to_kill = actions['witch']['kill']
 
         if target_to_kill:
-            kill_player(game_id, int(target_to_kill))
-            log_event(game_id, round_number, "killed", int(target_to_kill))
-            victim = ctx.guild.get_member(int(target_to_kill))
+            try:
+                target_to_kill = int(target_to_kill)
+            except Exception as e:
+                print(f"[ERROR] Gagal convert target_to_kill ke int: {e}")
+                return
+
+            lovers = self.cog.lovers.get(game_id)
+            kill_player(game_id, target_to_kill)
+            log_event(game_id, round_number, "killed", target_to_kill)
+
+            lovers_msg = ""
+            if lovers and target_to_kill in lovers:
+                partner_id = lovers[0] if lovers[1] == target_to_kill else lovers[1]
+                partner = get_player(game_id, partner_id)
+                if partner and partner['alive']:
+                    kill_player(game_id, partner_id)
+                    log_event(game_id, round_number, "lover_died", partner_id)
+                    lovers_msg = f"\nKarena cinta sejati, <@{partner_id}> ikut mati bersama pasangannya."
+
+            victim = guild.get_member(target_to_kill)
             if victim:
-                await self.send_embed(ctx, "Pagi Hari", f"{victim.mention} ditemukan mati pagi ini.")
+                await self.send_embed(channel, "Pagi Hari", f"{victim.mention} ditemukan mati pagi ini.{lovers_msg}{witch_msg}")
             else:
-                await self.send_embed(ctx, "Pagi Hari", "Seseorang ditemukan mati pagi ini.")
-        else:
-            await self.send_embed(ctx, "Pagi Hari", "Malam tenang. Tidak ada korban.")
+                await self.send_embed(channel, "Pagi Hari", f"Seseorang ditemukan mati pagi ini.{lovers_msg}{witch_msg}")
+
+        if witch_msg and not target_to_kill:
+            victim = guild.get_member(actions['witch'].get('heal'))
+            if victim:
+                await self.send_embed(channel, "Pagi Hari", f"{victim.mention} seharusnya mati pagi ini.\nNamun beruntung, dia berhasil diselamatkan oleh sang Witch! 🧪")
+            else:
+                await self.send_embed(channel, "Pagi Hari", f"Seseorang seharusnya mati pagi ini.\nNamun beruntung, dia berhasil diselamatkan oleh sang Witch! 🧪")
 
         await self.check_game_result(ctx, game_id)
 
-        # ❗ Cek lagi apakah game dihentikan saat proses
         game = get_active_game(ctx.guild.id)
         if not game or game['status'] == 'ended':
             print(f"[NIGHT END] Game {game_id} dihentikan, tidak lanjut siang.")
@@ -476,23 +553,17 @@ class Werewolf(commands.Cog):
         update_game_status(game_id, 'day', round_number)
         await self.handle_day_phase(ctx, game_id, round_number)
 
-
     async def handle_day_phase(self, ctx, game_id, round_number):
-        print(f"[DAY] Mulai siang {round_number} untuk game {game_id}")
         await self.send_embed(ctx, f"\u2600\ufe0f Siang {round_number}", "Diskusi dan voting dimulai. Kirim `mvote @user`.")
         await asyncio.sleep(30)
 
-        # ⛔ STOP jika game dihentikan
         game = get_active_game(ctx.guild.id)
         if not game or game['status'] == 'ended':
-            print(f"[DAY] Game {game_id} sudah dihentikan, tidak lanjut voting.")
             return
 
-        print("[DAY] Waktu diskusi selesai, proses vote.")
         votes = get_votes_for_round(game_id, round_number, phase="day")
         if not votes:
             await self.send_embed(ctx, "Voting", "Tidak ada yang divote. Tidak ada yang mati.")
-            print("[DAY] Tidak ada vote.")
         else:
             count = {}
             for v in votes:
@@ -501,20 +572,29 @@ class Werewolf(commands.Cog):
             kill_player(game_id, target_id)
             log_event(game_id, round_number, "voted", target_id)
 
+            lovers = self.cog.lovers.get(game_id)
+            lovers_msg = ""
+            if lovers and target_id in lovers:
+                partner_id = lovers[0] if lovers[1] == target_id else lovers[1]
+                partner = get_player(game_id, partner_id)
+                if partner and partner['alive']:
+                    kill_player(game_id, partner_id)
+                    log_event(game_id, round_number, "lover_died", partner_id)
+                    lovers_msg = f"\nKarena cinta sejati, <@{partner_id}> ikut mati bersama pasangannya."
+
             guild = ctx.guild if hasattr(ctx, 'guild') else ctx.channel.guild
             target = guild.get_member(target_id)
-            await self.send_embed(ctx, "Voting Berhasil", f"{target.mention} telah digantung oleh warga!")
-            print(f"[DAY] {target.name} digantung.")
+            if target:
+                await self.send_embed(ctx, "Voting Berhasil", f"{target.mention} telah digantung oleh warga!{lovers_msg}")
+            else:
+                await self.send_embed(ctx, "Voting Berhasil", f"Seseorang telah digantung oleh warga!{lovers_msg}")
 
         await self.check_game_result(ctx, game_id)
 
-        # ❗ Cek lagi sebelum malam
         game = get_active_game(ctx.guild.id)
         if not game or game['status'] == 'ended':
-            print(f"[DAY END] Game {game_id} dihentikan, tidak lanjut malam berikutnya.")
             return
 
-        # ✅ Tambahan: hentikan jika tidak ada aksi malam DAN tidak ada vote siang
         last_night_actions = self.night_actions.get(game_id, {})
         no_night_action = (
             not last_night_actions.get('werewolf') and
@@ -530,20 +610,14 @@ class Werewolf(commands.Cog):
             reset_players(game_id)
             self.active_games.pop(ctx.guild.id, None)
             self.hosts.pop(ctx.guild.id, None)
-            print(f"[AUTO-END] Game {game_id} dihentikan karena inaktivitas.")
             return
 
         update_game_status(game_id, 'night', round_number + 1)
         await self.handle_night_phase(ctx, game_id, round_number + 1)
 
-
     async def check_game_result(self, ctx, game_id):
         werewolves = [p for p in get_players_by_role(game_id, 'werewolf') if p['alive']]
         villagers = [p for p in get_alive_players(game_id) if p['role'] != 'werewolf']
-
-        print(f"[DEBUG] Cek hasil game {game_id}")
-        print(f"[DEBUG] Werewolves hidup: {[p['username'] for p in werewolves]}")
-        print(f"[DEBUG] Villagers hidup: {[p['username'] for p in villagers]}")
 
         if not werewolves:
             await self.send_embed(ctx, "Warga Menang", "\U0001F389 Semua werewolf telah dieliminasi.")
@@ -551,8 +625,6 @@ class Werewolf(commands.Cog):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] != 'werewolf'))
 
             players = get_players_by_game(game_id)
-            print(f"[DEBUG] Semua pemain (warga menang): {players}")
-
             embed = discord.Embed(
                 title="🎭 Peran Semua Pemain",
                 description="Inilah peran masing-masing pemain:",
@@ -572,8 +644,6 @@ class Werewolf(commands.Cog):
                 update_leaderboard(p['user_id'], ctx.guild.id, won=(p['role'] == 'werewolf'))
 
             players = get_players_by_game(game_id)
-            print(f"[DEBUG] Semua pemain (werewolf menang): {players}")
-
             embed = discord.Embed(
                 title="🎭 Peran Semua Pemain",
                 description="Inilah peran masing-masing pemain:",
@@ -587,6 +657,7 @@ class Werewolf(commands.Cog):
             update_game_status(game_id, 'ended')
             reset_players(game_id)
 
+        self.lovers.pop(game_id, None)
 
     @commands.command()
     async def vote(self, ctx, target: discord.Member):

@@ -457,6 +457,13 @@ def get_players_by_game(game_id):
     finally:
         close_connection(conn)
 
+def get_player(game_id, user_id):
+    players = get_players_by_game(game_id)
+    for p in players:
+        if int(p['user_id']) == int(user_id):
+            return p
+    return None
+
 def get_players_by_role(game_id, role):
     conn = connect_db()
     if not conn:
