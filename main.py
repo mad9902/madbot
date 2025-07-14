@@ -26,7 +26,7 @@ from bannedwords_cog import BannedWordsCog
 from broadcast_cog import MassDM
 from werewolf_cog import Werewolf
 from lastActive_cog import LastActive
-from confession_cog import ConfessionCog, ConfessionView
+from confession_cog import ConfessionCog, ConfessionView, restore_reply_buttons  
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
 # Load .env
@@ -82,6 +82,8 @@ class MadBot(commands.Bot):
 
         # Tambahkan view global untuk tombol confession agar tetap hidup setelah restart
         self.add_view(ConfessionView(self))  # PENTING
+        await restore_reply_buttons(self)
+
 
 # Buat bot instance
 bot = MadBot(command_prefix=get_prefix, intents=intents)
@@ -118,11 +120,6 @@ async def on_command_error(ctx, error):
     else:
         await ctx.send(f"❌ Terjadi error: {error}", delete_after=5)
 
-@atexit.register
-def cleanup():
-    if os.path.exists("confession_map.json"):
-        os.remove("confession_map.json")
-        
 # Jalankan bot
 async def main():
     await bot.start(os.getenv("TOKEN"))
