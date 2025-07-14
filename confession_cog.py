@@ -62,6 +62,12 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
 
             target_channel = interaction.guild.get_channel(channel_id) if channel_id else interaction.channel
 
+            if not target_channel:
+                return await interaction.response.send_message(
+                    "❌ Channel confession tidak ditemukan atau belum disetel.",
+                    ephemeral=True
+                )
+
             # Kirim confession utama
             sent = await target_channel.send(embed=embed)
 

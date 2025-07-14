@@ -167,8 +167,12 @@ def get_channel_settings(db, guild_id, setting_type):
     row = cursor.fetchone()
     cursor.close()
     if row:
-        return str(row[0])
+        try:
+            return int(row[0])
+        except ValueError:
+            return None
     return None
+
 
 def set_channel_settings(db, guild_id, setting_type, channel_id):
     if db is None:
