@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 from discord.ui import View, Select, Button
 from database import connect_db, set_channel_settings, get_channel_settings, get_logs_by_type, delete_old_logs, log_event, delete_old_voice_logs  
 import json
+from pytz import timezone
+from datetime import timezone as dt_timezone
 
 class LogSelect(Select):
     def __init__(self, bot, guild_id, user):
@@ -84,7 +86,10 @@ class LogView(View):
         else:
             for log in logs:
                 user_mention = f"<@{log['user_id']}>"
-                waktu = log['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                wib = timezone("Asia/Jakarta")
+                created_at_utc = log['created_at'].replace(tzinfo=dt_timezone.utc)
+                created_at_wib = created_at_utc.astimezone(wib)
+                waktu = created_at_wib.strftime('%Y-%m-%d %H:%M:%S')
                 data = log['event_data']
 
                 if self.event_type == "message_delete":
