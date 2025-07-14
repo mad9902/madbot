@@ -7,7 +7,8 @@ from database import (
     set_channel_settings,
 )
 
-CONFESSION_THREAD_MAP = {}
+CONFESSION_THREAD_MAP = {}  # message_id -> thread_id
+
 
 class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
     confession_input = discord.ui.TextInput(
@@ -18,35 +19,55 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         required=True,
     )
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, reply_thread: discord.Thread = None):
         super().__init__()
         self.bot = bot
+        self.reply_thread = reply_thread
 
     async def on_submit(self, interaction: discord.Interaction):
         confession_id = str(uuid.uuid4())[:8]
         content = self.confession_input.value
 
         embed = discord.Embed(
-            title=f"Anonymous Confession (#{confession_id})",
+            title=f"Anonymous Confession (#{confession_id})" if not self.reply_thread else "Balasan Anonim",
             description=f'"{content}"',
             color=discord.Color.dark_gray()
         )
 
         try:
-            sent = await interaction.channel.send(
-                embed=embed,
-                view=ConfessionView(self.bot, interaction.channel, is_thread=False)
+            # Balasan di thread
+            if self.reply_thread:
+                sent = await self.reply_thread.send(embed=embed)
+                CONFESSION_THREAD_MAP[sent.id] = self.reply_thread.id
+
+                reply_view = discord.ui.View()
+                reply_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+                await sent.edit(view=reply_view)
+
+                await interaction.response.send_message("✅ Balasan kamu telah dikirim secara anonim!", ephemeral=True)
+                return
+
+            # Confession utama
+            sent = await interaction.channel.send(embed=embed)
+
+            thread = await sent.create_thread(name=f"Confession #{confession_id}")
+            CONFESSION_THREAD_MAP[sent.id] = thread.id
+
+            # Tambahkan tombol submit & reply di channel utama
+            main_view = discord.ui.View()
+            main_view.add_item(SubmitConfessionButton(self.bot))
+            main_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+            await sent.edit(view=main_view)
+
+            # Kirim satu pesan pembuka di thread (tanpa tombol submit)
+            thread_view = discord.ui.View()
+            thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+            await thread.send(
+                "Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:",
+                view=thread_view
             )
 
-            if isinstance(interaction.channel, discord.TextChannel):
-                thread = await sent.create_thread(name=f"Confession #{confession_id}")
-                CONFESSION_THREAD_MAP[sent.id] = thread.id
-
-                await thread.send(
-                    "Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:",
-                    view=ConfessionView(self.bot, thread, is_thread=True)
-                )
-
+            # Simpan confession
             guild_id = interaction.guild_id or getattr(interaction.channel, "guild", None).id
             save_confession(self.bot.db, guild_id, interaction.user.id, confession_id, content)
 
@@ -58,25 +79,8 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 await interaction.response.send_message("❌ Gagal mengirim confession. Coba lagi.", ephemeral=True)
 
 
-
-class ConfessionView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, target_channel: discord.abc.Messageable = None, is_thread=False):
-        super().__init__(timeout=None)
-        self.bot = bot
-        self.channel = target_channel
-        self.is_thread = is_thread
-
-        if self.is_thread:
-            self.add_item(ReplyButton(bot))
-        else:
-            self.add_item(SubmitButton(bot))
-
-    def is_persistent(self) -> bool:
-        return True
-
-
-class SubmitButton(discord.ui.Button):
-    def __init__(self, bot):
+class SubmitConfessionButton(discord.ui.Button):
+    def __init__(self, bot: commands.Bot):
         super().__init__(
             label="Submit a confession!",
             style=discord.ButtonStyle.blurple,
@@ -85,36 +89,41 @@ class SubmitButton(discord.ui.Button):
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
+        if isinstance(interaction.channel, discord.Thread):
+            return await interaction.response.send_message(
+                "❌ Tidak bisa mengirim confession baru dari dalam thread.",
+                ephemeral=True
+            )
         await interaction.response.send_modal(ConfessionModal(self.bot))
 
 
-class ReplyButton(discord.ui.Button):
-    def __init__(self, bot):
+class ReplyToConfessionButton(discord.ui.Button):
+    def __init__(self, bot: commands.Bot, message_id: int):
         super().__init__(
             label="Reply",
             style=discord.ButtonStyle.gray,
-            custom_id="confess_reply"
+            custom_id=f"confess_reply_{message_id}"
         )
         self.bot = bot
+        self.message_id = message_id
 
     async def callback(self, interaction: discord.Interaction):
-        if isinstance(interaction.channel, discord.Thread):
-            await interaction.response.send_modal(ConfessionModal(self.bot))
-            return
-
-        message = interaction.message
-        thread_id = CONFESSION_THREAD_MAP.get(message.id)
+        thread_id = CONFESSION_THREAD_MAP.get(self.message_id)
 
         if not thread_id:
-            await interaction.response.send_message("❌ Tidak ditemukan thread untuk confession ini.", ephemeral=True)
-            return
+            return await interaction.response.send_message("❌ Thread tidak ditemukan untuk confession ini.", ephemeral=True)
 
         thread = await self.bot.fetch_channel(thread_id)
         if not isinstance(thread, discord.Thread):
-            await interaction.response.send_message("❌ Gagal menemukan thread target.", ephemeral=True)
-            return
+            return await interaction.response.send_message("❌ Gagal menemukan thread balasan.", ephemeral=True)
 
-        await interaction.response.send_modal(ConfessionModal(self.bot))
+        await interaction.response.send_modal(ConfessionModal(self.bot, reply_thread=thread))
+
+
+class ConfessionView(discord.ui.View):
+    def __init__(self, bot: commands.Bot):
+        super().__init__(timeout=None)
+        self.add_item(SubmitConfessionButton(bot))
 
 
 class ConfessionCog(commands.Cog):
@@ -126,7 +135,7 @@ class ConfessionCog(commands.Cog):
         if not ctx.author.guild_permissions.manage_guild and ctx.author.id != 416234104317804544:
             return await ctx.send("❌ Hanya admin server yang bisa menggunakan command ini.")
 
-        view = ConfessionView(self.bot, ctx.channel, is_thread=False)
+        view = ConfessionView(self.bot)
         embed = discord.Embed(
             title="Confessions",
             description="Klik tombol di bawah untuk mengirim confession secara anonim!",
