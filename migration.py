@@ -243,6 +243,19 @@ def migrate(db):
             user_id BIGINT PRIMARY KEY
         );
     """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS discord_logs (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            event_type VARCHAR(50) NOT NULL,
+            event_data JSON NOT NULL,      
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX (event_type),
+            INDEX (created_at)
+        );
+    """)
 
 
     db.commit()

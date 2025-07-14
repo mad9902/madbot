@@ -2,7 +2,8 @@ import mysql.connector
 from mysql.connector import Error
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -723,3 +724,62 @@ def get_all_tracked_users():
         return []
     finally:
         close_connection(conn)
+
+def log_event(db, guild_id, user_id, event_type, event_data):
+    cursor = db.cursor()
+    query = """
+        INSERT INTO discord_logs (guild_id, user_id, event_type, event_data)
+        VALUES (%s, %s, %s, %s)
+    """
+    cursor.execute(query, (
+        guild_id,
+        user_id,
+        event_type,
+        json.dumps(event_data)
+    ))
+    db.commit()
+    cursor.close()
+
+def delete_old_logs(older_than_days=10):
+    db = connect_db()
+    cursor = db.cursor()
+    threshold = datetime.now() - timedelta(days=older_than_days)
+    query = "DELETE FROM discord_logs WHERE created_at < %s"
+    cursor.execute(query, (threshold,))
+    db.commit()
+    cursor.close()
+    db.close()
+
+def delete_old_voice_logs(older_than_days=1):
+    db = connect_db()
+    cursor = db.cursor()
+
+    query = """
+        DELETE FROM discord_logs
+        WHERE event_type = 'voice_update' AND created_at < %s
+    """
+    from datetime import datetime, timedelta
+    threshold = datetime.now() - timedelta(days=older_than_days)
+    cursor.execute(query, (threshold,))
+
+    db.commit()
+    cursor.close()
+    db.close()
+
+
+def get_logs_by_type(guild_id, event_type, limit=10, offset=0):
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+    query = """
+        SELECT * FROM discord_logs
+        WHERE guild_id = %s AND event_type = %s
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s
+    """
+    cursor.execute(query, (guild_id, event_type, limit, offset))
+    results_raw = cursor.fetchall()
+    for row in results_raw:
+        row['event_data'] = json.loads(row['event_data'])  # JSON to dict
+    cursor.close()
+    db.close()
+    return results_raw
