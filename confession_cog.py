@@ -34,9 +34,9 @@ async def restore_reply_buttons(bot: commands.Bot):
             thread = await bot.fetch_channel(thread_id)
             if isinstance(thread, discord.Thread):
                 parent_message = await thread.parent.fetch_message(message_id)
-                view = discord.ui.View()
-                view.add_item(ReplyToConfessionButton(bot, message_id))
-                await parent_message.edit(view=view)
+                reply_view = discord.ui.View(timeout=None)
+                reply_view.add_item(ReplyToConfessionButton(bot, message_id))
+                await parent_message.edit(view=reply_view)
         except Exception as e:
             print(f"[Restore] Gagal restore tombol reply untuk message {message_id}: {e}")
 
@@ -74,7 +74,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 CONFESSION_THREAD_MAP[sent.id] = self.reply_thread.id
                 save_confession_map()
 
-                reply_view = discord.ui.View()
+                reply_view = discord.ui.View(timeout=None)
                 reply_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
                 await sent.edit(view=reply_view)
 
@@ -99,11 +99,11 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             CONFESSION_THREAD_MAP[sent.id] = thread.id
             save_confession_map()
 
-            reply_view = discord.ui.View()
+            reply_view = discord.ui.View(timeout=None)
             reply_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await sent.edit(view=reply_view)
 
-            thread_view = discord.ui.View()
+            thread_view = discord.ui.View(timeout=None)
             thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await thread.send("Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:", view=thread_view)
 
@@ -198,5 +198,5 @@ class ConfessionCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ConfessionCog(bot))
-    bot.add_view(ConfessionView(bot))  # Tombol "Submit a confession!"
-    await restore_reply_buttons(bot)   # Restore tombol reply setelah restart
+    bot.add_view(ConfessionView(bot))  # Tombol Submit global
+    await restore_reply_buttons(bot)   # Restore tombol reply saat restart
