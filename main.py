@@ -101,9 +101,12 @@ async def block_disabled_guilds(ctx):
 @bot.event
 async def on_interaction(interaction):
     if interaction.guild and interaction.guild.id in DISABLED_GUILDS:
-        await interaction.response.send_message("❌ Bot sedang nonaktif di server ini.", ephemeral=True)
+        try:
+            await interaction.response.send_message("❌ Bot sedang nonaktif di server ini.", ephemeral=True)
+        except discord.InteractionResponded:
+            pass
         return
-    await bot.process_application_commands(interaction)
+    await bot.process_interaction(interaction)
 
 # Fitur typo autocorrect
 @bot.event
