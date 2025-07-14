@@ -1,21 +1,24 @@
-__pycache__
-downloads
-private
-tests
-.vscode
+# Direktori dan file pribadi
+__pycache__/
+downloads/
+private/
+tests/
+.vscode/
+google-images-download/
+.cache/
+.env
+nugasinn.7.session
+token.txt
+notes.txt
+requirements_backup.txt
+.python-version
 ffmpeg.exe
 
-google-images-download
+# File konfigurasi & sementara
+confession_map.json
 
-notes.txt
-token.txt
-
+# Gambar
 *.jpg
 *.jpeg
 *.png
 *.gif
-nugasinn.7.session
-.cache
-.env
-requirements_backup.txt
-.python-version
