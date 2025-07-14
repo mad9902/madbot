@@ -27,6 +27,21 @@ def load_confession_map():
     except FileNotFoundError:
         CONFESSION_THREAD_MAP = {}
 
+async def restore_reply_buttons(bot: commands.Bot):
+    for message_id, thread_id in CONFESSION_THREAD_MAP.items():
+        try:
+            thread = await bot.fetch_channel(thread_id)
+            if isinstance(thread, discord.Thread):
+                reply_view = discord.ui.View()
+                reply_view.add_item(ReplyToConfessionButton(bot, message_id))
+                
+                # Dapatkan message aslinya dari thread.parent
+                parent_message = await thread.parent.fetch_message(message_id)
+                if parent_message:
+                    await parent_message.edit(view=reply_view)
+        except Exception as e:
+            print(f"[Restore] Gagal restore tombol reply untuk message {message_id}: {e}")
+
 class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
     confession_input = discord.ui.TextInput(
         label="Confession",
@@ -170,4 +185,8 @@ class ConfessionCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ConfessionCog(bot))
-    bot.add_view(ConfessionView(bot))  # View untuk tombol submit
+    bot.add_view(ConfessionView(bot))  # View global
+
+    # Restore tombol reply setelah restart
+    await restore_reply_buttons(bot)
+
