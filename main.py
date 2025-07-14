@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import atexit
 import os
 from dotenv import load_dotenv
 import asyncio
@@ -117,6 +118,11 @@ async def on_command_error(ctx, error):
     else:
         await ctx.send(f"❌ Terjadi error: {error}", delete_after=5)
 
+@atexit.register
+def cleanup():
+    if os.path.exists("confession_map.json"):
+        os.remove("confession_map.json")
+        
 # Jalankan bot
 async def main():
     await bot.start(os.getenv("TOKEN"))
