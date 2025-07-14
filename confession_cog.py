@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import uuid
 import json
-import os
 from database import (
     save_confession,
     connect_db,
@@ -28,6 +27,19 @@ def load_confession_map():
             CONFESSION_THREAD_MAP = {int(k): v for k, v in json.load(f).items()}
     except FileNotFoundError:
         CONFESSION_THREAD_MAP = {}
+
+async def restore_reply_buttons(bot: commands.Bot):
+    for message_id, thread_id in CONFESSION_THREAD_MAP.items():
+        try:
+            thread = await bot.fetch_channel(thread_id)
+            if isinstance(thread, discord.Thread):
+                parent_message = await thread.parent.fetch_message(message_id)
+                view = discord.ui.View()
+                view.add_item(ReplyToConfessionButton(bot, message_id))
+                await parent_message.edit(view=view)
+        except Exception as e:
+            print(f"[Restore] Gagal restore tombol reply untuk message {message_id}: {e}")
+
 # -----------------------
 # Modal
 # -----------------------
@@ -62,12 +74,12 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 CONFESSION_THREAD_MAP[sent.id] = self.reply_thread.id
                 save_confession_map()
 
-                await sent.edit(view=StaticReplyView())
-                await self.reply_thread.send("Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:", view=StaticReplyView())
+                reply_view = discord.ui.View()
+                reply_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+                await sent.edit(view=reply_view)
 
                 await interaction.response.send_message("✅ Balasan kamu telah dikirim secara anonim!", ephemeral=True)
                 return
-
 
             if isinstance(interaction.channel, discord.Thread):
                 return await interaction.response.send_message(
@@ -87,9 +99,13 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             CONFESSION_THREAD_MAP[sent.id] = thread.id
             save_confession_map()
 
-            # Add reply button inside the thread
-            await sent.edit(view=StaticReplyView())
-            await thread.send("Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:", view=StaticReplyView())
+            reply_view = discord.ui.View()
+            reply_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+            await sent.edit(view=reply_view)
+
+            thread_view = discord.ui.View()
+            thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+            await thread.send("Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:", view=thread_view)
 
             guild_id = interaction.guild_id or getattr(interaction.channel, "guild", None).id
             save_confession(self.bot.db, guild_id, interaction.user.id, confession_id, content)
@@ -116,30 +132,23 @@ class SubmitConfessionButton(discord.ui.Button):
                 "❌ Tidak bisa mengirim confession baru dari dalam thread.", ephemeral=True)
         await interaction.response.send_modal(ConfessionModal(self.bot))
 
-
 class ReplyToConfessionButton(discord.ui.Button):
-    def __init__(self):
-        super().__init__(label="Reply", style=discord.ButtonStyle.gray, custom_id="confess_reply_static")
+    def __init__(self, bot: commands.Bot, message_id: int):
+        custom_id = f"confess_reply_{message_id}"
+        super().__init__(label="Reply", style=discord.ButtonStyle.gray, custom_id=custom_id)
+        self.bot = bot
+        self.message_id = message_id
 
     async def callback(self, interaction: discord.Interaction):
-        message_id = interaction.message.id
-        thread_id = CONFESSION_THREAD_MAP.get(message_id)
-
+        thread_id = CONFESSION_THREAD_MAP.get(self.message_id)
         if not thread_id:
-            return await interaction.response.send_message("❌ Thread tidak ditemukan untuk confession ini.", ephemeral=True)
+            return await interaction.response.send_message("❌ Thread tidak ditemukan.", ephemeral=True)
 
-        thread = await interaction.client.fetch_channel(thread_id)
+        thread = await self.bot.fetch_channel(thread_id)
         if not isinstance(thread, discord.Thread):
-            return await interaction.response.send_message("❌ Gagal menemukan thread balasan.", ephemeral=True)
+            return await interaction.response.send_message("❌ Gagal menemukan thread.", ephemeral=True)
 
-        await interaction.response.send_modal(
-            ConfessionModal(interaction.client, reply_thread=thread)
-        )
-
-class StaticReplyView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(ReplyToConfessionButton())
+        await interaction.response.send_modal(ConfessionModal(self.bot, reply_thread=thread))
 
 # -----------------------
 # Views
@@ -189,5 +198,5 @@ class ConfessionCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ConfessionCog(bot))
-    bot.add_view(ConfessionView(bot)) 
-    bot.add_view(StaticReplyView())
+    bot.add_view(ConfessionView(bot))  # Tombol "Submit a confession!"
+    await restore_reply_buttons(bot)   # Restore tombol reply setelah restart
