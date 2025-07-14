@@ -28,15 +28,46 @@ def load_confession_map():
     except FileNotFoundError:
         CONFESSION_THREAD_MAP = {}
 
+def upgrade_confession_map():
+    global CONFESSION_THREAD_MAP
+    upgraded = {}
+    for k, v in CONFESSION_THREAD_MAP.items():
+        if isinstance(v, int):  # format lama
+            upgraded[k] = {
+                "thread_id": v,
+                "channel_id": None  # sementara biarkan kosong
+            }
+        else:
+            upgraded[k] = v
+    CONFESSION_THREAD_MAP = upgraded
+
 async def restore_reply_buttons(bot: commands.Bot):
-    for message_id, thread_id in CONFESSION_THREAD_MAP.items():
+    for message_id, data in CONFESSION_THREAD_MAP.items():
+        if not isinstance(data, dict) or "thread_id" not in data or "channel_id" not in data:
+            print(f"[Restore] Data tidak lengkap untuk message {message_id}")
+            continue
+
         try:
+            thread_id = data["thread_id"]
+            channel_id = data["channel_id"]
+
             thread = await bot.fetch_channel(thread_id)
-            if isinstance(thread, discord.Thread):
-                parent_message = await thread.parent.fetch_message(message_id)
-                reply_view = discord.ui.View(timeout=None)
-                reply_view.add_item(ReplyToConfessionButton(bot, message_id))
-                await parent_message.edit(view=reply_view)
+            if not isinstance(thread, discord.Thread):
+                print(f"[Restore] {thread_id} bukan thread.")
+                continue
+
+            parent_channel = await bot.fetch_channel(channel_id)
+            if not isinstance(parent_channel, discord.TextChannel):
+                print(f"[Restore] {channel_id} bukan text channel.")
+                continue
+
+            parent_message = await parent_channel.fetch_message(message_id)
+
+            view = discord.ui.View(timeout=None)
+            view.add_item(SubmitConfessionButton(bot))
+            view.add_item(ReplyToConfessionButton(bot, message_id))
+            await parent_message.edit(view=view)
+
         except Exception as e:
             print(f"[Restore] Gagal restore tombol reply untuk message {message_id}: {e}")
 
@@ -71,7 +102,10 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         try:
             if self.reply_thread:
                 sent = await self.reply_thread.send(embed=embed)
-                CONFESSION_THREAD_MAP[sent.id] = self.reply_thread.id
+                CONFESSION_THREAD_MAP[sent.id] = {
+                    "thread_id": self.reply_thread.id,
+                    "channel_id": self.reply_thread.parent_id or self.reply_thread.id
+                }
                 save_confession_map()
 
                 reply_view = discord.ui.View(timeout=None)
@@ -96,7 +130,10 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
 
             sent = await target_channel.send(embed=embed)
             thread = await sent.create_thread(name=f"Confession #{confession_id}")
-            CONFESSION_THREAD_MAP[sent.id] = thread.id
+            CONFESSION_THREAD_MAP[sent.id] = {
+                "thread_id": thread.id,
+                "channel_id": target_channel.id
+            }
             save_confession_map()
 
             reply_view = discord.ui.View(timeout=None)
@@ -167,6 +204,7 @@ class ConfessionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         load_confession_map()
+        upgrade_confession_map()
 
     @commands.command(name="sendconfessbutton")
     async def send_confess_button(self, ctx):
