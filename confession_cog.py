@@ -5,6 +5,7 @@ from database import (
     save_confession,
     connect_db,
     set_channel_settings,
+    get_channel_settings
 )
 
 CONFESSION_THREAD_MAP = {}  # message_id -> thread_id
@@ -47,19 +48,33 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 await interaction.response.send_message("✅ Balasan kamu telah dikirim secara anonim!", ephemeral=True)
                 return
 
-            # Confession utama
-            sent = await interaction.channel.send(embed=embed)
+            # Tidak boleh kirim confession utama dari dalam thread
+            if isinstance(interaction.channel, discord.Thread):
+                return await interaction.response.send_message(
+                    "❌ Tidak bisa mengirim confession dari dalam thread.",
+                    ephemeral=True
+                )
+
+            # Ambil channel yang disetel sebagai tempat confession
+            db = connect_db()
+            channel_id = get_channel_settings(db, interaction.guild_id, "confession")
+            db.close()
+
+            target_channel = interaction.guild.get_channel(channel_id) if channel_id else interaction.channel
+
+            # Kirim confession utama
+            sent = await target_channel.send(embed=embed)
 
             thread = await sent.create_thread(name=f"Confession #{confession_id}")
             CONFESSION_THREAD_MAP[sent.id] = thread.id
 
-            # Tambahkan tombol submit & reply di channel utama
+            # Tambahkan tombol submit & reply di luar thread
             main_view = discord.ui.View()
             main_view.add_item(SubmitConfessionButton(self.bot))
             main_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await sent.edit(view=main_view)
 
-            # Kirim satu pesan pembuka di thread (tanpa tombol submit)
+            # Kirim pesan pembuka di dalam thread
             thread_view = discord.ui.View()
             thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await thread.send(
@@ -67,7 +82,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 view=thread_view
             )
 
-            # Simpan confession
+            # Simpan confession ke database
             guild_id = interaction.guild_id or getattr(interaction.channel, "guild", None).id
             save_confession(self.bot.db, guild_id, interaction.user.id, confession_id, content)
 
