@@ -1,13 +1,12 @@
 import discord
 from discord.ext import commands
-import atexit
 import os
-from dotenv import load_dotenv
 import asyncio
+from dotenv import load_dotenv
 from rapidfuzz import process, fuzz
 
 # Database dan migrasi
-from database import connect_db, ensure_database_exists
+from database import connect_db, ensure_database_exists, CommandManager
 from migration import migrate
 
 # Import semua cog
@@ -26,8 +25,9 @@ from bannedwords_cog import BannedWordsCog
 from broadcast_cog import MassDM
 from werewolf_cog import Werewolf
 from lastActive_cog import LastActive
+from commandstatus_cog import CommandStatusCog
 from logs_cog import LogCog
-from confession_cog import ConfessionCog, ConfessionView, restore_reply_buttons  
+from confession_cog import ConfessionCog, ConfessionView, restore_reply_buttons
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
 # Load .env
@@ -52,12 +52,14 @@ class MadBot(commands.Bot):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.db = None
+        self.command_manager = None
 
     async def setup_hook(self):
         self.remove_command("help")
         ensure_database_exists()
         self.db = connect_db()
         migrate(self.db)
+        self.command_manager = CommandManager()
 
         # Load semua cog
         await self.add_cog(main_cog(self))
@@ -81,16 +83,16 @@ class MadBot(commands.Bot):
         await self.add_cog(MassDM(self))
         await self.add_cog(Werewolf(self))
         await self.add_cog(LogCog(self))
+        await self.add_cog(CommandStatusCog(self))
 
-        # Tambahkan view global untuk tombol confession agar tetap hidup setelah restart
-        self.add_view(ConfessionView(self))  # PENTING
+        # Tombol global confession tetap hidup
+        self.add_view(ConfessionView(self))
         await restore_reply_buttons(self)
-
 
 # Buat bot instance
 bot = MadBot(command_prefix=get_prefix, intents=intents)
 
-# Cek disable per guild
+# Cek disable per guild dari bot_state
 @bot.check
 async def block_disabled_guilds(ctx):
     if ctx.guild and ctx.guild.id in DISABLED_GUILDS:
@@ -98,6 +100,13 @@ async def block_disabled_guilds(ctx):
             return True
         return False
     return True
+
+# Cek command dinonaktifkan dari database
+@bot.check
+async def check_command_disabled(ctx):
+    if not ctx.guild or not ctx.command:
+        return True
+    return not bot.command_manager.is_command_disabled(ctx.guild.id, ctx.command.name)
 
 # Blok interaksi juga kalau dinonaktifkan
 @bot.event
@@ -117,11 +126,13 @@ async def on_command_error(ctx, error):
         attempted = ctx.message.content[len(ctx.prefix):].split()[0]
         command_names = [command.name for command in bot.commands]
         result = process.extractOne(attempted, command_names, scorer=fuzz.ratio)
-        if result is not None:
+        if result:
             match, score, _ = result
             if score >= 70:
                 await ctx.reply(f"❓ Apakah maksudmu `m{match}`?", delete_after=5)
                 return
+    elif isinstance(error, commands.CheckFailure):
+        return  # Jangan kirim pesan error untuk command yang diblokir
     else:
         await ctx.send(f"❌ Terjadi error: {error}", delete_after=5)
 

@@ -5,7 +5,9 @@ from database import (
     set_channel_settings,
     get_channel_settings,
     set_welcome_message,
-    get_welcome_message
+    get_welcome_message,
+    get_feature_status,
+    set_feature_status
 )
 
 # ✅ Check hanya untuk owner server atau dev ID kamu
@@ -23,6 +25,27 @@ class WelcomeMessageConfig(commands.Cog):
         self.bot = bot
 
     # ✅ Set pesan welcome ke database
+    @commands.command(name="togglewelcome", help="Aktif/nonaktifkan pesan welcome.")
+    @is_owner_or_dev()
+    async def toggle_welcome(self, ctx, status: str):
+        status = status.lower()
+        if status not in ["on", "off"]:
+            return await ctx.send("❌ Gunakan `on` atau `off`. Contoh: `mtogglewelcome on`")
+
+        db = connect_db()
+        set_feature_status(db, ctx.guild.id, "welcome_message", status == "on")
+        db.close()
+
+        await ctx.send(f"✅ Fitur welcome_message telah {'diaktifkan' if status == 'on' else 'dinonaktifkan'}.")
+
+    @commands.command(name="welcomestatus", help="Cek status fitur welcome_message.")
+    async def welcome_status(self, ctx):
+        db = connect_db()
+        status = get_feature_status(db, ctx.guild.id, "welcome_message")
+        db.close()
+        await ctx.send(f"📣 Fitur welcome_message saat ini: {'Aktif ✅' if status else 'Nonaktif ❌'}")
+
+
     @commands.command(name="setwelcomemsg")
     @is_owner_or_dev()
     async def set_welcome_msg(self, ctx, *, message: str):
@@ -77,6 +100,12 @@ class WelcomeMessageConfig(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member):
         db = connect_db()
+        
+        # ✅ Cek apakah welcome_message di-nonaktifkan
+        if not await get_feature_status(db, member.guild.id, 'welcome_message'):
+            db.close()
+            return
+
         message = get_welcome_message(db, member.guild.id)
         ch_id = get_channel_settings(db, member.guild.id, "welcome")
         db.close()

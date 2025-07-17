@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from database import connect_db, add_banned_word, get_all_banned_words, remove_banned_word
+from database import connect_db, add_banned_word, get_all_banned_words, remove_banned_word, get_feature_status, set_feature_status
 from discord import ui, Interaction
 
 ALLOWED_USER_ID = 416234104317804544
@@ -116,17 +116,23 @@ class BannedWordsCog(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        if message.content.startswith(tuple(await self.bot.get_prefix(message))):
+        # ⛔ Cek jika fitur reply_words sedang dimatikan
+        db = connect_db()
+        if not get_feature_status(db, message.guild.id, 'reply_words'):
+            db.close()
             return
 
-        db = connect_db()
         banned_words = get_all_banned_words(db, message.guild.id)
         db.close()
+
+        if message.content.startswith(tuple(await self.bot.get_prefix(message))):
+            return
 
         content_lower = message.content.lower()
 
         for word, response, word_type in banned_words:
             if word in content_lower:
+                # ⬇️ Send embed seperti biasa
                 word_upper = word.upper()
 
                 if word_type == "female":
@@ -157,3 +163,24 @@ class BannedWordsCog(commands.Cog):
                 break
 
         await self.bot.process_commands(message)
+
+    @commands.command(name="togglereplywords", help="Aktif/nonaktifkan fitur auto reply kata.")
+    @commands.has_permissions(administrator=True)
+    async def toggle_reply_words(self, ctx, status: str):
+        status = status.lower()
+        if status not in ["on", "off"]:
+            return await ctx.send("❗ Gunakan `on` atau `off`. Contoh: `mtogglereplywords on`")
+
+        db = connect_db()
+        set_feature_status(db, ctx.guild.id, "reply_words", status == "on")
+        db.close()
+
+        await ctx.send(f"✅ Fitur reply_words telah {'diaktifkan' if status == 'on' else 'dinonaktifkan'}.")
+
+        
+    @commands.command(name="replywordstatus", help="Cek status fitur reply_words.")
+    async def reply_words_status(self, ctx):
+        db = connect_db()
+        status = get_feature_status(db, ctx.guild.id, "reply_words")
+        db.close()
+        await ctx.send(f"💬 Fitur reply_words saat ini: {'Aktif ✅' if status else 'Nonaktif ❌'}")

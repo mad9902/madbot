@@ -257,6 +257,36 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS disabled_commands (
+        guild_id BIGINT NOT NULL,
+        command_name VARCHAR(100) NOT NULL,
+        disabled_by BIGINT,
+        disabled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (guild_id, command_name),
+        INDEX (command_name),
+        INDEX (disabled_at)
+        );
+    """)
+
+    try:
+        cursor.execute("""
+            ALTER TABLE disabled_commands 
+            ADD COLUMN feature_type ENUM('command', 'welcome_message', 'reply_words') DEFAULT 'command'
+        """)
+    except:
+        pass  
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS feature_status (
+            guild_id BIGINT NOT NULL,
+            feature_name VARCHAR(100) NOT NULL,
+            status BOOLEAN NOT NULL DEFAULT TRUE,
+            PRIMARY KEY (guild_id, feature_name),
+            INDEX (feature_name)
+        );
+    """)
+
 
     db.commit()
     cursor.close()

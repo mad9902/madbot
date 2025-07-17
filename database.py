@@ -5,8 +5,12 @@ import time
 from datetime import datetime, timedelta
 import json
 from dotenv import load_dotenv
+import logging
 
+# Configure logging
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def retry_database(retries=5, delay=3):
     def decorator(func):
@@ -17,9 +21,9 @@ def retry_database(retries=5, delay=3):
                     return func(*args, **kwargs)
                 except Error as e:
                     last_exception = e
-                    print(f"[Attempt {attempt}] Gagal koneksi ke database: {e}. Retry in {delay}s...")
+                    logger.warning(f"[Attempt {attempt}] Database error: {e}. Retrying in {delay}s...")
                     time.sleep(delay)
-            print(f"Gagal setelah {retries} percobaan.")
+            logger.error(f"Failed after {retries} attempts")
             raise last_exception
         return wrapper
     return decorator
@@ -37,21 +41,116 @@ def ensure_database_exists():
         cursor.close()
         db.close()
     except Error as e:
-        print(f"[DB INIT ERROR] Failed to create database: {e}")
+        logger.error(f"Failed to create database: {e}")
+        raise
 
 @retry_database(retries=3, delay=3)
 def connect_db():
-    db = mysql.connector.connect(
+    """Create and return a new database connection"""
+    return mysql.connector.connect(
         host=os.getenv("MYSQL_HOST"),
         user=os.getenv("MYSQL_USER"),
         password=os.getenv("MYSQL_PASS") or None,
         database=os.getenv("MYSQL_DB")
     )
-    return db
+
+class CommandManager:
+    """Handles command disabling/enabling functionality"""
+    
+    @retry_database()
+    def disable_command(self, guild_id: int, command_name: str, disabled_by: int = None) -> bool:
+        """Disable a command for a specific guild"""
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+            
+            query = """
+            INSERT INTO disabled_commands (guild_id, command_name, disabled_by)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE disabled_by = VALUES(disabled_by), disabled_at = CURRENT_TIMESTAMP
+            """
+            cursor.execute(query, (guild_id, command_name, disabled_by))
+            conn.commit()
+            return True
+        except Error as e:
+            logger.error(f"Failed to disable command '{command_name}' for guild {guild_id}: {e}")
+            return False
+        finally:
+            close_connection(conn)
+
+    @retry_database()
+    def enable_command(self, guild_id: int, command_name: str) -> bool:
+        """Enable a previously disabled command"""
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                "DELETE FROM disabled_commands WHERE guild_id = %s AND command_name = %s",
+                (guild_id, command_name)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Error as e:
+            logger.error(f"Failed to enable command '{command_name}' for guild {guild_id}: {e}")
+            return False
+        finally:
+            close_connection(conn)
+
+    @retry_database()
+    def is_command_disabled(self, guild_id: int, command_name: str) -> bool:
+        """Check if a command is disabled for a guild"""
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                "SELECT 1 FROM disabled_commands WHERE guild_id = %s AND command_name = %s",
+                (guild_id, command_name)
+            )
+            return cursor.fetchone() is not None
+        except Error as e:
+            logger.error(f"Failed to check if command '{command_name}' is disabled for guild {guild_id}: {e}")
+            return False
+        finally:
+            close_connection(conn)
+
+    @retry_database()
+    def get_disabled_commands(self, guild_id: int) -> list:
+        """Get all disabled commands for a guild"""
+        try:
+            conn = connect_db()
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute(
+                "SELECT command_name, disabled_by, disabled_at FROM disabled_commands WHERE guild_id = %s",
+                (guild_id,)
+            )
+            return cursor.fetchall()
+        except Error as e:
+            logger.error(f"Failed to get disabled commands for guild {guild_id}: {e}")
+            return []
+        finally:
+            close_connection(conn)
+def set_feature_status(db, guild_id, feature_name, status):
+    """Set status fitur untuk guild tertentu."""
+    cursor = db.cursor()
+    cursor.execute("INSERT INTO feature_status (guild_id, feature_name, status) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE status = %s", (guild_id, feature_name, status, status))
+    db.commit()
+
+def get_feature_status(db, guild_id, feature_name):
+    """Get status fitur untuk guild tertentu."""
+    cursor = db.cursor()
+    cursor.execute("SELECT status FROM feature_status WHERE guild_id = %s AND feature_name = %s", (guild_id, feature_name))
+    result = cursor.fetchone()
+    return result[0] if result else True  # Default ke True jika tidak ada entri
 
 def close_connection(conn):
+    """Properly close database connection"""
     if conn and conn.is_connected():
         conn.close()
+# Initialize database when module loads
+ensure_database_exists()
 
 
 def get_user_xp(db, user_id, guild_id):
