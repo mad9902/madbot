@@ -839,7 +839,7 @@ def log_event(db, guild_id, user_id, event_type, event_data):
     db.commit()
     cursor.close()
 
-def delete_old_logs(older_than_days=10):
+def delete_old_logs(older_than_days=5):
     db = connect_db()
     cursor = db.cursor()
     threshold = datetime.now() - timedelta(days=older_than_days)

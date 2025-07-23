@@ -145,7 +145,7 @@ class LogCog(commands.Cog):
 
     @tasks.loop(hours=24)
     async def delete_old_logs(self):
-        delete_old_logs(older_than_days=10)
+        delete_old_logs(older_than_days=5)
 
     @tasks.loop(hours=24)
     async def delete_old_voice_logs(self):
