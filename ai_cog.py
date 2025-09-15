@@ -4,10 +4,183 @@ import google.generativeai as genai
 import os
 import requests
 import uuid
+import json
 import asyncio
+import re
+from dataclasses import dataclass, field
+from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ===== Model untuk SplitBill =====
+@dataclass
+class Item:
+    id: int
+    name: str
+    qty: int
+    unit_price: int
+
+@dataclass
+class BillState:
+    id: int
+    thread_id: int
+    created_by: int
+    currency: str = "IDR"
+    items: List[Item] = field(default_factory=list)
+    taxes: Dict[str, int] = field(default_factory=lambda: {"tax": 0, "service": 0, "tips": 0})
+    participants: Dict[int, str] = field(default_factory=dict)
+    name_index: Dict[str, int] = field(default_factory=dict)
+    claims: List[Tuple[int, int, float]] = field(default_factory=list)
+    _next_pid: int = 1
+
+    def ensure_participant(self, display_name: str) -> int:
+        key = display_name.strip().lower()
+        if key in self.name_index:
+            return self.name_index[key]
+        pid = self._next_pid
+        self._next_pid += 1
+        self.participants[pid] = display_name
+        self.name_index[key] = pid
+        return pid
+
+def allocate(bill: BillState):
+    pre = {pid: 0 for pid in bill.participants}
+    total_pre = 0
+    for it in bill.items:
+        total_item = it.qty * it.unit_price
+        claims = [(pid, w) for (iid, pid, w) in bill.claims if iid == it.id]
+        if not claims:
+            continue
+        sum_w = sum(w for _, w in claims)
+        for pid, w in claims:
+            pre[pid] += round(total_item * (w / sum_w))
+        total_pre += total_item
+    taxes_sum = sum(bill.taxes.values())
+    by_user = pre.copy()
+    if taxes_sum and total_pre:
+        for pid in by_user:
+            by_user[pid] += round(pre[pid] / total_pre * taxes_sum)
+    return by_user, pre, total_pre
+
+# ==== UTIL UI ====
+def _idr(n: int) -> str:
+    return f"Rp{n:,}".replace(",", ".")
+
+def _item_claimers(bill: BillState, item_id: int) -> str:
+    # return daftar nama yg klaim item ini
+    pid_weights = [(pid, w) for (iid, pid, w) in bill.claims if iid == item_id]
+    if not pid_weights:
+        return "-"
+    names = [bill.participants.get(pid, f"U{pid}") for (pid, _) in pid_weights]
+    return ", ".join(names)
+
+def _compute_totals(bill: BillState):
+    by_user, pre, total_pre = allocate(bill)
+    taxes_sum = sum(bill.taxes.values())
+    grand = total_pre + taxes_sum
+    return by_user, pre, total_pre, taxes_sum, grand
+
+def _render_summary_embed(bill: BillState) -> discord.Embed:
+    by_user, pre, total_pre, taxes_sum, grand = _compute_totals(bill)
+
+    em = discord.Embed(
+        title="🧾 Split Bill (Gemini)",
+        description=f"**Currency:** {bill.currency}",
+        color=0x2ecc71
+    )
+
+    # fees
+    em.add_field(
+        name="Biaya",
+        value=(
+            f"- Tax: {_idr(bill.taxes['tax'])}\n"
+            f"- Service: {_idr(bill.taxes['service'])}\n"
+            f"- Tips: {_idr(bill.taxes['tips'])}\n"
+            f"**Subtotal:** {_idr(total_pre)}\n"
+            f"**Grand Total:** {_idr(grand)}"
+        ),
+        inline=False
+    )
+
+    # items + claimers (dipangkas bila panjang)
+    lines = []
+    for it in bill.items:
+        lines.append(
+            f"**{it.id}. {it.name}** — x{it.qty} × {_idr(it.unit_price)} "
+            f"= {_idr(it.qty * it.unit_price)}\n"
+            f"└─ Claimed by: {_item_claimers(bill, it.id)}"
+        )
+
+    items_block = "\n".join(lines)
+    if len(items_block) > 1024:
+        # kalau terlalu panjang, potong biar embed nggak error
+        items_block = items_block[:1000] + "\n… (dipotong)"
+    em.add_field(name="Items", value=items_block or "_(belum ada)_", inline=False)
+
+    # participants ringkas
+    if bill.participants:
+        names = ", ".join(sorted(bill.participants.values(), key=str.lower))
+        if len(names) > 1024:
+            names = names[:1000] + "…"
+        em.add_field(name="Peserta", value=names, inline=False)
+
+    em.set_footer(text="Gunakan: m items, m claim <id> Nama1, Nama2 | m setfee tax=.. service=.. tips=.. | m finalize")
+    return em
+
+async def _post_or_edit_summary(self, channel: discord.TextChannel, bill: BillState):
+    # simpan message id di state supaya bisa diedit setiap ada perubahan
+    msg_id = getattr(bill, "summary_message_id", None)
+    embed = _render_summary_embed(bill)
+    try:
+        if msg_id:
+            msg = await channel.fetch_message(msg_id)
+            await msg.edit(embed=embed)
+        else:
+            sent = await channel.send(embed=embed)
+            bill.summary_message_id = sent.id
+    except Exception:
+        # kalau gagal fetch (mis. msg sudah hilang), kirim ulang
+        sent = await channel.send(embed=embed)
+        bill.summary_message_id = sent.id
+
+def _split_by_ratio(total_amt: int, weights: Dict[int, int]) -> Dict[int, int]:
+        """
+        Bagi total_amt berdasarkan weights (mis. pre-tax per user).
+        Hasil dijamin jumlahnya = total_amt (pakai koreksi sisa pembulatan).
+        """
+        if total_amt <= 0 or not weights:
+            return {pid: 0 for pid in weights}
+
+        total_w = sum(max(w, 0) for w in weights.values())
+        if total_w == 0:
+            return {pid: 0 for pid in weights}
+
+        # hitung pecahan float untuk prioritas sisa
+        parts_float = {pid: (weights[pid] / total_w) * total_amt for pid in weights}
+        parts_int = {pid: int(parts_float[pid]) for pid in parts_float}
+        remainder = total_amt - sum(parts_int.values())
+
+        if remainder != 0:
+            # distribusikan sisa ke yang fraksinya terbesar (kalau remainder > 0)
+            # atau kurangi dari fraksi terbesar (kalau remainder < 0)
+            order = sorted(
+                weights.keys(),
+                key=lambda pid: parts_float[pid] - int(parts_float[pid]),
+                reverse=True
+            )
+            i = 0
+            step = 1 if remainder > 0 else -1
+            while remainder != 0 and i < len(order) * 3:  # batas aman
+                pid = order[i % len(order)]
+                if step < 0 and parts_int[pid] == 0:
+                    i += 1
+                    continue
+                parts_int[pid] += step
+                remainder -= step
+                i += 1
+
+        return parts_int
 
 class GeminiCog(commands.Cog):
     def __init__(self, bot):
@@ -15,7 +188,7 @@ class GeminiCog(commands.Cog):
         self.deepai_key = os.getenv("DEEPAI_API_KEY")
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         self.model = genai.GenerativeModel("models/gemini-2.0-flash-lite-001")
-        print("[GeminiCog] Loaded successfully")
+        self.state_by_thread: Dict[int, BillState] = {}
 
     @commands.command(name="ai", help="Tanya ke AI (Gemini)")
     async def ai_command(self, ctx, *, prompt: str):
@@ -209,3 +382,173 @@ class GeminiCog(commands.Cog):
             except Exception as e:
                 print(f"[Translate ERROR] {e}")
                 await ctx.send("❌ Terjadi error saat menerjemahkan.")
+                
+    # ==== FITUR SPLITBILL GEMINI ====
+    @commands.command(name="splitbillgemini", help="Split bill otomatis pakai Gemini dari foto struk")
+    async def msplitbillgemini_command(self, ctx):
+        if not ctx.message.attachments:
+            return await ctx.send("❗ Harap attach gambar struk.")
+        att = ctx.message.attachments[0]
+        if not any(att.filename.lower().endswith(ext) for ext in (".png",".jpg",".jpeg",".webp",".bmp",".tif",".tiff")):
+            return await ctx.send("❌ File bukan gambar.")
+
+        await ctx.typing()
+        try:
+            img_bytes = await att.read()
+            prompt = (
+                "You are a receipt parser for Indonesian restaurant bills. "
+                "Extract line items and fees. STRICT JSON only with keys: currency, items, fees. "
+                "items: [{name, qty, unit_price}] (unit_price per item). "
+                "fees: {tax, service, tips} in rupiah."
+            )
+            resp = self.model.generate_content([prompt, {"mime_type":"image/png","data":img_bytes}])
+            txt = resp.candidates[0].content.parts[0].text.strip()
+            m = re.search(r"\{.*\}", txt, re.S)
+            data = json.loads(m.group(0) if m else txt)
+
+            # build items (normalisasi: jika unit_price ternyata total utk xN, bagi ke unit)
+            items = []
+            for it in data.get("items", []):
+                name = it.get("name", "?")
+                qty = int(it.get("qty") or 1)
+                price = int(it.get("unit_price") or 0)
+                unit = price // qty if qty > 1 and price % qty == 0 else price
+                items.append(Item(id=len(items)+1, name=name, qty=qty, unit_price=unit))
+
+            fees = data.get("fees", {})
+
+            # buat thread & state
+            thread = await ctx.channel.create_thread(
+                name=f"SplitBillGemini-{ctx.message.id}", type=discord.ChannelType.public_thread
+            )
+            bill = BillState(
+                id=ctx.message.id,
+                thread_id=thread.id,
+                created_by=ctx.author.id,
+                items=items,
+                taxes={
+                    "tax": int(fees.get("tax") or 0),
+                    "service": int(fees.get("service") or 0),
+                    "tips": int(fees.get("tips") or 0),
+                }
+            )
+            bill.ensure_participant(ctx.author.display_name)
+            # simpan placeholder untuk message embed
+            bill.summary_message_id = None
+            self.state_by_thread[thread.id] = bill
+
+            # kirim embed pertama
+            await _post_or_edit_summary(self, thread, bill)
+            await thread.send("Klaim item dengan: `m claim <item_id> Nama1, Nama2` • Set fee: `m setfee tax=..` • Finalize: `m finalize`")
+
+        except Exception as e:
+            await ctx.send(f"❌ Gagal parsing struk: {e}")
+
+    # ---- perintah pendukung (EDIT: semua auto-update embed) ----
+    @commands.command(name="items")
+    async def items_cmd(self, ctx):
+        bill = self.state_by_thread.get(ctx.channel.id)
+        if not bill:
+            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+        await _post_or_edit_summary(self, ctx.channel, bill)
+
+    @commands.command(name="claim")
+    async def claim_cmd(self, ctx, item_id: int, *, who: str):
+        bill = self.state_by_thread.get(ctx.channel.id)
+        if not bill:
+            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+        it = next((x for x in bill.items if x.id == item_id), None)
+        if not it:
+            return await ctx.send("Item tidak ada.")
+
+        # parsing nama (pisah koma/titik koma)
+        names = [n.strip() for n in re.split(r"[;,]", who) if n.strip()]
+        if not names:
+            return await ctx.send("Format: `m claim <item_id> Nama1, Nama2`")
+
+        pids = [bill.ensure_participant(n) for n in names]
+        # hapus klaim lama utk peserta2 tsb di item ini
+        bill.claims = [(iid,pid,w) for (iid,pid,w) in bill.claims if not (iid==item_id and pid in pids)]
+        # bagi rata
+        w = 1/len(pids)
+        for pid in pids:
+            bill.claims.append((item_id, pid, w))
+
+        await _post_or_edit_summary(self, ctx.channel, bill)
+        await ctx.message.add_reaction("🧾")
+
+    @commands.command(name="setfee")
+    async def setfee_cmd(self, ctx, *, args: str = ""):
+        bill = self.state_by_thread.get(ctx.channel.id)
+        if not bill:
+            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+        kv = dict(re.findall(r"(?i)\b(tax|service|tips)\s*=\s*([\d\.\,]+)", args))
+        if not kv:
+            return await ctx.send("Format: `m setfee tax=<angka> service=<angka> tips=<angka>`")
+        def to_int(s: str) -> int:
+            s = s.replace(".", "").replace(",", "")
+            return int(re.sub(r"\D", "", s) or 0)
+        for k, v in kv.items():
+            bill.taxes[k.lower()] = to_int(v)
+
+        await _post_or_edit_summary(self, ctx.channel, bill)
+        await ctx.message.add_reaction("💸")
+
+    @commands.command(name="finalize")
+    async def finalize_cmd(self, ctx):
+        bill = self.state_by_thread.get(ctx.channel.id)
+        if not bill:
+            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+
+        # Hitung pre-tax per orang dari klaim
+        _, pre, total_pre = allocate(bill)
+        if total_pre == 0:
+            return await ctx.send("Belum ada item yang diklaim.")
+
+        # Total fee (nominal rupiah)
+        tax_amt = int(bill.taxes.get("tax", 0) or 0)
+        svc_amt = int(bill.taxes.get("service", 0) or 0)
+        tips_amt = int(bill.taxes.get("tips", 0) or 0)
+
+        # Distribusi fee proporsional terhadap pre-tax masing-masing orang
+        tax_share = _split_by_ratio(tax_amt, pre)
+        svc_share = _split_by_ratio(svc_amt, pre)
+        tips_share = _split_by_ratio(tips_amt, pre)
+
+        # Total per user = pre + bagiannya (tax + service + tips)
+        per_user_total = {}
+        for pid in bill.participants:
+            per_user_total[pid] = (
+                pre.get(pid, 0)
+                + tax_share.get(pid, 0)
+                + svc_share.get(pid, 0)
+                + tips_share.get(pid, 0)
+            )
+
+        # Koreksi selisih pembulatan agar pas Grand Total
+        grand_total = total_pre + tax_amt + svc_amt + tips_amt
+        diff = grand_total - sum(per_user_total.values())
+        if diff != 0 and per_user_total:
+            target = max(per_user_total, key=per_user_total.get)
+            per_user_total[target] += diff
+
+        # Render embed final
+        em = discord.Embed(title="✅ Hasil Final", color=0x5865F2)
+        em.add_field(name="Subtotal", value=_idr(total_pre), inline=True)
+        em.add_field(name="Fee (Tax+Service+Tips)", value=_idr(tax_amt + svc_amt + tips_amt), inline=True)
+        em.add_field(name="Grand Total", value=_idr(grand_total), inline=True)
+
+        lines = []
+        order = sorted(bill.participants.keys(), key=lambda pid: bill.participants[pid].lower())
+        for pid in order:
+            name = bill.participants[pid]
+            lines.append(
+                f"**{name}**: {_idr(per_user_total[pid])} "
+                f"(pre-tax {_idr(pre.get(pid,0))}, "
+                f"+ tax {_idr(tax_share.get(pid,0))}, "
+                f"+ svc {_idr(svc_share.get(pid,0))}, "
+                f"+ tips {_idr(tips_share.get(pid,0))})"
+            )
+
+        em.add_field(name="Per Orang", value="\n".join(lines) or "-", inline=False)
+        await ctx.send(embed=em)
