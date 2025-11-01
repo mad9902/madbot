@@ -190,6 +190,35 @@ class GeminiCog(commands.Cog):
         self.model = genai.GenerativeModel("models/gemini-2.0-flash-lite-001")
         self.state_by_thread: Dict[int, BillState] = {}
 
+    async def _schedule_thread_cleanup(self, thread_id: int, delay_seconds: int = 24*60*60):
+        # tidur dulu 24 jam
+        await asyncio.sleep(delay_seconds)
+        # ambil channel (thread) dari cache atau fetch
+        thread = self.bot.get_channel(thread_id)
+        if thread is None:
+            try:
+                thread = await self.bot.fetch_channel(thread_id)
+            except Exception:
+                thread = None
+
+        if thread is None:
+            return  # sudah hilang / tidak bisa diambil
+
+        # coba hapus, kalau gagal (permission), arsipkan + lock
+        try:
+            await thread.delete(reason="Auto-cleanup splitbill setelah finalize 24 jam")
+        except Exception:
+            try:
+                await thread.edit(archived=True, locked=True, reason="Auto-archive splitbill 24h")
+            except Exception:
+                pass
+
+        # bersihkan state internal kalau ada
+        try:
+            self.state_by_thread.pop(thread_id, None)
+        except Exception:
+            pass
+
     @commands.command(name="ai", help="Tanya ke AI (Gemini)")
     async def ai_command(self, ctx, *, prompt: str):
         print(f"[Gemini COMMAND] Called by {ctx.author} with prompt: {prompt}")
@@ -384,7 +413,7 @@ class GeminiCog(commands.Cog):
                 await ctx.send("❌ Terjadi error saat menerjemahkan.")
                 
     # ==== FITUR SPLITBILL GEMINI ====
-    @commands.command(name="splitbillgemini", help="Split bill otomatis pakai Gemini dari foto struk")
+    @commands.command(name="splitbill", help="Split bill otomatis pakai Gemini dari foto struk")
     async def msplitbillgemini_command(self, ctx):
         if not ctx.message.attachments:
             return await ctx.send("❗ Harap attach gambar struk.")
@@ -401,7 +430,8 @@ class GeminiCog(commands.Cog):
                 "items: [{name, qty, unit_price}] (unit_price per item). "
                 "fees: {tax, service, tips} in rupiah."
             )
-            resp = self.model.generate_content([prompt, {"mime_type":"image/png","data":img_bytes}])
+            mime = (att.content_type or "image/png").split(";")[0]
+            resp = self.model.generate_content([prompt, {"mime_type": mime, "data": img_bytes}])
             txt = resp.candidates[0].content.parts[0].text.strip()
             m = re.search(r"\{.*\}", txt, re.S)
             data = json.loads(m.group(0) if m else txt)
@@ -417,10 +447,16 @@ class GeminiCog(commands.Cog):
 
             fees = data.get("fees", {})
 
-            # buat thread & state
-            thread = await ctx.channel.create_thread(
-                name=f"SplitBillGemini-{ctx.message.id}", type=discord.ChannelType.public_thread
-            )
+            # ganti blok "buat thread & state" di splitbill:
+            try:
+                thread = await ctx.message.create_thread(
+                    name=f"SplitBill-{ctx.message.id}"
+                )
+            except Exception:
+                # fallback: pakai channel sekarang
+                thread = ctx.channel
+                await ctx.send("⚠️ Gagal membuat thread (izin/tipe channel). Kita lanjut di channel ini ya.")
+
             bill = BillState(
                 id=ctx.message.id,
                 thread_id=thread.id,
@@ -449,14 +485,14 @@ class GeminiCog(commands.Cog):
     async def items_cmd(self, ctx):
         bill = self.state_by_thread.get(ctx.channel.id)
         if not bill:
-            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+            return await ctx.send("Command ini dipakai di thread SplitBill.")
         await _post_or_edit_summary(self, ctx.channel, bill)
 
     @commands.command(name="claim")
     async def claim_cmd(self, ctx, item_id: int, *, who: str):
         bill = self.state_by_thread.get(ctx.channel.id)
         if not bill:
-            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+            return await ctx.send("Command ini dipakai di thread SplitBill.")
         it = next((x for x in bill.items if x.id == item_id), None)
         if not it:
             return await ctx.send("Item tidak ada.")
@@ -481,7 +517,7 @@ class GeminiCog(commands.Cog):
     async def setfee_cmd(self, ctx, *, args: str = ""):
         bill = self.state_by_thread.get(ctx.channel.id)
         if not bill:
-            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+            return await ctx.send("Command ini dipakai di thread SplitBill.")
         kv = dict(re.findall(r"(?i)\b(tax|service|tips)\s*=\s*([\d\.\,]+)", args))
         if not kv:
             return await ctx.send("Format: `m setfee tax=<angka> service=<angka> tips=<angka>`")
@@ -498,7 +534,7 @@ class GeminiCog(commands.Cog):
     async def finalize_cmd(self, ctx):
         bill = self.state_by_thread.get(ctx.channel.id)
         if not bill:
-            return await ctx.send("Command ini dipakai di thread SplitBillGemini.")
+            return await ctx.send("Command ini dipakai di thread SplitBill.")
 
         # Hitung pre-tax per orang dari klaim
         _, pre, total_pre = allocate(bill)
@@ -550,5 +586,27 @@ class GeminiCog(commands.Cog):
                 f"+ tips {_idr(tips_share.get(pid,0))})"
             )
 
-        em.add_field(name="Per Orang", value="\n".join(lines) or "-", inline=False)
+        if not lines:
+            em.add_field(name="Per Orang", value="-", inline=False)
+        else:
+            chunk = ""
+            first = True
+            for ln in lines:
+                # +1 untuk newline bila chunk tidak kosong
+                add_len = (1 if chunk else 0) + len(ln)
+                if len(chunk) + add_len > 1024:
+                    em.add_field(name=("Per Orang" if first else "\u200b"), value=chunk, inline=False)
+                    first = False
+                    chunk = ln
+                else:
+                    chunk = (f"{chunk}\n{ln}") if chunk else ln
+            if chunk:
+                em.add_field(name=("Per Orang" if first else "\u200b"), value=chunk, inline=False)
         await ctx.send(embed=em)
+                # …setelah kirim embed final
+        await ctx.send("🗓️ Thread ini akan dihapus otomatis dalam 24 jam. (Kalau bot tidak punya izin hapus, akan diarsipkan & dikunci.)")
+
+        # jadwalkan cleanup
+        if isinstance(ctx.channel, discord.Thread):
+            asyncio.create_task(self._schedule_thread_cleanup(ctx.channel.id, 24*60*60))
+
