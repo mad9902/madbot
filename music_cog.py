@@ -15,6 +15,7 @@ import discord
 import asyncio
 import os
 import re
+import shutil
 import random
 import requests
 from discord.ext import commands
@@ -151,7 +152,7 @@ class music_cog(commands.Cog):
         self.db = bot.db
 
         # FFmpeg executable (Windows)
-        self.ffmpeg_executable = r"C:\ffmpeg\bin\ffmpeg.exe"
+        self.ffmpeg_executable = shutil.which("ffmpeg")
 
         # Default volume
         self.volume = 1.0
