@@ -113,14 +113,15 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
     # --- STREAK NUMBER (lowered so it doesn't overlap) ---
     try:
         font_num = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 110
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            70   # <<< dari 110 menjadi 70 (lebih kecil)
         )
     except:
         font_num = ImageFont.load_default()
 
     draw = ImageDraw.Draw(base)
     draw.text(
-        (450, 240),  # turun agar tidak menutupi api
+        (450, 255),   # sedikit naik (dulunya 240)
         str(streak),
         fill="white",
         font=font_num,
