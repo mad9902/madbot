@@ -438,10 +438,22 @@ class StreakCog(commands.Cog):
 
         lines = []
         for i, row in enumerate(rows, start=1):
-            emoji, tier = get_flame_tier(row["current_streak"])
+            streak = row["current_streak"]
+
+            # --- Ambil emoji custom untuk streak ini ---
+            custom_id = get_emoji_for_streak(guild_id, streak)
+            if custom_id:
+                custom_obj = self.bot.get_emoji(custom_id)
+                emoji = str(custom_obj) if custom_obj else f"<:e:{custom_id}>"
+            else:
+                emoji, _ = get_flame_tier(streak)
+
+            # Gunakan tier teks default tetap sama
+            _, tier = get_flame_tier(streak)
+
             lines.append(
                 f"**#{i}** {emoji} {format_pair_mention(row)} — "
-                f"`{row['current_streak']}x` (Max {row['max_streak']}, {tier})"
+                f"`{streak}x` (Max {row['max_streak']}, {tier})"
             )
 
         embed = discord.Embed(
@@ -450,6 +462,7 @@ class StreakCog(commands.Cog):
             colour=discord.Colour.orange()
         )
         await ctx.send(embed=embed)
+
 
     # ----- !streak setchannel -----
 
