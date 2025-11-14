@@ -547,7 +547,7 @@ class StreakCog(commands.Cog):
             description=(
                 "Fitur ini membuat **pasangan streak** berdasarkan pesan `api @user` "
                 "dan reaction 🔥 dari user yang di-mention.\n"
-                "HANYA aktif di channel yang sudah di-set sebagai channel streak."
+                "Fitur **hanya aktif** di channel yang sudah di-set sebagai channel streak."
             ),
             colour=discord.Colour.orange()
         )
@@ -560,14 +560,14 @@ class StreakCog(commands.Cog):
             value=(
                 "1. Admin set channel streak:\n"
                 f"   • `{prefix}streak setchannel command #streak`\n"
-                f"   • `{prefix}streak setchannel log #streak-log` (opsional)\n\n"
+                f"   • `{prefix}streak setchannel log #streak-log`\n\n"
                 "2. Buat pasangan streak:\n"
                 f"   • `{prefix}streak request @user`\n"
                 f"   • `{prefix}streak accept @user`\n\n"
-                "3. Jika sudah **ACTIVE**:\n"
-                "   • Kirim di channel streak: `api @pasangan`\n"
-                "   • Bot akan react 🔥 otomatis\n"
-                "   • Kalau user yang di-mention ikut react 🔥 → streak naik."
+                "3. Jika status pasangan sudah **ACTIVE**:\n"
+                "   • Kirim pesan di channel streak: `api @pasangan`\n"
+                "   • Bot react 🔥 otomatis\n"
+                "   • User yang di-mention harus react 🔥 kembali → streak naik."
             ),
             inline=False,
         )
@@ -579,11 +579,11 @@ class StreakCog(commands.Cog):
             name="🔥 Aturan Streak Harian",
             value=(
                 "• Hitungan streak per **hari**.\n"
-                "• Kalau sudah tercatat hari ini → reaction berikutnya **tidak menambah** streak.\n"
-                "• Jika **bolong 1 hari** (gap = 2 hari):\n"
-                f"  → Bisa restore: `{prefix}streak restore @user`\n"
-                "• Jika **bolong 2+ hari** (gap ≥ 3):\n"
-                "  → Streak **putus**, mulai dari 1, dan tidak bisa di-restore."
+                "• Jika sudah tercatat hari ini → reaction berikutnya **tidak menambah** streak.\n"
+                "• Jika bolong 1 hari (gap = 2):\n"
+                f"  → Gunakan: `{prefix}streak restore @user`\n"
+                "• Jika bolong ≥ 2 hari (gap ≥ 3):\n"
+                "  → Streak **putus** dan mulai dari 1 (tidak bisa di-restore)."
             ),
             inline=False,
         )
@@ -594,15 +594,74 @@ class StreakCog(commands.Cog):
         embed.add_field(
             name="♻️ Aturan Restore",
             value=(
-                f"• `{prefix}streak restore @user` untuk pulihkan streak yang bolong 1 hari.\n"
+                f"• `{prefix}streak restore @user` memulihkan streak yang bolong 1 hari.\n"
                 "• Syarat:\n"
-                "  - Pasangan streak **ACTIVE**.\n"
-                "  - Gap hari = **2 hari** tepat.\n"
+                "  - Pasangan streak harus **ACTIVE**.\n"
+                "  - Gap hari tepat = **2**.\n"
                 "• Limit restore: **5x per bulan per pasangan**.\n"
                 "• Gap ≥ 3 hari → tidak bisa restore."
             ),
             inline=False,
         )
+
+        # -------------------------------------------------
+        # TIER API DEFAULT
+        # -------------------------------------------------
+        embed.add_field(
+            name="🔥 Tier Api (Default)",
+            value=(
+                "• 1–4 : ✨ COMMON\n"
+                "• 5–9 : 🔥 UNCOMMON\n"
+                "• 10–29 : 🔥🔥 RARE\n"
+                "• 30–99 : 🔥🔥🔥 EPIC\n"
+                "• 100–199 : 🔥🔥🔥🔥 MYTHIC\n"
+                "• 200+ : 🔥🔥🔥🔥🔥 LEGENDARY"
+            ),
+            inline=False,
+        )
+
+        # -------------------------------------------------
+        # CUSTOM EMOJI TIER
+        # -------------------------------------------------
+        embed.add_field(
+            name="🎨 Custom Emoji Tier",
+            value=(
+                "Kamu bisa mengganti emoji 🔥 sesuai streak tertentu.\n"
+                "Gunakan:\n"
+                f"• `{prefix}streak emoji set <min_streak> <emoji>`\n"
+                f"• `{prefix}streak emoji delete <min_streak>`\n"
+                f"• `{prefix}streak emoji list`\n\n"
+                "Contoh:\n"
+                f"• `{prefix}streak emoji set 5 <:flame5:1234567890>`\n"
+                f"• `{prefix}streak emoji set 100 <:epicflame:9876543210>`"
+            ),
+            inline=False,
+        )
+
+        # -------------------------------------------------
+        # DAFTAR COMMAND
+        # -------------------------------------------------
+        embed.add_field(
+            name="📜 Daftar Command",
+            value=(
+                f"• `{prefix}streak request @user` — ajukan pasangan streak.\n"
+                f"• `{prefix}streak accept @user` — terima ajakan.\n"
+                f"• `{prefix}streak deny @user` — tolak ajakan.\n"
+                f"• `{prefix}streak @user` — lihat info pasangan streak.\n"
+                f"• `{prefix}streak restore @user` — pulihkan streak.\n"
+                f"• `{prefix}streak top` — lihat leaderboard.\n"
+                f"• `{prefix}streak pending` — lihat request pending.\n"
+                f"• `{prefix}streak setchannel command #ch` — set channel utama.\n"
+                f"• `{prefix}streak setchannel log #ch` — set channel log.\n"
+                f"• `{prefix}streak emoji ...` — atur emoji tier."
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(text="Contoh penggunaan: api @username → bot react 🔥 → user react balik → streak naik.")
+
+        await ctx.send(embed=embed)
+
 
         # -------------------------------------------------
         # TIER API
