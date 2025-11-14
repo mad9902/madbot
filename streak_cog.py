@@ -22,6 +22,18 @@ from database import (
 #  Helper kecil
 # =========================
 
+def get_display_emoji(bot, guild_id, streak):
+    """Ambil emoji custom dari DB; kalau tidak ada → fallback tier default."""
+    emoji_id = get_emoji_for_streak(guild_id, streak)
+    if emoji_id:
+        obj = bot.get_emoji(emoji_id)
+        return str(obj) if obj else f"<:e:{emoji_id}>"
+
+    # fallback ke default
+    default_emoji, _ = get_flame_tier(streak)
+    return default_emoji
+
+
 def get_flame_tier(streak: int):
     """
     Menentukan level api + teks berdasarkan current_streak.
@@ -226,23 +238,26 @@ class StreakCog(commands.Cog):
         streak_now = new_pair["current_streak"]
         before = result["before"]
         broken = result["broken"]
-        emoji, tier = get_flame_tier(streak_now)
+        emoji = get_display_emoji(self.bot, guild_id, streak_now)
+        _, tier = get_flame_tier(streak_now)
+
 
         # Kirim info singkat di channel
         desc_channel = channel  # alias biar pendek
+
         if broken:
             text = (
                 f"{emoji} Streak {format_pair_mention(new_pair)} **PUTUS** "
                 f"dan mulai lagi dari **{streak_now}**."
             )
         else:
-            # hanya kirim kalau beneran naik
             if streak_now == before:
                 return
             text = (
                 f"{emoji} Streak {format_pair_mention(new_pair)} naik dari "
                 f"**{before}** ➜ **{streak_now}** ({tier})"
             )
+
 
         try:
             await desc_channel.send(text)
@@ -295,7 +310,9 @@ class StreakCog(commands.Cog):
         if not pair:
             return await ctx.send("Kamu belum punya pasangan streak dengan orang itu.")
 
-        emoji, tier = get_flame_tier(pair["current_streak"])
+        emoji = get_display_emoji(self.bot, guild_id, pair["current_streak"])
+        _, tier = get_flame_tier(pair["current_streak"])
+
         status = pair["status"]
 
         embed = discord.Embed(
@@ -419,7 +436,9 @@ class StreakCog(commands.Cog):
             return await ctx.send(msg)
 
         new_pair = result["pair"]
-        emoji, tier = get_flame_tier(new_pair["current_streak"])
+        emoji = get_display_emoji(self.bot, guild_id, new_pair["current_streak"])
+        _, tier = get_flame_tier(new_pair["current_streak"])
+
 
         await ctx.send(
             f"{emoji} Streak {format_pair_mention(new_pair)} berhasil di-**RESTORE** "
