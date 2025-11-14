@@ -733,14 +733,16 @@ class StreakCog(commands.Cog):
         )
 
     # ---- SET EMOJI TIER ----
-    @tiers_group.command(name="set")
-    async def tiers_set(self, ctx: commands.Context, min_streak: int, emoji: str):
+    @emoji_group.command(name="set")
+    async def emoji_set(self, ctx: commands.Context, min_streak: int, emoji: str):
         """
-        Atur emoji custom untuk tier tertentu.
-        Contoh:
-            streak tiers set 5 <:flame:1234567890>
-            streak tiers set 100 1234567890
+        Set custom emoji untuk tier tertentu.
+        Bisa kirim:
+        - <:flame:1234567890>
+        - <a:animeflame:9876543210>
+        - atau cukup kirim emoji custom server langsung
         """
+
         DEV_ID = 416234104317804544
         is_admin = ctx.author.guild_permissions.manage_guild
         is_dev = ctx.author.id == DEV_ID
@@ -748,22 +750,34 @@ class StreakCog(commands.Cog):
         if not (is_admin or is_dev):
             return await ctx.send("❌ Kamu tidak punya izin untuk mengatur emoji.")
 
-        import re
-        emoji_id = None
-
-        # Format <:name:id> atau <a:name:id>
-        m = re.match(r"<a?:\w+:(\d+)>", emoji)
-        if m:
-            emoji_id = int(m.group(1))
-        elif emoji.isdigit():
-            emoji_id = int(emoji)
+        # -----------------------------
+        # 1. Ambil custom emoji dari message
+        # -----------------------------
+        # Jika user benar-benar mengirim emoji custom di message:
+        if ctx.message.emojis:
+            emoji_obj = ctx.message.emojis[0]  # ambil emoji pertama
+            emoji_id = emoji_obj.id
         else:
-            return await ctx.send("❌ Emoji harus custom emoji server (bukan unicode).")
+            # fallback: parse dari format <...:ID>
+            import re
+            m = re.search(r'<a?:\w+:(\d+)>', emoji)
+            if m:
+                emoji_id = int(m.group(1))
+            elif emoji.isdigit():  # langsung ID
+                emoji_id = int(emoji)
+            else:
+                return await ctx.send("❌ Kirim emoji custom, bukan unicode ya.")
 
+        # -----------------------------
+        # 2. Simpan ke database
+        # -----------------------------
         set_tier_emoji(ctx.guild.id, min_streak, emoji_id)
 
+        # -----------------------------
+        # 3. Tampilkan kembali emoji
+        # -----------------------------
         obj = self.bot.get_emoji(emoji_id)
-        disp = obj if obj else f"<:e:{emoji_id}>"
+        disp = str(obj) if obj else f"<:e:{emoji_id}>"
 
         await ctx.send(f"✅ Emoji untuk streak **≥ {min_streak}** di-set ke {disp}")
 
