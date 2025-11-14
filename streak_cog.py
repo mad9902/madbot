@@ -18,9 +18,77 @@ from database import (
     get_emoji_for_streak,
 )
 
+import io
+import aiohttp
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import random
 # =========================
 #  Helper kecil
 # =========================
+
+async def download_image(url: str):
+    async with aiohttp.ClientSession() as s:
+        async with s.get(url) as r:
+            return Image.open(io.BytesIO(await r.read())).convert("RGBA")
+
+
+async def make_streak_card(pfp1, pfp2, emoji_url, streak):
+    # Canvas
+    W, H = 900, 350
+    base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
+    
+    # --- Background with flame pattern ---
+    if emoji_url:
+        flame = await download_image(emoji_url)
+        flame = flame.resize((70, 70))
+        
+        for _ in range(60):
+            x = random.randint(0, W-70)
+            y = random.randint(0, H-70)
+            base.alpha_composite(flame, (x, y))
+    
+    # Darken layer
+    dark = Image.new("RGBA", (W, H), (0, 0, 0, 170))
+    base.alpha_composite(dark)
+
+    # --- Profile Pictures ---
+    pfp_size = 150
+    mask = Image.new("L", (pfp_size, pfp_size), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, pfp_size, pfp_size), fill=255)
+
+    p1 = await download_image(pfp1)
+    p1 = p1.resize((pfp_size, pfp_size))
+    base.paste(p1, (130, 100), mask)
+
+    p2 = await download_image(pfp2)
+    p2 = p2.resize((pfp_size, pfp_size))
+    base.paste(p2, (620, 100), mask)
+
+    # --- Big center flame ---
+    if emoji_url:
+        big = await download_image(emoji_url)
+        big = big.resize((200, 200))
+        base.alpha_composite(big, (350, 60))
+    else:
+        draw = ImageDraw.Draw(base)
+        font = ImageFont.truetype("arial.ttf", 160)
+        draw.text((450, 160), "🔥", font=font, fill="white", anchor="mm")
+
+    # --- Streak Number ---
+    font_num = ImageFont.truetype("arialbd.ttf", 130)
+    ImageDraw.Draw(base).text(
+        (450, 255), 
+        str(streak), 
+        fill="white", 
+        font=font_num, 
+        anchor="mm"
+    )
+
+    # Return as file
+    buffer = io.BytesIO()
+    base.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
 
 def get_display_emoji(bot, guild_id, streak):
     """Ambil emoji custom dari DB; kalau tidak ada → fallback tier default."""
@@ -142,18 +210,69 @@ class StreakCog(commands.Cog):
     # -------------------------------------------------
     # Listener 2: kalau target react 🔥 -> streak naik
     # -------------------------------------------------
+    # ---------------------------------------------
+    # Listener 1: detect "api @user" di channel streak
+    # ---------------------------------------------
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or message.guild is None:
+            return
+
+        guild = message.guild
+        guild_id = guild.id
+
+        settings = get_streak_settings(guild_id)
+        if not settings:
+            return
+
+        cmd_channel_id = settings.get("command_channel_id")
+        if cmd_channel_id is None or message.channel.id != cmd_channel_id:
+            return
+
+        content = message.content.strip()
+        if not content:
+            return
+
+        parts = content.split()
+        if len(parts) < 2:
+            return
+        if parts[0].lower() != "api":
+            return
+
+        mentions = [m for m in message.mentions if not m.bot and m.id != message.author.id]
+        if len(mentions) != 1:
+            return
+
+        target = mentions[0]
+
+        pair = get_streak_pair(guild_id, message.author.id, target.id)
+        if not pair:
+            await message.channel.send(
+                f"{message.author.mention}, kamu belum punya pasangan streak dengan {target.mention}.\n"
+                f"Gunakan `!streak request {target.mention}` dulu."
+            )
+            return
+
+        if pair["status"] != "ACTIVE":
+            await message.channel.send(
+                f"Pasangan streak dengan {target.mention} belum ACTIVE (status sekarang: `{pair['status']}`)."
+            )
+            return
+
+        # react emoji (custom atau fallback)
+        try:
+            emoji_id = get_emoji_for_streak(guild_id, pair["current_streak"])
+            e = self.bot.get_emoji(emoji_id) if emoji_id else None
+            await message.add_reaction(e or "🔥")
+        except discord.Forbidden:
+            pass
+
+
+    # -------------------------------------------------
+    # Listener 2: kalau target react 🔥 -> streak naik
+    # -------------------------------------------------
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        """
-        - Dipanggil tiap kali ada reaction masuk.
-        - Dicek:
-          - bukan bot
-          - guild + channel = channel streak
-          - emoji = 🔥
-          - message content diawali 'api' dan mention 1 user
-          - reactor = user yang di-mention (bukan author)
-        - Kalau semua valid -> apply_streak_update(is_restore=False)
-        """
         if payload.user_id == self.bot.user.id:
             return
 
@@ -165,7 +284,7 @@ class StreakCog(commands.Cog):
         if member is None or member.bot:
             return
 
-        # cek emoji (unicode api)
+        # hanya api unicode
         if payload.emoji.name != "🔥":
             return
 
@@ -175,7 +294,7 @@ class StreakCog(commands.Cog):
 
         cmd_channel_id = settings.get("command_channel_id")
         if cmd_channel_id is None or payload.channel_id != cmd_channel_id:
-            return  # hanya proses reaction di channel streak
+            return
 
         channel = guild.get_channel(payload.channel_id)
         if channel is None:
@@ -183,55 +302,42 @@ class StreakCog(commands.Cog):
 
         try:
             message = await channel.fetch_message(payload.message_id)
-        except (discord.NotFound, discord.Forbidden):
+        except:
             return
 
-        # pastikan pesan bukan dari bot lain
         if message.author.bot or message.guild is None:
             return
 
-        content = message.content.strip()
-        parts = content.split()
+        parts = message.content.strip().split()
         if len(parts) < 2 or parts[0].lower() != "api":
             return
 
-        # cek mention di pesan
         mentions = [m for m in message.mentions if not m.bot and m.id != message.author.id]
         if len(mentions) != 1:
             return
 
         target = mentions[0]
 
-        # React HARUS datang dari user yang di-mention
         if member.id != target.id:
             return
 
-        # Tidak perlu naikkan streak kalau author sendiri yang react,
-        # sudah difilter di atas (member == target).
         guild_id = guild.id
 
-        # cek pasangan
         pair = get_streak_pair(guild_id, message.author.id, target.id)
         if not pair or pair["status"] != "ACTIVE":
-            return  # diam saja, tidak ada pasangan aktif
+            return
 
-        # apply update normal (bukan restore)
         result = apply_streak_update(
             guild_id=guild_id,
             user1_id=pair["user1_id"],
             user2_id=pair["user2_id"],
             channel_id=payload.channel_id,
             message_id=payload.message_id,
-            author_id=member.id,  # yang merespon api
+            author_id=member.id,
             is_restore=False,
         )
 
         if not result["ok"]:
-            # beberapa reason:
-            # - already_updated_today: sudah pernah tercatat hari ini
-            # - restore_quota_reached: cuma buat restore
-            # ...dst.
-            # di sini kita diam saja biar nggak spam
             return
 
         new_pair = result["pair"]
@@ -241,10 +347,7 @@ class StreakCog(commands.Cog):
         emoji = get_display_emoji(self.bot, guild_id, streak_now)
         _, tier = get_flame_tier(streak_now)
 
-
-        # Kirim info singkat di channel
-        desc_channel = channel  # alias biar pendek
-
+        # Message to streak channel
         if broken:
             text = (
                 f"{emoji} Streak {format_pair_mention(new_pair)} **PUTUS** "
@@ -258,32 +361,57 @@ class StreakCog(commands.Cog):
                 f"**{before}** ➜ **{streak_now}** ({tier})"
             )
 
-
         try:
-            await desc_channel.send(text)
-        except discord.Forbidden:
+            await channel.send(text)
+        except:
             pass
 
-        # Kirim log ke log_channel kalau diset
+        # LOG CHANNEL → dengan card grafik 🔥
         log_channel_id = settings.get("log_channel_id")
-        if log_channel_id:
-            log_channel = guild.get_channel(log_channel_id)
-            if log_channel:
-                embed = discord.Embed(
-                    title=f"{emoji} Streak Update",
-                    description=format_pair_mention(new_pair),
-                    colour=discord.Colour.orange(),
-                )
-                embed.add_field(name="Sebelum", value=str(before))
-                embed.add_field(name="Sesudah", value=str(streak_now))
-                embed.add_field(name="Tier", value=tier, inline=False)
-                if result["delta_days"] is not None:
-                    embed.set_footer(text=f"Gap hari: {result['delta_days']}")
-                try:
-                    await log_channel.send(embed=embed)
-                except discord.Forbidden:
-                    pass
+        if not log_channel_id:
+            return
 
+        log_channel = guild.get_channel(log_channel_id)
+        if not log_channel:
+            return
+
+        # === Build card image ===
+        pfp1 = message.author.display_avatar.with_size(512).with_format("png").url
+        pfp2 = target.display_avatar.with_size(512).with_format("png").url
+
+        emoji_id = get_emoji_for_streak(guild_id, streak_now)
+        emoji_url = None
+        if emoji_id:
+            e = self.bot.get_emoji(emoji_id)
+            if e and hasattr(e, "url"):
+                emoji_url = e.url
+
+        card = await make_streak_card(
+            pfp1=pfp1,
+            pfp2=pfp2,
+            emoji_url=emoji_url,
+            streak=streak_now
+        )
+
+        file = discord.File(card, filename="streak.png")
+
+        embed = discord.Embed(
+            title=f"{emoji} Streak Update",
+            description=format_pair_mention(new_pair),
+            colour=discord.Colour.orange(),
+        )
+        embed.set_image(url="attachment://streak.png")
+        embed.add_field(name="Sebelum", value=str(before))
+        embed.add_field(name="Sesudah", value=str(streak_now))
+        embed.add_field(name="Tier", value=tier, inline=False)
+
+        if result["delta_days"] is not None:
+            embed.set_footer(text=f"Gap hari: {result['delta_days']}")
+
+        try:
+            await log_channel.send(file=file, embed=embed)
+        except:
+            pass
     # =========================
     #  COMMAND GROUP !streak
     # =========================
