@@ -335,11 +335,12 @@ class StreakCog(commands.Cog):
                 emoji_url = e.url
 
         card = await make_streak_card(
-            pfp1=pfp1,
-            pfp2=pfp2,
+            pfp1_url=pfp1,
+            pfp2_url=pfp2,
             emoji_url=emoji_url,
             streak=streak_now
         )
+
 
         file = discord.File(card, filename="streak.png")
 
