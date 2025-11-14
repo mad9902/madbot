@@ -16,12 +16,19 @@ from database import (
     set_tier_emoji,
     delete_tier_emoji,
     get_emoji_for_streak,
+    mark_needs_restore,
+    clear_restore_flags,
+    kill_streak_due_to_deadline,
+    auto_process_gap,
+    ensure_restore_cycle
+
 )
 
 import io
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import random
+from datetime import datetime, date, timedelta
 # =========================
 #  Helper kecil
 # =========================
@@ -180,6 +187,50 @@ class StreakCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def send_warning_near_dead(self, guild, pair):
+        """Kirim embed warning ke log channel."""
+        settings = get_streak_settings(guild.id)
+        if not settings or not settings.get("log_channel_id"):
+            return
+
+        log_channel = guild.get_channel(settings["log_channel_id"])
+        if not log_channel:
+            return
+
+        embed = discord.Embed(
+            title="⚠️ Streak Hampir Mati!",
+            description=(
+                f"{format_pair_mention(pair)}\n"
+                f"Streak kalian **bolong 1 hari**.\n"
+                f"Aktifkan kembali dengan `api @user` sebelum:\n"
+                f"**{pair['restore_deadline']}**"
+            ),
+            colour=discord.Colour.gold()
+        )
+        embed.set_footer(text="Jika tidak, besok streak mati total 💀")
+        await log_channel.send(embed=embed)
+
+    async def send_streak_dead(self, guild, pair):
+        settings = get_streak_settings(guild.id)
+        if not settings or not settings.get("log_channel_id"):
+            return
+
+        log_channel = guild.get_channel(settings["log_channel_id"])
+        if not log_channel:
+            return
+
+        embed = discord.Embed(
+            title="💀 Streak Mati Total",
+            description=(
+                f"{format_pair_mention(pair)}\n"
+                f"Tidak menyalakan api sampai deadline.\n"
+                f"Streak telah **putus permanen**."
+            ),
+            colour=discord.Colour.red()
+        )
+        await log_channel.send(embed=embed)
+
+
     # ---------------------------------------------
     # Listener 1: detect "api @user" di channel streak
     # ---------------------------------------------
@@ -219,6 +270,53 @@ class StreakCog(commands.Cog):
         target = mentions[0]
 
         pair = get_streak_pair(guild_id, message.author.id, target.id)
+
+        # ★ AUTO GAP PROCESSING
+        pair = auto_process_gap(pair)
+
+        # Jika baru masuk mode restore (delta = 1)
+        # === Warning logic masuk mode restore ===
+        if pair and pair.get("needs_restore", 0) == 1:
+            last = pair.get("last_update_date")
+            today = date.today()
+
+            # parse tanggal string -> date
+            if isinstance(last, str):
+                try:
+                    last = datetime.strptime(last, "%Y-%m-%d").date()
+                except:
+                    last = today
+
+            delta = (today - last).days
+
+            if delta == 1:
+                await self.send_warning_near_dead(message.guild, pair)
+
+
+        if not pair:
+            await message.channel.send(
+                f"{message.author.mention}, pasangan streak ini tidak valid lagi."
+            )
+            return
+
+        # ★ Jika streak sudah mati karena lewat deadline
+        if pair["status"] == "BROKEN":
+            await self.send_streak_dead(message.guild, pair)
+            await message.channel.send(
+                f"💀 Streak kalian sudah mati karena tidak menyalakan api sampai deadline.\n"
+                f"Mulai ulang dengan `mstreak request`."
+            )
+            return
+
+        # ★ mode needs_restore, bot tetap react tapi hanya memberi peringatan
+        if pair["needs_restore"] == 1:
+            await message.add_reaction("⚠️")
+            await message.channel.send(
+                f"⚠️ {message.author.mention}, pasanganmu **butuh restore**.\n"
+                f"Pasanganmu harus react 🔥 untuk memulihkan streak sebelum `{pair['restore_deadline']}`."
+            )
+            return
+
         if not pair:
             await message.channel.send(
                 f"{message.author.mention}, kamu belum punya pasangan streak dengan {target.mention}.\n"
@@ -297,9 +395,85 @@ class StreakCog(commands.Cog):
         guild_id = guild.id
 
         pair = get_streak_pair(guild_id, message.author.id, target.id)
-        if not pair or pair["status"] != "ACTIVE":
+
+        if not pair:
             return
 
+        # ★ AUTO GAP PROCESSING (diproses hanya untuk pengecekan, tidak overwrite pair)
+        gap_check = auto_process_gap(pair)
+
+        # trigger warning jika baru masuk mode restore
+        if gap_check.get("needs_restore", 0) == 1:
+            last = gap_check.get("last_update_date")
+            if last:
+                last_str = str(last).split(" ")[0]
+                if last_str != str(date.today()):
+                    await self.send_warning_near_dead(guild, gap_check)
+
+        if not gap_check:
+            return
+
+        pair = gap_check
+
+
+        # ★ Jika streak sudah mati
+        if pair["status"] == "BROKEN":
+            await self.send_streak_dead(guild, pair)
+            await channel.send(
+                f"💀 Streak kalian sudah mati karena melewati batas restore."
+            )
+            return
+
+        # ==========================================
+        # ★ CASE 1 — pasangan sedang butuh RESTORE
+        # ==========================================
+        if pair.get("needs_restore", 0) == 1:
+
+            # Cek deadline restore
+            if pair.get("restore_deadline"):
+                dead = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
+                if date.today() > dead:
+                    kill_streak_due_to_deadline(pair["id"])
+                    await channel.send("💀 Terlambat restore → streak mati total.")
+                    return
+
+            # Jalankan restore
+            # RESTORE MODE
+            result = apply_streak_update(
+                guild_id=guild_id,
+                user1_id=pair["user1_id"],
+                user2_id=pair["user2_id"],
+                channel_id=payload.channel_id,
+                message_id=payload.message_id,
+                author_id=member.id,
+                is_restore=True
+            )
+
+            if not result["ok"]:
+                await channel.send("❌ Gagal restore streak.")
+                return
+
+            # sukses restore → clear flags
+            clear_restore_flags(pair["id"])
+
+            new_pair = result["pair"]
+            emoji = get_display_emoji(self.bot, guild_id, new_pair["current_streak"])
+
+            await channel.send(
+                f"{emoji} **RESTORE BERHASIL!** Streak kembali menyala 🔥 "
+                f"(hari terakhir restore: {result['delta_days']})."
+            )
+            return
+
+
+
+        # ========================
+        # CASE NORMAL UPDATE MODE
+        # ========================
+        if pair["status"] != "ACTIVE":
+            return
+
+        # NORMAL UPDATE
         result = apply_streak_update(
             guild_id=guild_id,
             user1_id=pair["user1_id"],
@@ -409,6 +583,20 @@ class StreakCog(commands.Cog):
 
         guild_id = ctx.guild.id
         pair = get_streak_pair(guild_id, ctx.author.id, member.id)
+
+        # ★ APPLY AUTO GAP SYSTEM
+        pair = auto_process_gap(pair)
+
+        if not pair:
+            return await ctx.send("Data pasangan tidak ditemukan.")
+
+        # ★ Jika streak sudah mati karena lewat deadline
+        if pair["status"] == "BROKEN":
+            return await ctx.send(
+                "💀 Streak pasangan ini sudah mati karena melewati batas restore.\n"
+                "Mulai ulang dengan `mstreak request @user`."
+            )
+
         if not pair:
             return await ctx.send("Kamu belum punya pasangan streak dengan orang itu.")
 
@@ -426,6 +614,13 @@ class StreakCog(commands.Cog):
         embed.add_field(name="Streak Sekarang", value=str(pair["current_streak"]), inline=True)
         embed.add_field(name="Max Streak", value=str(pair["max_streak"]), inline=True)
         embed.add_field(name="Tier", value=tier, inline=True)
+        # ★ Informasi jika sedang butuh restore
+        if pair.get("needs_restore", 0) == 1:
+            embed.add_field(
+                name="⚠️ Status Restore",
+                value=f"Butuh restore sebelum `{pair['restore_deadline']}`",
+                inline=False
+            )
         if pair["last_update_date"]:
             embed.set_footer(text=f"Terakhir nyala: {pair['last_update_date']}")
 
@@ -503,16 +698,35 @@ class StreakCog(commands.Cog):
     # ----- mstreak restore @user -----
 
     @streak_group.command(name="restore")
-    async def streak_restore(self, ctx: commands.Context, member: discord.Member):
-        """
-        Restore streak kalau bolong 1 hari (gap = 2 hari),
-        dengan limit 5x per bulan per pasangan (di-handle di database.py).
-        """
+    async def streak_restore(self, ctx, member: discord.Member):
         guild_id = ctx.guild.id
-        pair = get_streak_pair(guild_id, ctx.author.id, member.id)
-        if not pair or pair["status"] != "ACTIVE":
-            return await ctx.send("Kamu belum punya pasangan streak aktif dengan orang itu.")
 
+        pair = get_streak_pair(guild_id, ctx.author.id, member.id)
+
+        # ★ AUTO GAP SYSTEM
+        pair = auto_process_gap(pair)
+
+        if not pair:
+            return await ctx.send("Pasangan streak tidak ditemukan.")
+
+        # ★ Sudah mati → tidak bisa restore
+        if pair["status"] == "BROKEN":
+            return await ctx.send(
+                "💀 Terlambat restore. Streak sudah mati total."
+            )
+
+        if pair["status"] != "ACTIVE":
+            return await ctx.send(
+                f"Pasangan streak belum ACTIVE (status: `{pair['status']}`)."
+            )
+
+        # ★ Tidak butuh restore
+        if pair.get("needs_restore", 0) != 1:
+            return await ctx.send(
+                "⚠️ Pasangan ini tidak membutuhkan restore (gap hari bukan 2)."
+            )
+        
+        # ★ APPLY RESTORE
         result = apply_streak_update(
             guild_id=guild_id,
             user1_id=pair["user1_id"],
@@ -524,27 +738,17 @@ class StreakCog(commands.Cog):
         )
 
         if not result["ok"]:
-            reason = result["reason"]
-            if reason == "already_updated_today":
-                msg = "Hari ini sudah pernah dihitung untuk streak ini."
-            elif reason == "restore_quota_reached":
-                msg = "Jatah restore bulan ini sudah habis (max 5x per pasangan)."
-            elif reason == "pair_not_active":
-                msg = "Pasangan streak belum ACTIVE."
-            elif reason == "pair_not_found":
-                msg = "Pasangan streak tidak ditemukan."
-            else:
-                msg = f"Gagal restore streak ({reason})."
-            return await ctx.send(msg)
+            return await ctx.send(f"Gagal restore ({result['reason']}).")
+
+        # ★ CLEAR RESTORE FLAGS
+        clear_restore_flags(pair["id"])
 
         new_pair = result["pair"]
         emoji = get_display_emoji(self.bot, guild_id, new_pair["current_streak"])
-        _, tier = get_flame_tier(new_pair["current_streak"])
-
 
         await ctx.send(
             f"{emoji} Streak {format_pair_mention(new_pair)} berhasil di-**RESTORE** "
-            f"menjadi **{new_pair['current_streak']}** (gap hari: {result['delta_days']})."
+            f"menjadi **{new_pair['current_streak']}** (gap: {result['delta_days']})."
         )
 
     # ----- mstreak top -----

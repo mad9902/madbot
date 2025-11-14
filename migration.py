@@ -306,10 +306,10 @@ def migrate(db):
             initiator_id BIGINT NOT NULL,
             status ENUM('PENDING','ACTIVE','DENIED','BROKEN')
                 NOT NULL DEFAULT 'PENDING',
-            current_streak INT NOT NULL DEFAULT 0,   -- streak hari ini (dipakai untuk warna api)
-            max_streak INT NOT NULL DEFAULT 0,       -- rekor tertinggi (opsional buat display ☁️)
-            total_updates INT NOT NULL DEFAULT 0,    -- total kali nyala (opsional statistik)
-            last_update_date DATE NULL,              -- kapan terakhir nyala
+            current_streak INT NOT NULL DEFAULT 0,
+            max_streak INT NOT NULL DEFAULT 0,
+            total_updates INT NOT NULL DEFAULT 0,
+            last_update_date DATE NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ON UPDATE CURRENT_TIMESTAMP,
@@ -323,9 +323,9 @@ def migrate(db):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS streak_settings (
             guild_id BIGINT NOT NULL PRIMARY KEY,
-            command_channel_id BIGINT DEFAULT NULL,  -- #・🔥・streak
-            log_channel_id BIGINT DEFAULT NULL,      -- #・🔥・streaks
-            auto_update BOOLEAN NOT NULL DEFAULT TRUE,  -- true = cukup reply/mention partner
+            command_channel_id BIGINT DEFAULT NULL,
+            log_channel_id BIGINT DEFAULT NULL,
+            auto_update BOOLEAN NOT NULL DEFAULT TRUE,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ON UPDATE CURRENT_TIMESTAMP
         );
@@ -347,6 +347,81 @@ def migrate(db):
             INDEX idx_guild_created (guild_id, created_at)
         );
     """)
+
+    # --- Tambahan kolom restore system ---
+    # Kolom: needs_restore
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME='streak_pairs'
+          AND COLUMN_NAME='needs_restore';
+    """)
+    exists = cursor.fetchone()[0] == 1
+    if not exists:
+        cursor.execute("""
+            ALTER TABLE streak_pairs
+                ADD COLUMN needs_restore TINYINT(1) NOT NULL DEFAULT 0;
+        """)
+
+    # Kolom: restore_deadline
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME='streak_pairs'
+          AND COLUMN_NAME='restore_deadline';
+    """)
+    exists = cursor.fetchone()[0] == 1
+    if not exists:
+        cursor.execute("""
+            ALTER TABLE streak_pairs
+                ADD COLUMN restore_deadline DATE NULL;
+        """)
+
+    # Kolom: restore_used_this_cycle
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME='streak_pairs'
+          AND COLUMN_NAME='restore_used_this_cycle';
+    """)
+    exists = cursor.fetchone()[0] == 1
+    if not exists:
+        cursor.execute("""
+            ALTER TABLE streak_pairs
+                ADD COLUMN restore_used_this_cycle TINYINT(1) NOT NULL DEFAULT 0;
+        """)
+
+    # --- Tambahan kolom per-bulan (reset restore tiap bulan) ---
+    # Kolom: restore_month
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME='streak_pairs'
+          AND COLUMN_NAME='restore_month';
+    """)
+    exists = cursor.fetchone()[0] == 1
+    if not exists:
+        cursor.execute("""
+            ALTER TABLE streak_pairs
+                ADD COLUMN restore_month INT DEFAULT NULL;
+        """)
+
+    # Kolom: restore_year
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME='streak_pairs'
+          AND COLUMN_NAME='restore_year';
+    """)
+    exists = cursor.fetchone()[0] == 1
+    if not exists:
+        cursor.execute("""
+            ALTER TABLE streak_pairs
+                ADD COLUMN restore_year INT DEFAULT NULL;
+        """)
+
+
+
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS streak_emoji_map (

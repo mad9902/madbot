@@ -12,6 +12,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+
 def retry_database(retries=5, delay=3):
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -1193,10 +1195,13 @@ def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, au
             current = before + 1
 
         elif delta_days == 2:
-            # boleh restore kalau is_restore True dan quota masih ada
             if is_restore:
-                used = _get_monthly_restore_count(cursor, pair["id"], today.year, today.month)
-                if used >= 5:
+
+                # --- Reset restore cycle jika perlu ---
+                pair = ensure_restore_cycle(pair)
+
+                # batas restore 5x / bulan
+                if pair["restore_used_this_cycle"] >= 5:
                     cursor.close()
                     db.close()
                     return {
@@ -1209,10 +1214,21 @@ def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, au
                         "broken": True,
                         "delta_days": delta_days,
                     }
+
                 current = before + 1
                 action_type = "RESTORE"
+
+                # increment restore count
+                cursor2 = db.cursor()
+                cursor2.execute("""
+                    UPDATE streak_pairs
+                    SET restore_used_this_cycle = restore_used_this_cycle + 1
+                    WHERE id = %s
+                """, (pair["id"],))
+                db.commit()
+                cursor2.close()
+
             else:
-                # tidak pakai restore → putus, mulai 1 lagi
                 current = 1
                 broken = True
 
@@ -1269,6 +1285,191 @@ def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, au
         "broken": broken,
         "delta_days": delta_days,
     }
+
+def mark_needs_restore(pair_id, deadline_date):
+    """
+    Tandai bahwa pair ini butuh restore (hari kedua tidak api).
+    """
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        UPDATE streak_pairs
+        SET needs_restore = 1,
+            restore_deadline = %s
+        WHERE id = %s
+    """, (deadline_date, pair_id))
+    db.commit()
+    cursor.close()
+    db.close()
+
+
+def clear_restore_flags(pair_id):
+    """
+    Reset flags restore ketika pasangan berhasil menyalakan api di hari deadline.
+    Reset cycle jika ini adalah restore bulan baru.
+    """
+    today = date.today()
+    cur_month = today.month
+    cur_year = today.year
+
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        UPDATE streak_pairs
+        SET needs_restore = 0,
+            restore_deadline = NULL,
+            restore_used_this_cycle = 0,
+            restore_month = %s,
+            restore_year = %s
+        WHERE id = %s
+    """, (cur_month, cur_year, pair_id))
+    db.commit()
+    cursor.close()
+    db.close()
+
+
+def kill_streak_due_to_deadline(pair_id):
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        UPDATE streak_pairs
+        SET current_streak = 0,
+            needs_restore = 0,
+            restore_deadline = NULL,
+            restore_used_this_cycle = 0,
+            restore_month = NULL,
+            restore_year = NULL,
+            status = 'BROKEN'
+        WHERE id = %s
+    """, (pair_id,))
+    db.commit()
+    cursor.close()
+    db.close()
+
+def auto_process_gap(pair):
+    """
+    Evaluasi gap hari dan tentukan apakah perlu restore
+    atau apakah streak otomatis putus.
+    Dipanggil SETIAP kali pair diakses (lazy evaluation).
+    """
+    if not pair:
+        return pair
+
+    pair = ensure_restore_cycle(pair)
+
+
+    last = pair["last_update_date"]
+    needs_restore = pair.get("needs_restore", 0)
+    deadline = pair.get("restore_deadline", None)
+
+    today = date.today()
+
+    # Convert string → date
+    if isinstance(last, str):
+        last = datetime.strptime(last, "%Y-%m-%d").date()
+
+    # Jika belum pernah update sebelumnya
+    if last is None:
+        return pair
+
+    delta = (today - last).days
+
+    # CASE A — Hari ini masih sama → tidak ada perubahan
+    if delta <= 0:
+        return pair
+
+    # CASE B — Sudah tanda restore sebelumnya
+    if needs_restore == 1:
+        # cek deadline apakah lewat
+        if deadline:
+            if isinstance(deadline, str):
+                deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
+
+            # lewat deadline → streak mati
+            if today > deadline:
+                kill_streak_due_to_deadline(pair["id"])
+                return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
+
+        pair = ensure_restore_cycle(pair)
+        return pair
+
+
+    # CASE C — Baru bolong 1 hari → tandai restore
+    if delta == 1:
+        deadline_date = today + timedelta(days=1)
+        mark_needs_restore(pair["id"], deadline_date.strftime("%Y-%m-%d"))
+        pair["needs_restore"] = 1
+        pair["restore_deadline"] = deadline_date.strftime("%Y-%m-%d")
+
+        # Tambahan penting
+        pair = ensure_restore_cycle(pair)
+
+        return pair
+
+
+    # CASE D — Bolong ≥ 2 hari → langsung putus (tanpa restore)
+    if delta >= 2:
+        kill_streak_due_to_deadline(pair["id"])
+        return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
+
+    return pair
+
+def ensure_restore_cycle(pair):
+    """
+    Pastikan bahwa restore_used_this_cycle selaras dengan bulan & tahun saat ini.
+    Jika bulan atau tahun sudah berubah → reset counter ke 0.
+    """
+    if not pair:
+        return pair
+
+    today = date.today()
+    cur_month = today.month
+    cur_year = today.year
+
+    stored_month = pair.get("restore_month")
+    stored_year = pair.get("restore_year")
+
+    # Jika belum pernah diset → set sekarang
+    if stored_month is None or stored_year is None:
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE streak_pairs
+            SET restore_month = %s,
+                restore_year = %s,
+                restore_used_this_cycle = 0
+            WHERE id = %s
+        """, (cur_month, cur_year, pair["id"]))
+        db.commit()
+        cursor.close()
+        db.close()
+
+        pair["restore_month"] = cur_month
+        pair["restore_year"] = cur_year
+        pair["restore_used_this_cycle"] = 0
+        return pair
+
+    # Jika bulan berbeda → reset counter
+    if stored_month != cur_month or stored_year != cur_year:
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE streak_pairs
+            SET restore_month = %s,
+                restore_year = %s,
+                restore_used_this_cycle = 0
+            WHERE id = %s
+        """, (cur_month, cur_year, pair["id"]))
+        db.commit()
+        cursor.close()
+        db.close()
+
+        pair["restore_month"] = cur_month
+        pair["restore_year"] = cur_year
+        pair["restore_used_this_cycle"] = 0
+
+    return pair
+
 
 def set_tier_emoji(guild_id, min_streak, emoji_id):
     """
