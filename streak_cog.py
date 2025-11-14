@@ -713,7 +713,7 @@ class StreakCog(commands.Cog):
             return str(obj)
         return f"<:e:{emoji_id}>"
     
-    @commands.group(name="emoji", invoke_without_command=True)
+    @commands.group(name="tiers", invoke_without_command=True)
     async def emoji_group(self, ctx: commands.Context):
         """
         Pengaturan emoji tier:
