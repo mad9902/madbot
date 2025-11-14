@@ -713,27 +713,33 @@ class StreakCog(commands.Cog):
             return str(obj)
         return f"<:e:{emoji_id}>"
     
-    @commands.group(name="tiers", invoke_without_command=True)
-    async def emoji_group(self, ctx: commands.Context):
+    # =========================
+    #  SUBCOMMAND GROUP: streak tiers
+    # =========================
+
+    @streak_group.group(name="tiers", invoke_without_command=True)
+    async def tiers_group(self, ctx: commands.Context):
         """
         Pengaturan emoji tier:
-        - streak emoji set <min_streak> <emoji>
-        - streak emoji delete <min_streak>
-        - streak emoji list
+        - streak tiers set <min_streak> <emoji>
+        - streak tiers delete <min_streak>
+        - streak tiers list
         """
-        await ctx.send("Gunakan:\n"
-                       "`streak emoji set <min_streak> <emoji>`\n"
-                       "`streak emoji delete <min_streak>`\n"
-                       "`streak emoji list`")
+        await ctx.send(
+            "Gunakan:\n"
+            "`streak tiers set <min_streak> <emoji>`\n"
+            "`streak tiers delete <min_streak>`\n"
+            "`streak tiers list`"
+        )
 
     # ---- SET EMOJI TIER ----
-    @emoji_group.command(name="set")
-    async def emoji_set(self, ctx: commands.Context, min_streak: int, emoji: str):
+    @tiers_group.command(name="set")
+    async def tiers_set(self, ctx: commands.Context, min_streak: int, emoji: str):
         """
         Atur emoji custom untuk tier tertentu.
         Contoh:
-            streak emoji set 5 <:flame:1234567890>
-            streak emoji set 100 1234567890
+            streak tiers set 5 <:flame:1234567890>
+            streak tiers set 100 1234567890
         """
         DEV_ID = 416234104317804544
         is_admin = ctx.author.guild_permissions.manage_guild
@@ -742,9 +748,8 @@ class StreakCog(commands.Cog):
         if not (is_admin or is_dev):
             return await ctx.send("❌ Kamu tidak punya izin untuk mengatur emoji.")
 
-        # Extract emoji ID
-        emoji_id = None
         import re
+        emoji_id = None
 
         # Format <:name:id> atau <a:name:id>
         m = re.match(r"<a?:\w+:(\d+)>", emoji)
@@ -753,7 +758,7 @@ class StreakCog(commands.Cog):
         elif emoji.isdigit():
             emoji_id = int(emoji)
         else:
-            return await ctx.send("❌ Emoji harus custom emoji (bukan unicode).")
+            return await ctx.send("❌ Emoji harus custom emoji server (bukan unicode).")
 
         set_tier_emoji(ctx.guild.id, min_streak, emoji_id)
 
@@ -763,8 +768,8 @@ class StreakCog(commands.Cog):
         await ctx.send(f"✅ Emoji untuk streak **≥ {min_streak}** di-set ke {disp}")
 
     # ---- DELETE EMOJI TIER ----
-    @emoji_group.command(name="delete")
-    async def emoji_delete(self, ctx: commands.Context, min_streak: int):
+    @tiers_group.command(name="delete")
+    async def tiers_delete(self, ctx: commands.Context, min_streak: int):
         """
         Hapus emoji tier tertentu.
         """
@@ -779,8 +784,8 @@ class StreakCog(commands.Cog):
         await ctx.send(f"🗑️ Emoji untuk tier streak **≥ {min_streak}** dihapus.")
 
     # ---- LIST EMOJI TIER ----
-    @emoji_group.command(name="list")
-    async def emoji_list(self, ctx: commands.Context):
+    @tiers_group.command(name="list")
+    async def tiers_list(self, ctx: commands.Context):
         """
         Lihat semua emoji tier yang sudah di-set.
         """
@@ -796,7 +801,6 @@ class StreakCog(commands.Cog):
             lines.append(f"- Streak ≥ **{r['min_streak']}** : {disp}")
 
         await ctx.send("🔥 **Daftar Emoji Tier:**\n" + "\n".join(lines))
-
 
 
 async def setup(bot: commands.Bot):
