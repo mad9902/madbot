@@ -140,7 +140,7 @@ class image_cog(commands.Cog):
         await ctx.send(embed=embed)
 
 
-    @commands.command(name="emoji", help="Download emoji custom dengan ID atau mention")
+    @commands.command(name="emojisteal", help="Download emoji custom dengan ID atau mention")
     async def emoji(self, ctx, emoji_input: str):
         import re
 

@@ -78,7 +78,7 @@ class main_cog(commands.Cog):
         embed.add_field(
             name="🖼️ Image Commands",
             value=(
-                "`emoji <emoji or id>`   - Ambil emoji sebagai gambar\n"
+                "`emojisteal <emoji or id>`   - Ambil emoji sebagai gambar\n"
                 "`sticker <reply or id>` - Ambil stiker sebagai gambar\n"
                 "`avatar <tag optional>` - Ambil avatar user\n"
                 "`upload <image>`        - Upload gambar ke link\n"
