@@ -32,53 +32,71 @@ async def download_image(url: str):
             return Image.open(io.BytesIO(await r.read())).convert("RGBA")
 
 
-async def make_streak_card(pfp1, pfp2, emoji_url, streak):
-    # Canvas
+async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
+    # Canvas size
     W, H = 900, 350
     base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
-    
-    # --- Background with flame pattern ---
-        # --- Big center flame ---
+
+    # --- PANEL BACKGROUND ---
+    panel = Image.new("RGBA", (820, 260), (20, 20, 20, 255))
+    rounded = Image.new("L", panel.size, 0)
+    draw = ImageDraw.Draw(rounded)
+    draw.rounded_rectangle((0, 0, 820, 260), radius=40, fill=255)
+    panel.putalpha(rounded)
+    base.paste(panel, (40, 45), panel)
+
+    # --- HELPER: Circle crop ---
+    def circle(img, size):
+        img = img.resize((size, size))
+        mask = Image.new("L", (size, size), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, size, size), fill=255)
+        out = Image.new("RGBA", (size, size))
+        out.paste(img, (0, 0), mask)
+        return out
+
+    # --- Load PFPs ---
+    p1 = await download_image(pfp1_url)
+    p2 = await download_image(pfp2_url)
+    p1 = circle(p1, 150)
+    p2 = circle(p2, 150)
+
+    # --- Paste PFP Left & Right ---
+    base.alpha_composite(p1, (110, 105))
+    base.alpha_composite(p2, (640, 105))
+
+    # --- Flame (center) ---
     if emoji_url:
-        big = await download_image(emoji_url)
-        big = big.resize((200, 200))
-        base.alpha_composite(big, (350, 60))
+        flame = await download_image(emoji_url)
+        flame = flame.resize((170, 170))
+        base.alpha_composite(flame, (365, 75))
     else:
         draw = ImageDraw.Draw(base)
         try:
-            # Coba pakai font DejaVu di Linux container
-            font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                160
-            )
-        except OSError:
-            # Fallback kalau font nggak ada
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 160)
+        except:
             font = ImageFont.load_default()
-        draw.text((450, 160), "🔥", font=font, fill="white", anchor="mm")
+        draw.text((450, 155), "🔥", anchor="mm", font=font, fill="white")
 
     # --- Streak Number ---
     try:
-        font_num = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            130
-        )
-    except OSError:
+        font_num = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120)
+    except:
         font_num = ImageFont.load_default()
 
     ImageDraw.Draw(base).text(
-        (450, 255),
+        (450, 250),
         str(streak),
-        fill="white",
         font=font_num,
+        fill="white",
         anchor="mm"
     )
 
-
-    # Return as file
-    buffer = io.BytesIO()
-    base.save(buffer, format="PNG")
-    buffer.seek(0)
-    return buffer
+    # Output → BytesIO
+    buf = io.BytesIO()
+    base.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 def get_display_emoji(bot, guild_id, streak):
     """Ambil emoji custom dari DB; kalau tidak ada → fallback tier default."""
