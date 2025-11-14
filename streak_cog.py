@@ -33,76 +33,110 @@ async def download_image(url: str):
 
 
 async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
-
-    # Canvas size
+    # Canvas
     W, H = 900, 350
     base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
 
     # --- PANEL BACKGROUND ---
     panel = Image.new("RGBA", (820, 260), (20, 20, 20, 255))
     rounded_mask = Image.new("L", panel.size, 0)
-    mask_draw = ImageDraw.Draw(rounded_mask)
-    mask_draw.rounded_rectangle((0, 0, 820, 260), radius=40, fill=255)
+    m = ImageDraw.Draw(rounded_mask)
+    m.rounded_rectangle((0, 0, 820, 260), radius=40, fill=255)
     panel.putalpha(rounded_mask)
     base.paste(panel, (40, 45), panel)
 
-    # --- HELPER: Circle crop ---
+    # PANEL AREA FOR FX
+    panel_x, panel_y = 40, 45
+
+    # --- add small background flames (GK-style) ---
+    small_flames = random.randint(4, 7)
+    flame_positions = []
+
+    for _ in range(small_flames):
+        # random size 40–80px
+        size = random.randint(40, 80)
+        opacity = random.randint(30, 70)
+
+        # choose random X region left/mid-right, avoid center
+        rx = random.choice([
+            random.randint(panel_x + 40, panel_x + 220),
+            random.randint(panel_x + 500, panel_x + 760)
+        ])
+        ry = random.randint(panel_y + 40, panel_y + 200)
+
+        # tiny flame from emoji or fallback
+        if emoji_url:
+            f = await download_image(emoji_url)
+            f = f.resize((size, size))
+        else:
+            f = Image.new("RGBA", (size, size))
+            d = ImageDraw.Draw(f)
+            try:
+                ff = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
+            except:
+                ff = ImageFont.load_default()
+            d.text((size//2, size//2), "🔥", anchor="mm", fill=(255,255,255,255), font=ff)
+
+        # reduce alpha
+        f = f.copy()
+        alpha = f.split()[3]
+        alpha = alpha.point(lambda p: int(p * (opacity/255)))
+        f.putalpha(alpha)
+
+        # light blur to soften
+        f = f.filter(ImageFilter.GaussianBlur(1.2))
+
+        base.alpha_composite(f, (rx, ry))
+
+    # --- HELPER: circle crop ---
     def circle(img, size):
         img = img.resize((size, size))
         mask = Image.new("L", (size, size), 0)
         d = ImageDraw.Draw(mask)
         d.ellipse((0, 0, size, size), fill=255)
-
         out = Image.new("RGBA", (size, size))
         out.paste(img, (0, 0), mask)
         return out
 
-    # --- Load PFPs ---
-    p1 = await download_image(pfp1_url)
-    p2 = await download_image(pfp2_url)
-    p1 = circle(p1, 150)
-    p2 = circle(p2, 150)
+    # --- Load avatars ---
+    p1 = circle(await download_image(pfp1_url), 150)
+    p2 = circle(await download_image(pfp2_url), 150)
 
-    # --- Paste PFP Left & Right ---
-    base.alpha_composite(p1, (110, 105))    # left
-    base.alpha_composite(p2, (640, 105))    # right
+    base.alpha_composite(p1, (110, 105))
+    base.alpha_composite(p2, (640, 105))
 
-    # --- Flame (center) ---
+    # --- flame center (move slightly downward) ---
+    center_flame_y = 90  # sebelumnya 75 (lebih turun biar tidak nabrak)
     if emoji_url:
         flame = await download_image(emoji_url)
         flame = flame.resize((170, 170))
-        base.alpha_composite(flame, (365, 75))
+        base.alpha_composite(flame, (365, center_flame_y))
     else:
-        flame_draw = ImageDraw.Draw(base)
+        d = ImageDraw.Draw(base)
         try:
-            flame_font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                160
-            )
+            fnt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 160)
         except:
-            flame_font = ImageFont.load_default()
+            fnt = ImageFont.load_default()
+        d.text((450, center_flame_y+80), "🔥", anchor="mm", font=fnt, fill="white")
 
-        flame_draw.text((450, 155), "🔥", anchor="mm", font=flame_font, fill="white")
-
-    # --- Streak Number ---
+    # --- streak number (move slightly downward) ---
     try:
         font_num = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            120
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 140
         )
     except:
         font_num = ImageFont.load_default()
 
-    number_draw = ImageDraw.Draw(base)
-    number_draw.text(
-        (450, 250),
+    number_y = 275  # sebelumnya 250
+    dnum = ImageDraw.Draw(base)
+    dnum.text(
+        (450, number_y),
         str(streak),
-        font=font_num,
         fill="white",
+        font=font_num,
         anchor="mm"
     )
 
-    # Output → BytesIO
     buf = io.BytesIO()
     base.save(buf, format="PNG")
     buf.seek(0)
