@@ -717,7 +717,7 @@ class StreakCog(commands.Cog):
     #  COMMAND: mstreak tiers ...
     # =========================
 
-    @commands.group(name="tiers", invoke_without_command=True)
+    @streak_group.group(name="tiers", invoke_without_command=True)
     async def tiers(self, ctx: commands.Context):
         await ctx.send(
             "Gunakan:\n"
