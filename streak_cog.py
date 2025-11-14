@@ -730,29 +730,34 @@ class StreakCog(commands.Cog):
     # SET EMOJI TIER
     # -----------------------------
     @tiers.command(name="set")
-    async def tiers_set(self, ctx: commands.Context, min_streak: int):
+    async def tiers_set(self, ctx: commands.Context, min_streak: int, emoji: str):
         """
         mstreak tiers set <min_streak> <emoji>
-        Contoh: mstreak tiers set 10 🔥
-        (cukup kirim emoji custom di message)
+        Cukup kirim emoji custom server atau emoji ID.
         """
-
         DEV_ID = 416234104317804544
         if not (ctx.author.guild_permissions.manage_guild or ctx.author.id == DEV_ID):
             return await ctx.send("❌ Kamu tidak punya izin.")
 
-        # HARUS emoji custom (server emoji)
-        if not ctx.message.emojis:
-            return await ctx.send("❌ Kirim emoji custom server, bukan unicode.")
+        import re
 
-        emoji_obj = ctx.message.emojis[0]
-        emoji_id = emoji_obj.id
+        # --- Ambil ID dari format <:name:id> atau <a:name:id> ---
+        match = re.search(r"<a?:\w+:(\d+)>", emoji)
+        if match:
+            emoji_id = int(match.group(1))
+        # --- Atau user langsung kirim ID ---
+        elif emoji.isdigit():
+            emoji_id = int(emoji)
+        else:
+            return await ctx.send("❌ Kirim emoji custom server (contoh: <:flame:1234567890>)")
 
+        # Simpan ke DB
         set_tier_emoji(ctx.guild.id, min_streak, emoji_id)
 
-        await ctx.send(
-            f"✅ Emoji untuk streak ≥ **{min_streak}** di-set ke {emoji_obj}"
-        )
+        obj = self.bot.get_emoji(emoji_id)
+        disp = str(obj) if obj else f"<:e:{emoji_id}>"
+
+        await ctx.send(f"✅ Emoji untuk streak ≥ **{min_streak}** di-set ke {disp}")
 
     # -----------------------------
     # DELETE EMOJI TIER
