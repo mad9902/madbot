@@ -2,7 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import json
 from dotenv import load_dotenv
 import logging
@@ -824,7 +824,7 @@ def get_all_tracked_users():
     finally:
         close_connection(conn)
 
-def log_event(db, guild_id, user_id, event_type, event_data):
+def log_event_discord(db, guild_id, user_id, event_type, event_data):
     cursor = db.cursor()
     query = """
         INSERT INTO discord_logs (guild_id, user_id, event_type, event_data)
@@ -882,3 +882,390 @@ def get_logs_by_type(guild_id, event_type, limit=10, offset=0):
     cursor.close()
     db.close()
     return results_raw
+
+def _normalize_pair_users(user1_id, user2_id):
+    """
+    Biar pasangan streak unik & konsisten:
+    selalu simpan user1_id < user2_id.
+    """
+    return (user1_id, user2_id) if user1_id <= user2_id else (user2_id, user1_id)
+
+
+def get_streak_pair(guild_id, user1_id, user2_id):
+    """
+    Ambil data pasangan streak (kalau ada).
+    """
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    u1, u2 = _normalize_pair_users(user1_id, user2_id)
+    cursor.execute("""
+        SELECT *
+        FROM streak_pairs
+        WHERE guild_id = %s AND user1_id = %s AND user2_id = %s
+    """, (guild_id, u1, u2))
+
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+    return row
+
+
+def create_streak_pair(guild_id, user1_id, user2_id, initiator_id):
+    """
+    Buat pasangan streak baru dengan status PENDING.
+    Kalau sudah ada, balikin row yang lama.
+    """
+    existing = get_streak_pair(guild_id, user1_id, user2_id)
+    if existing:
+        return existing
+
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    u1, u2 = _normalize_pair_users(user1_id, user2_id)
+    cursor.execute("""
+        INSERT INTO streak_pairs (guild_id, user1_id, user2_id, initiator_id, status)
+        VALUES (%s, %s, %s, %s, 'PENDING')
+    """, (guild_id, u1, u2, initiator_id))
+    db.commit()
+
+    pair_id = cursor.lastrowid
+    cursor.execute("SELECT * FROM streak_pairs WHERE id = %s", (pair_id,))
+    row = cursor.fetchone()
+
+    cursor.close()
+    db.close()
+    return row
+
+
+def set_streak_status(pair_id, status):
+    """
+    Ubah status streak_pairs: PENDING / ACTIVE / DENIED / BROKEN.
+    """
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        UPDATE streak_pairs
+        SET status = %s
+        WHERE id = %s
+    """, (status, pair_id))
+    db.commit()
+    cursor.close()
+    db.close()
+
+
+def get_pending_streak_requests(guild_id, target_user_id=None, limit=20, offset=0):
+    """
+    Ambil daftar request PENDING di satu guild.
+    - Kalau target_user_id = None -> semua pending di guild.
+    - Kalau target_user_id diisi -> hanya yang melibatkan user tsb.
+    """
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    if target_user_id is None:
+        cursor.execute("""
+            SELECT *
+            FROM streak_pairs
+            WHERE guild_id = %s
+              AND status = 'PENDING'
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """, (guild_id, limit, offset))
+    else:
+        cursor.execute("""
+            SELECT *
+            FROM streak_pairs
+            WHERE guild_id = %s
+              AND status = 'PENDING'
+              AND (user1_id = %s OR user2_id = %s)
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """, (guild_id, target_user_id, target_user_id, limit, offset))
+
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return rows
+
+
+
+def get_active_streaks(guild_id, limit=20, offset=0, order_by="current"):
+    """
+    Ambil list pasangan streak aktif untuk command /topstreak.
+    order_by: 'current' atau 'max'
+    """
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    if order_by == "max":
+        order_sql = "max_streak DESC"
+    else:
+        order_sql = "current_streak DESC"
+
+    query = f"""
+        SELECT *
+        FROM streak_pairs
+        WHERE guild_id = %s AND status = 'ACTIVE'
+        ORDER BY {order_sql}, updated_at DESC
+        LIMIT %s OFFSET %s
+    """
+    cursor.execute(query, (guild_id, limit, offset))
+    rows = cursor.fetchall()
+
+    cursor.close()
+    db.close()
+    return rows
+
+
+def get_streak_settings(guild_id):
+    """
+    Ambil pengaturan streak per guild.
+    """
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM streak_settings
+        WHERE guild_id = %s
+    """, (guild_id,))
+    row = cursor.fetchone()
+
+    cursor.close()
+    db.close()
+    return row
+
+
+def upsert_streak_settings(guild_id, command_channel_id=None, log_channel_id=None, auto_update=True):
+    """
+    Simpan / update pengaturan streak.
+    """
+    db = connect_db()
+    cursor = db.cursor()
+
+    cursor.execute("""
+        INSERT INTO streak_settings (guild_id, command_channel_id, log_channel_id, auto_update)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            command_channel_id = VALUES(command_channel_id),
+            log_channel_id = VALUES(log_channel_id),
+            auto_update = VALUES(auto_update),
+            updated_at = CURRENT_TIMESTAMP
+    """, (guild_id, command_channel_id, log_channel_id, auto_update))
+
+    db.commit()
+    cursor.close()
+    db.close()
+
+
+def _first_day_next_month(year, month):
+    if month == 12:
+        return date(year + 1, 1, 1)
+    return date(year, month + 1, 1)
+
+
+def _get_monthly_restore_count(cursor, pair_id, year, month):
+    """
+    Hitung berapa kali RESTORE yang sudah dipakai pair ini
+    di bulan (year, month) ini (pakai cursor yang sama).
+    """
+    start_date = date(year, month, 1)
+    end_date = _first_day_next_month(year, month)
+
+    cursor.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM streak_logs
+        WHERE pair_id = %s
+          AND action_type = 'RESTORE'
+          AND created_at >= %s
+          AND created_at < %s
+    """, (pair_id, start_date, end_date))
+
+    row = cursor.fetchone()
+    return row[0] if row and row[0] is not None else 0
+
+
+def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, author_id,
+                        is_restore=False, today=None):
+    """
+    Core logic update streak (+ restore):
+
+    - Kalau belum pernah nyala -> current_streak = 1
+    - Kalau beda 1 hari  (delta=1) -> current_streak + 1
+    - Kalau beda 2 hari  (delta=2):
+        - kalau is_restore=True dan kuota bulan ini < 5 -> current_streak + 1 (RESTORE)
+        - kalau is_restore=False atau kuota habis -> reset ke 1 (PUTUS)
+    - Kalau beda >=3 hari -> reset ke 1 (PUTUS)
+    - Kalau delta <= 0 (hari sama/ mundur) -> tidak ubah streak
+
+    Return dict:
+    {
+      "ok": bool,
+      "reason": str | None,
+      "pair": row_pair (dict) setelah update,
+      "before": int,
+      "after": int,
+      "action_type": "UPDATE"|"RESTORE"|None,
+      "broken": bool,
+      "delta_days": int|None
+    }
+    """
+    if today is None:
+        today = date.today()
+
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    u1, u2 = _normalize_pair_users(user1_id, user2_id)
+    # Lock baris ini secara halus (MySQL default nggak terlalu strict,
+    # tapi at least kita ambil data paling baru)
+    cursor.execute("""
+        SELECT *
+        FROM streak_pairs
+        WHERE guild_id = %s AND user1_id = %s AND user2_id = %s
+        LIMIT 1
+    """, (guild_id, u1, u2))
+
+    pair = cursor.fetchone()
+    if not pair:
+        cursor.close()
+        db.close()
+        return {
+            "ok": False,
+            "reason": "pair_not_found",
+            "pair": None,
+            "before": 0,
+            "after": 0,
+            "action_type": None,
+            "broken": False,
+            "delta_days": None,
+        }
+
+    if pair["status"] != "ACTIVE":
+        cursor.close()
+        db.close()
+        return {
+            "ok": False,
+            "reason": "pair_not_active",
+            "pair": pair,
+            "before": pair.get("current_streak", 0),
+            "after": pair.get("current_streak", 0),
+            "action_type": None,
+            "broken": False,
+            "delta_days": None,
+        }
+
+    last_date = pair["last_update_date"]
+    current = pair["current_streak"] or 0
+    before = current
+    broken = False
+    action_type = "UPDATE"
+    delta_days = None
+
+    if last_date is None:
+        # pertama kali nyala
+        current = 1
+    else:
+        if isinstance(last_date, datetime):
+            last_date = last_date.date()
+
+        delta_days = (today - last_date).days
+
+        if delta_days <= 0:
+            # hari ini sudah pernah dihitung atau waktu mundur → abaikan
+            cursor.close()
+            db.close()
+            return {
+                "ok": False,
+                "reason": "already_updated_today",
+                "pair": pair,
+                "before": before,
+                "after": before,
+                "action_type": None,
+                "broken": False,
+                "delta_days": delta_days,
+            }
+
+        elif delta_days == 1:
+            # normal naik
+            current = before + 1
+
+        elif delta_days == 2:
+            # boleh restore kalau is_restore True dan quota masih ada
+            if is_restore:
+                used = _get_monthly_restore_count(cursor, pair["id"], today.year, today.month)
+                if used >= 5:
+                    cursor.close()
+                    db.close()
+                    return {
+                        "ok": False,
+                        "reason": "restore_quota_reached",
+                        "pair": pair,
+                        "before": before,
+                        "after": before,
+                        "action_type": None,
+                        "broken": True,
+                        "delta_days": delta_days,
+                    }
+                current = before + 1
+                action_type = "RESTORE"
+            else:
+                # tidak pakai restore → putus, mulai 1 lagi
+                current = 1
+                broken = True
+
+        else:  # delta_days >= 3
+            # sudah lewat 2 hari → tidak bisa restore, mulai dari 1 lagi
+            current = 1
+            broken = True
+
+    # update streak_pairs
+    new_max = max(pair.get("max_streak", 0) or 0, current)
+
+    cursor.execute("""
+        UPDATE streak_pairs
+        SET current_streak = %s,
+            max_streak = %s,
+            last_update_date = %s
+        WHERE id = %s
+    """, (current, new_max, today, pair["id"]))
+
+    # insert log
+    cursor.execute("""
+        INSERT INTO streak_logs (
+            guild_id, pair_id, channel_id, message_id,
+            author_id, before_streak, after_streak, action_type
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """, (
+        guild_id,
+        pair["id"],
+        channel_id,
+        message_id,
+        author_id,
+        before,
+        current,
+        action_type,
+    ))
+
+    db.commit()
+
+    # ambil pair terbaru
+    cursor.execute("SELECT * FROM streak_pairs WHERE id = %s", (pair["id"],))
+    updated_pair = cursor.fetchone()
+
+    cursor.close()
+    db.close()
+
+    return {
+        "ok": True,
+        "reason": None,
+        "pair": updated_pair,
+        "before": before,
+        "after": current,
+        "action_type": action_type,
+        "broken": broken,
+        "delta_days": delta_days,
+    }

@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ui import View, Select, Button
-from database import connect_db, set_channel_settings, get_channel_settings, get_logs_by_type, delete_old_logs, log_event, delete_old_voice_logs  
+from database import connect_db, set_channel_settings, get_channel_settings, get_logs_by_type, delete_old_logs, log_event_discord, delete_old_voice_logs  
 import json
 from pytz import timezone
 from datetime import timezone as dt_timezone
@@ -175,7 +175,7 @@ class LogCog(commands.Cog):
         if not message.guild or message.author.bot:
             return
         db = connect_db()
-        log_event(db, message.guild.id, message.author.id, "message_delete", {
+        log_event_discord(db, message.guild.id, message.author.id, "message_delete", {
             "content": message.content,
             "channel": message.channel.name
         })
@@ -186,7 +186,7 @@ class LogCog(commands.Cog):
         if not before.guild or before.author.bot:
             return
         db = connect_db()
-        log_event(db, before.guild.id, before.author.id, "message_edit", {
+        log_event_discord(db, before.guild.id, before.author.id, "message_edit", {
             "before": before.content,
             "after": after.content,
             "channel": before.channel.name
@@ -198,7 +198,7 @@ class LogCog(commands.Cog):
         if not member.guild:
             return
         db = connect_db()
-        log_event(db, member.guild.id, member.id, "voice_update", {
+        log_event_discord(db, member.guild.id, member.id, "voice_update", {
             "before_channel": before.channel.name if before.channel else None,
             "after_channel": after.channel.name if after.channel else None
         })
@@ -212,12 +212,12 @@ class LogCog(commands.Cog):
             if member:
                 db = connect_db()
                 if before.name != after.name:
-                    log_event(db, guild.id, after.id, "username_change", {
+                    log_event_discord(db, guild.id, after.id, "username_change", {
                         "before": before.name,
                         "after": after.name
                     })
                 if before.discriminator != after.discriminator:
-                    log_event(db, guild.id, after.id, "discriminator_change", {
+                    log_event_discord(db, guild.id, after.id, "discriminator_change", {
                         "before": before.discriminator,
                         "after": after.discriminator
                     })

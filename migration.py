@@ -287,6 +287,66 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS feature_status (
+        guild_id BIGINT NOT NULL,
+        feature_name VARCHAR(100) NOT NULL,
+        status BOOLEAN NOT NULL DEFAULT TRUE,
+        PRIMARY KEY (guild_id, feature_name),
+        INDEX (feature_name)
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS streak_pairs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            user1_id BIGINT NOT NULL,
+            user2_id BIGINT NOT NULL,
+            initiator_id BIGINT NOT NULL,
+            status ENUM('PENDING','ACTIVE','DENIED','BROKEN')
+                NOT NULL DEFAULT 'PENDING',
+            current_streak INT NOT NULL DEFAULT 0,   -- streak hari ini (dipakai untuk warna api)
+            max_streak INT NOT NULL DEFAULT 0,       -- rekor tertinggi (opsional buat display ☁️)
+            total_updates INT NOT NULL DEFAULT 0,    -- total kali nyala (opsional statistik)
+            last_update_date DATE NULL,              -- kapan terakhir nyala
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_pair (guild_id, user1_id, user2_id),
+            INDEX idx_guild_status (guild_id, status),
+            INDEX idx_user1 (user1_id),
+            INDEX idx_user2 (user2_id)
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS streak_settings (
+            guild_id BIGINT NOT NULL PRIMARY KEY,
+            command_channel_id BIGINT DEFAULT NULL,  -- #・🔥・streak
+            log_channel_id BIGINT DEFAULT NULL,      -- #・🔥・streaks
+            auto_update BOOLEAN NOT NULL DEFAULT TRUE,  -- true = cukup reply/mention partner
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS streak_logs (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            pair_id INT NOT NULL,
+            channel_id BIGINT NOT NULL,
+            message_id BIGINT NULL,
+            author_id BIGINT NOT NULL,
+            before_streak INT NOT NULL,
+            after_streak INT NOT NULL,
+            action_type ENUM('UPDATE','RESTORE') NOT NULL DEFAULT 'UPDATE',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_guild_pair (guild_id, pair_id),
+            INDEX idx_guild_created (guild_id, created_at)
+        );
+    """)
 
     db.commit()
     cursor.close()

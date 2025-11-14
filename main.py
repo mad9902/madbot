@@ -13,6 +13,7 @@ from migration import migrate
 from main_cog import main_cog
 from image_cog import image_cog
 from music_cog import music_cog
+from streak_cog import StreakCog
 from link_cog import link_cog
 from ai_cog import GeminiCog
 from level_cog import LevelCog
@@ -84,6 +85,7 @@ class MadBot(commands.Bot):
         await self.add_cog(Werewolf(self))
         await self.add_cog(LogCog(self))
         await self.add_cog(CommandStatusCog(self))
+        await self.add_cog(StreakCog(self))
 
         # Tombol global confession tetap hidup
         self.add_view(ConfessionView(self))
@@ -110,14 +112,33 @@ async def check_command_disabled(ctx):
 
 # Blok interaksi juga kalau dinonaktifkan
 @bot.event
-async def on_interaction(interaction):
+async def on_interaction(interaction: discord.Interaction):
+    # Blokir di guild yang disabled
     if interaction.guild and interaction.guild.id in DISABLED_GUILDS:
         try:
-            await interaction.response.send_message("❌ Bot sedang nonaktif di server ini.", ephemeral=True)
-        except discord.InteractionResponded:
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Bot sedang nonaktif di server ini.", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ Bot sedang nonaktif di server ini.", ephemeral=True)
+        except discord.HTTPException:
             pass
         return
-    await bot.process_interaction(interaction)
+    # Jangan panggil apa-apa di sini — biarkan discord.py yang memproses interaction
+    return
+
+# Bisa taruh di main.py agar dipakai semua cog
+async def safe_respond(inter: discord.Interaction, **kwargs):
+    try:
+        if inter.response.is_done():
+            await inter.followup.send(**kwargs)
+        else:
+            await inter.response.send_message(**kwargs)
+    except discord.HTTPException:
+        pass
+
+# contoh pakai di mana pun:
+# await safe_respond(interaction, content="OK!", ephemeral=True)
+
 
 # Fitur typo autocorrect
 @bot.event
