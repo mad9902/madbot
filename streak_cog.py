@@ -33,24 +33,26 @@ async def download_image(url: str):
 
 
 async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
+
     # Canvas size
     W, H = 900, 350
     base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
 
     # --- PANEL BACKGROUND ---
     panel = Image.new("RGBA", (820, 260), (20, 20, 20, 255))
-    rounded = Image.new("L", panel.size, 0)
-    draw = ImageDraw.Draw(rounded)
-    draw.rounded_rectangle((0, 0, 820, 260), radius=40, fill=255)
-    panel.putalpha(rounded)
+    rounded_mask = Image.new("L", panel.size, 0)
+    mask_draw = ImageDraw.Draw(rounded_mask)
+    mask_draw.rounded_rectangle((0, 0, 820, 260), radius=40, fill=255)
+    panel.putalpha(rounded_mask)
     base.paste(panel, (40, 45), panel)
 
     # --- HELPER: Circle crop ---
     def circle(img, size):
         img = img.resize((size, size))
         mask = Image.new("L", (size, size), 0)
-        draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, size, size), fill=255)
+        d = ImageDraw.Draw(mask)
+        d.ellipse((0, 0, size, size), fill=255)
+
         out = Image.new("RGBA", (size, size))
         out.paste(img, (0, 0), mask)
         return out
@@ -62,8 +64,8 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
     p2 = circle(p2, 150)
 
     # --- Paste PFP Left & Right ---
-    base.alpha_composite(p1, (110, 105))
-    base.alpha_composite(p2, (640, 105))
+    base.alpha_composite(p1, (110, 105))    # left
+    base.alpha_composite(p2, (640, 105))    # right
 
     # --- Flame (center) ---
     if emoji_url:
@@ -71,20 +73,28 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
         flame = flame.resize((170, 170))
         base.alpha_composite(flame, (365, 75))
     else:
-        draw = ImageDraw.Draw(base)
+        flame_draw = ImageDraw.Draw(base)
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 160)
+            flame_font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                160
+            )
         except:
-            font = ImageFont.load_default()
-        draw.text((450, 155), "🔥", anchor="mm", font=font, fill="white")
+            flame_font = ImageFont.load_default()
+
+        flame_draw.text((450, 155), "🔥", anchor="mm", font=flame_font, fill="white")
 
     # --- Streak Number ---
     try:
-        font_num = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120)
+        font_num = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            120
+        )
     except:
         font_num = ImageFont.load_default()
 
-    ImageDraw.Draw(base).text(
+    number_draw = ImageDraw.Draw(base)
+    number_draw.text(
         (450, 250),
         str(streak),
         font=font_num,
