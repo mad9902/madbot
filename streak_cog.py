@@ -714,109 +714,82 @@ class StreakCog(commands.Cog):
         return f"<:e:{emoji_id}>"
     
     # =========================
-    #  SUBCOMMAND GROUP: streak tiers
+    #  COMMAND: mstreak tiers ...
     # =========================
 
     @commands.group(name="tiers", invoke_without_command=True)
     async def tiers(self, ctx: commands.Context):
-        """
-        Pengaturan emoji tier:
-        - streak tiers set <min_streak> <emoji>
-        - streak tiers delete <min_streak>
-        - streak tiers list
-        """
         await ctx.send(
             "Gunakan:\n"
-            "`streak tiers set <min_streak> <emoji>`\n"
-            "`streak tiers delete <min_streak>`\n"
-            "`streak tiers list`"
+            "`mstreak tiers <min_streak> <emoji>` - set emoji\n"
+            "`mstreak tiers delete <min_streak>` - hapus emoji\n"
+            "`mstreak tiers list` - list emoji tier"
         )
 
-
-    # ---- SET EMOJI TIER ----
+    # -----------------------------
+    # SET EMOJI TIER
+    # -----------------------------
     @tiers.command(name="set")
-    async def emoji_set(self, ctx: commands.Context, min_streak: int, emoji: str):
+    async def tiers_set(self, ctx: commands.Context, min_streak: int):
         """
-        Set custom emoji untuk tier tertentu.
-        Bisa kirim:
-        - <:flame:1234567890>
-        - <a:animeflame:9876543210>
-        - atau cukup kirim emoji custom server langsung
+        mstreak tiers set <min_streak> <emoji>
+        Contoh: mstreak tiers set 10 🔥
+        (cukup kirim emoji custom di message)
         """
 
         DEV_ID = 416234104317804544
-        is_admin = ctx.author.guild_permissions.manage_guild
-        is_dev = ctx.author.id == DEV_ID
+        if not (ctx.author.guild_permissions.manage_guild or ctx.author.id == DEV_ID):
+            return await ctx.send("❌ Kamu tidak punya izin.")
 
-        if not (is_admin or is_dev):
-            return await ctx.send("❌ Kamu tidak punya izin untuk mengatur emoji.")
+        # HARUS emoji custom (server emoji)
+        if not ctx.message.emojis:
+            return await ctx.send("❌ Kirim emoji custom server, bukan unicode.")
 
-        # -----------------------------
-        # 1. Ambil custom emoji dari message
-        # -----------------------------
-        # Jika user benar-benar mengirim emoji custom di message:
-        if ctx.message.emojis:
-            emoji_obj = ctx.message.emojis[0]  # ambil emoji pertama
-            emoji_id = emoji_obj.id
-        else:
-            # fallback: parse dari format <...:ID>
-            import re
-            m = re.search(r'<a?:\w+:(\d+)>', emoji)
-            if m:
-                emoji_id = int(m.group(1))
-            elif emoji.isdigit():  # langsung ID
-                emoji_id = int(emoji)
-            else:
-                return await ctx.send("❌ Kirim emoji custom, bukan unicode ya.")
+        emoji_obj = ctx.message.emojis[0]
+        emoji_id = emoji_obj.id
 
-        # -----------------------------
-        # 2. Simpan ke database
-        # -----------------------------
         set_tier_emoji(ctx.guild.id, min_streak, emoji_id)
 
-        # -----------------------------
-        # 3. Tampilkan kembali emoji
-        # -----------------------------
-        obj = self.bot.get_emoji(emoji_id)
-        disp = str(obj) if obj else f"<:e:{emoji_id}>"
+        await ctx.send(
+            f"✅ Emoji untuk streak ≥ **{min_streak}** di-set ke {emoji_obj}"
+        )
 
-        await ctx.send(f"✅ Emoji untuk streak **≥ {min_streak}** di-set ke {disp}")
-
-    # ---- DELETE EMOJI TIER ----
+    # -----------------------------
+    # DELETE EMOJI TIER
+    # -----------------------------
     @tiers.command(name="delete")
     async def tiers_delete(self, ctx: commands.Context, min_streak: int):
         """
-        Hapus emoji tier tertentu.
+        mstreak tiers delete <min_streak>
         """
-        DEV_ID = 416234104317804544
-        is_admin = ctx.author.guild_permissions.manage_guild
-        is_dev = ctx.author.id == DEV_ID
 
-        if not (is_admin or is_dev):
+        DEV_ID = 416234104317804544
+        if not (ctx.author.guild_permissions.manage_guild or ctx.author.id == DEV_ID):
             return await ctx.send("❌ Kamu tidak punya izin.")
 
         delete_tier_emoji(ctx.guild.id, min_streak)
-        await ctx.send(f"🗑️ Emoji untuk tier streak **≥ {min_streak}** dihapus.")
+        await ctx.send(f"🗑️ Emoji untuk streak ≥ **{min_streak}** telah dihapus.")
 
-    # ---- LIST EMOJI TIER ----
+    # -----------------------------
+    # LIST EMOJI TIER
+    # -----------------------------
     @tiers.command(name="list")
     async def tiers_list(self, ctx: commands.Context):
         """
-        Lihat semua emoji tier yang sudah di-set.
+        mstreak tiers list
         """
         rows = get_tier_emojis(ctx.guild.id)
         if not rows:
             return await ctx.send("Belum ada emoji tier yang di-set.")
 
-        lines = []
+        out = []
         for r in rows:
             eid = r["emoji_id"]
-            obj = self.bot.get_emoji(int(eid))
+            obj = self.bot.get_emoji(eid)
             disp = obj if obj else f"<:e:{eid}>"
-            lines.append(f"- Streak ≥ **{r['min_streak']}** : {disp}")
+            out.append(f"- Streak ≥ **{r['min_streak']}** : {disp}")
 
-        await ctx.send("🔥 **Daftar Emoji Tier:**\n" + "\n".join(lines))
-
+        await ctx.send("🔥 **Daftar Emoji Tier:**\n" + "\n".join(out))
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(StreakCog(bot))
