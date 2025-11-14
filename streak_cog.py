@@ -37,89 +37,72 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
     W, H = 900, 350
     base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
 
-    # --- PANEL BACKGROUND ---
-    panel = Image.new("RGBA", (820, 260), (20, 20, 20, 255))
-    rounded_mask = Image.new("L", panel.size, 0)
-    m = ImageDraw.Draw(rounded_mask)
-    m.rounded_rectangle((0, 0, 820, 260), radius=40, fill=255)
-    panel.putalpha(rounded_mask)
-    base.paste(panel, (40, 45), panel)
+    # --- PANEL ---
+    panel = Image.new("RGBA", (820, 260), (30, 30, 30, 255))
+    mask = Image.new("L", panel.size, 0)
+    dmask = ImageDraw.Draw(mask)
+    dmask.rounded_rectangle((0, 0, 820, 260), radius=45, fill=255)
+    panel.putalpha(mask)
+    base.alpha_composite(panel, (40, 45))
 
-    # PANEL AREA FOR FX
     panel_x, panel_y = 40, 45
 
-    # --- add small background flames (GK-style) ---
-    small_flames = random.randint(4, 7)
-    flame_positions = []
+    # --- GENERATE SMALL FLAMES (GK STYLE) ---
+    for _ in range(random.randint(4, 7)):
+        size = random.randint(60, 110)
 
-    for _ in range(small_flames):
-        # random size 40–80px
-        size = random.randint(40, 80)
-        opacity = random.randint(30, 70)
-
-        # choose random X region left/mid-right, avoid center
-        rx = random.choice([
-            random.randint(panel_x + 40, panel_x + 220),
-            random.randint(panel_x + 500, panel_x + 760)
+        # random position (left or right)
+        px = random.choice([
+            random.randint(panel_x + 50, panel_x + 260),
+            random.randint(panel_x + 520, panel_x + 780)
         ])
-        ry = random.randint(panel_y + 40, panel_y + 200)
+        py = random.randint(panel_y + 50, panel_y + 200)
 
-        # tiny flame from emoji or fallback
-        if emoji_url:
-            f = await download_image(emoji_url)
-            f = f.resize((size, size))
-        else:
-            f = Image.new("RGBA", (size, size))
-            d = ImageDraw.Draw(f)
-            try:
-                ff = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
-            except:
-                ff = ImageFont.load_default()
-            d.text((size//2, size//2), "🔥", anchor="mm", fill=(255,255,255,255), font=ff)
+        # create flame image manually (yellow/orange)
+        flame = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        fd = ImageDraw.Draw(flame)
 
-        # reduce alpha
-        f = f.copy()
-        alpha = f.split()[3]
-        alpha = alpha.point(lambda p: int(p * (opacity/255)))
-        f.putalpha(alpha)
+        # simple flame shape (circle + triangle)
+        fd.ellipse((0, size*0.3, size, size), fill=(255, 170, 0, 255))
+        fd.polygon([(size/2, 0), (size*0.95, size*0.7), (size*0.05, size*0.7)],
+                   fill=(255, 200, 0, 255))
 
-        # light blur to soften
-        f = f.filter(ImageFilter.GaussianBlur(1.2))
+        # transparency
+        flame = flame.point(lambda p: int(p * random.uniform(0.15, 0.35)))
+        flame = flame.filter(ImageFilter.GaussianBlur(2))
 
-        base.alpha_composite(f, (rx, ry))
+        base.alpha_composite(flame, (px, py))
 
-    # --- HELPER: circle crop ---
+    # --- CIRCLE AVATARS ---
     def circle(img, size):
         img = img.resize((size, size))
         mask = Image.new("L", (size, size), 0)
         d = ImageDraw.Draw(mask)
         d.ellipse((0, 0, size, size), fill=255)
         out = Image.new("RGBA", (size, size))
-        out.paste(img, (0, 0), mask)
+        out.paste(img, mask=mask)
         return out
 
-    # --- Load avatars ---
     p1 = circle(await download_image(pfp1_url), 150)
     p2 = circle(await download_image(pfp2_url), 150)
 
     base.alpha_composite(p1, (110, 105))
     base.alpha_composite(p2, (640, 105))
 
-    # --- flame center (move slightly downward) ---
-    center_flame_y = 90  # sebelumnya 75 (lebih turun biar tidak nabrak)
-    if emoji_url:
-        flame = await download_image(emoji_url)
-        flame = flame.resize((170, 170))
-        base.alpha_composite(flame, (365, center_flame_y))
-    else:
-        d = ImageDraw.Draw(base)
-        try:
-            fnt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 160)
-        except:
-            fnt = ImageFont.load_default()
-        d.text((450, center_flame_y+80), "🔥", anchor="mm", font=fnt, fill="white")
+    # --- BIG FLAME CENTER (Better GK style) ---
+    flame_big = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(flame_big)
 
-    # --- streak number (move slightly downward) ---
+    # flame yellow/orange
+    bd.ellipse((10, 90, 190, 190), fill=(255, 140, 0, 255))
+    bd.polygon([(100, 5), (185, 150), (15, 150)], fill=(255, 180, 0, 255))
+
+    # glow
+    flame_glow = flame_big.filter(ImageFilter.GaussianBlur(18))
+    base.alpha_composite(flame_glow, (350, 65))
+    base.alpha_composite(flame_big, (350, 65))
+
+    # --- NUMBER WITH OUTLINE ---
     try:
         font_num = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 140
@@ -127,16 +110,19 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
     except:
         font_num = ImageFont.load_default()
 
-    number_y = 275  # sebelumnya 250
-    dnum = ImageDraw.Draw(base)
-    dnum.text(
-        (450, number_y),
-        str(streak),
-        fill="white",
-        font=font_num,
-        anchor="mm"
-    )
+    num_x, num_y = 450, 270  # moved downward
 
+    draw = ImageDraw.Draw(base)
+
+    # outline
+    for ox, oy in [(-2,0),(2,0),(0,-2),(0,2)]:
+        draw.text((num_x+ox, num_y+oy), str(streak), font=font_num,
+                  fill=(0,0,0,180), anchor="mm")
+
+    # main
+    draw.text((num_x, num_y), str(streak), font=font_num, fill="white", anchor="mm")
+
+    # return
     buf = io.BytesIO()
     base.save(buf, format="PNG")
     buf.seek(0)
