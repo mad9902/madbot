@@ -47,40 +47,46 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
 
     panel_x, panel_y = 40, 45
 
-    # --- GENERATE SMALL FLAMES (GK STYLE) ---
-    for _ in range(random.randint(4, 7)):
-        size = random.randint(60, 110)
+    # --- SMALL FLAMES (use DB emoji) ---
+    if emoji_url:
+        flame_src = await download_image(emoji_url)
+    else:
+        flame_src = None
 
-        # random position (left or right)
+    for _ in range(random.randint(4, 6)):
+        if flame_src:
+            f = flame_src.copy()
+        else:
+            f = Image.new("RGBA", (60, 60), (255,255,255,255))
+
+        size = random.randint(40, 90)
+        f = f.resize((size, size))
+
+        # opacity
+        alpha = f.split()[3]
+        alpha = alpha.point(lambda p: int(p * random.uniform(0.10, 0.25)))
+        f.putalpha(alpha)
+
+        # blur
+        f = f.filter(ImageFilter.GaussianBlur(1.5))
+
+        # random position left or right
         px = random.choice([
-            random.randint(panel_x + 50, panel_x + 260),
-            random.randint(panel_x + 520, panel_x + 780)
+            random.randint(panel_x+50, panel_x+260),
+            random.randint(panel_x+540, panel_x+760),
         ])
-        py = random.randint(panel_y + 50, panel_y + 200)
+        py = random.randint(panel_y+60, panel_y+180)
 
-        # create flame image manually (yellow/orange)
-        flame = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        fd = ImageDraw.Draw(flame)
+        base.alpha_composite(f, (px, py))
 
-        # simple flame shape (circle + triangle)
-        fd.ellipse((0, size*0.3, size, size), fill=(255, 170, 0, 255))
-        fd.polygon([(size/2, 0), (size*0.95, size*0.7), (size*0.05, size*0.7)],
-                   fill=(255, 200, 0, 255))
-
-        # transparency
-        flame = flame.point(lambda p: int(p * random.uniform(0.15, 0.35)))
-        flame = flame.filter(ImageFilter.GaussianBlur(2))
-
-        base.alpha_composite(flame, (px, py))
-
-    # --- CIRCLE AVATARS ---
+    # --- Avatar circle ---
     def circle(img, size):
         img = img.resize((size, size))
-        mask = Image.new("L", (size, size), 0)
-        d = ImageDraw.Draw(mask)
-        d.ellipse((0, 0, size, size), fill=255)
+        m = Image.new("L", (size, size))
+        dm = ImageDraw.Draw(m)
+        dm.ellipse((0, 0, size, size), fill=255)
         out = Image.new("RGBA", (size, size))
-        out.paste(img, mask=mask)
+        out.paste(img, mask=m)
         return out
 
     p1 = circle(await download_image(pfp1_url), 150)
@@ -89,40 +95,38 @@ async def make_streak_card(pfp1_url, pfp2_url, emoji_url, streak):
     base.alpha_composite(p1, (110, 105))
     base.alpha_composite(p2, (640, 105))
 
-    # --- BIG FLAME CENTER (Better GK style) ---
-    flame_big = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(flame_big)
+    # --- BIG FLAME (use DB emoji, scaled down) ---
+    if flame_src:
+        big = flame_src.copy()
+        big = big.resize((140, 140))  # ← setengah dari 280px
+        base.alpha_composite(big, (380, 75))  # center position
+    else:
+        draw = ImageDraw.Draw(base)
+        try:
+            fnt = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 130
+            )
+        except:
+            fnt = ImageFont.load_default()
+        draw.text((450, 150), "🔥", anchor="mm", font=fnt, fill="white")
 
-    # flame yellow/orange
-    bd.ellipse((10, 90, 190, 190), fill=(255, 140, 0, 255))
-    bd.polygon([(100, 5), (185, 150), (15, 150)], fill=(255, 180, 0, 255))
-
-    # glow
-    flame_glow = flame_big.filter(ImageFilter.GaussianBlur(18))
-    base.alpha_composite(flame_glow, (350, 65))
-    base.alpha_composite(flame_big, (350, 65))
-
-    # --- NUMBER WITH OUTLINE ---
+    # --- STREAK NUMBER (lowered so it doesn't overlap) ---
     try:
         font_num = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 140
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 110
         )
     except:
         font_num = ImageFont.load_default()
 
-    num_x, num_y = 450, 270  # moved downward
-
     draw = ImageDraw.Draw(base)
+    draw.text(
+        (450, 240),  # turun agar tidak menutupi api
+        str(streak),
+        fill="white",
+        font=font_num,
+        anchor="mm"
+    )
 
-    # outline
-    for ox, oy in [(-2,0),(2,0),(0,-2),(0,2)]:
-        draw.text((num_x+ox, num_y+oy), str(streak), font=font_num,
-                  fill=(0,0,0,180), anchor="mm")
-
-    # main
-    draw.text((num_x, num_y), str(streak), font=font_num, fill="white", anchor="mm")
-
-    # return
     buf = io.BytesIO()
     base.save(buf, format="PNG")
     buf.seek(0)
