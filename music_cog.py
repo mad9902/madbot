@@ -538,15 +538,24 @@ class music_cog(commands.Cog):
             "-nostdin "
             "-reconnect 1 "
             "-reconnect_streamed 1 "
+            "-reconnect_on_network_error 1 "
             "-reconnect_delay_max 5 "
+            "-reconnect_at_eof 1 "
             "-protocol_whitelist file,http,https,tcp,tls,crypto"
         )
 
-        options_str = f'-vn -af "{filter_chain}" -loglevel error'
+        options_str = (
+            f'-vn -af "{filter_chain}" '
+            "-threads 1 "
+            "-flags +low_delay "
+            "-ignore_unknown "
+            "-nostats -hide_banner -loglevel error"
+        )
 
         # Start playing
         try:
-            source = self.current_song["source"]
+            # gunakan Hasil preload jika ada (lebih cepat karena sudah resolve)
+            source = self.preloaded_source or self.current_song["source"]
 
             self.vc.play(
                 discord.FFmpegPCMAudio(
@@ -559,6 +568,7 @@ class music_cog(commands.Cog):
                     asyncio.create_task, self._continue_next(e)
                 )
             )
+            self.preloaded_source = None
             self.is_playing = True
 
             embed = self.build_now_playing_embed()
@@ -595,12 +605,23 @@ class music_cog(commands.Cog):
             "-nostdin "
             "-reconnect 1 "
             "-reconnect_streamed 1 "
+            "-reconnect_on_network_error 1 "
             "-reconnect_delay_max 5 "
+            "-reconnect_at_eof 1 "
             "-protocol_whitelist file,http,https,tcp,tls,crypto"
         )
-        options_str = f'-vn -af "{filter_chain}" -loglevel error'
 
-        source = self.current_song["source"]
+        options_str = (
+            f'-vn -af "{filter_chain}" '
+            "-threads 1 "
+            "-flags +low_delay "
+            "-ignore_unknown "
+            "-nostats -hide_banner -loglevel error"
+        )
+
+        source = self.preloaded_source or self.current_song["source"]
+        self.preloaded_source = None  # clear setelah dipakai
+
 
         self.vc.play(
             discord.FFmpegPCMAudio(
