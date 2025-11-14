@@ -38,51 +38,41 @@ async def make_streak_card(pfp1, pfp2, emoji_url, streak):
     base = Image.new("RGBA", (W, H), (0, 0, 0, 255))
     
     # --- Background with flame pattern ---
-    if emoji_url:
-        flame = await download_image(emoji_url)
-        flame = flame.resize((70, 70))
-        
-        for _ in range(60):
-            x = random.randint(0, W-70)
-            y = random.randint(0, H-70)
-            base.alpha_composite(flame, (x, y))
-    
-    # Darken layer
-    dark = Image.new("RGBA", (W, H), (0, 0, 0, 170))
-    base.alpha_composite(dark)
-
-    # --- Profile Pictures ---
-    pfp_size = 150
-    mask = Image.new("L", (pfp_size, pfp_size), 0)
-    ImageDraw.Draw(mask).ellipse((0, 0, pfp_size, pfp_size), fill=255)
-
-    p1 = await download_image(pfp1)
-    p1 = p1.resize((pfp_size, pfp_size))
-    base.paste(p1, (130, 100), mask)
-
-    p2 = await download_image(pfp2)
-    p2 = p2.resize((pfp_size, pfp_size))
-    base.paste(p2, (620, 100), mask)
-
-    # --- Big center flame ---
+        # --- Big center flame ---
     if emoji_url:
         big = await download_image(emoji_url)
         big = big.resize((200, 200))
         base.alpha_composite(big, (350, 60))
     else:
         draw = ImageDraw.Draw(base)
-        font = ImageFont.truetype("arial.ttf", 160)
+        try:
+            # Coba pakai font DejaVu di Linux container
+            font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                160
+            )
+        except OSError:
+            # Fallback kalau font nggak ada
+            font = ImageFont.load_default()
         draw.text((450, 160), "🔥", font=font, fill="white", anchor="mm")
 
     # --- Streak Number ---
-    font_num = ImageFont.truetype("arialbd.ttf", 130)
+    try:
+        font_num = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            130
+        )
+    except OSError:
+        font_num = ImageFont.load_default()
+
     ImageDraw.Draw(base).text(
-        (450, 255), 
-        str(streak), 
-        fill="white", 
-        font=font_num, 
+        (450, 255),
+        str(streak),
+        fill="white",
+        font=font_num,
         anchor="mm"
     )
+
 
     # Return as file
     buffer = io.BytesIO()
@@ -140,79 +130,9 @@ class StreakCog(commands.Cog):
     # ---------------------------------------------
     # Listener 1: detect "api @user" di channel streak
     # ---------------------------------------------
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """
-        Flow:
-        - Hanya di guild + bukan bot
-        - Hanya di channel streak yang sudah diset
-        - Pesan diawali kata 'api' dan mention tepat 1 user
-        - Bot akan otomatis react 🔥 ke pesan tersebut
-        (streak baru naik kalau target react 🔥 balik, di listener on_raw_reaction_add)
-        """
-        if message.author.bot or message.guild is None:
-            return
-
-        guild = message.guild
-        guild_id = guild.id
-
-        settings = get_streak_settings(guild_id)
-        if not settings:
-            return  # belum ada setting streak
-
-        cmd_channel_id = settings.get("command_channel_id")
-        if cmd_channel_id is None or message.channel.id != cmd_channel_id:
-            return  # hanya aktif di channel yang diset
-
-        content = message.content.strip()
-        if not content:
-            return
-
-        # cek apakah pesan diawali kata 'api' (case-insensitive)
-        parts = content.split()
-        if len(parts) < 2:
-            return
-
-        if parts[0].lower() != "api":
-            return
-
-        # ambil mention
-        mentions = [m for m in message.mentions if not m.bot and m.id != message.author.id]
-        if len(mentions) != 1:
-            return
-
-        target = mentions[0]
-
-        # cek apakah mereka sudah punya pasangan streak ACTIVE
-        pair = get_streak_pair(guild_id, message.author.id, target.id)
-        if not pair:
-            # bisa kamu ganti jadi silent kalau nggak mau spam
-            await message.channel.send(
-                f"{message.author.mention}, kamu belum punya pasangan streak dengan {target.mention}.\n"
-                f"Gunakan `!streak request {target.mention}` dulu."
-            )
-            return
-
-        if pair["status"] != "ACTIVE":
-            await message.channel.send(
-                f"Pasangan streak dengan {target.mention} belum ACTIVE (status sekarang: `{pair['status']}`)."
-            )
-            return
-
-        # semua valid -> bot react 🔥
-        try:
-            emoji_id = get_emoji_for_streak(guild_id, pair["current_streak"])
-            e = self.bot.get_emoji(emoji_id) if emoji_id else None
-            await message.add_reaction(e or "🔥")
-        except discord.Forbidden:
-            pass
-
     # -------------------------------------------------
     # Listener 2: kalau target react 🔥 -> streak naik
     # -------------------------------------------------
-    # ---------------------------------------------
-    # Listener 1: detect "api @user" di channel streak
-    # ---------------------------------------------
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or message.guild is None:
@@ -249,7 +169,7 @@ class StreakCog(commands.Cog):
         if not pair:
             await message.channel.send(
                 f"{message.author.mention}, kamu belum punya pasangan streak dengan {target.mention}.\n"
-                f"Gunakan `!streak request {target.mention}` dulu."
+                f"Gunakan `mstreak request {target.mention}` dulu."
             )
             return
 
@@ -413,24 +333,24 @@ class StreakCog(commands.Cog):
         except:
             pass
     # =========================
-    #  COMMAND GROUP !streak
+    #  COMMAND GROUP mstreak
     # =========================
 
     @commands.group(name="streak", invoke_without_command=True)
     async def streak_group(self, ctx: commands.Context, member: discord.Member = None):
         """
-        - !streak @user -> info pair kamu dengan user tsb
-        - !streak request @user -> ajukan pasangan streak
-        - !streak accept @user  -> terima
-        - !streak deny @user    -> tolak
-        - !streak restore @user -> restore kalau bolong 1 hari (max 5x/bulan)
-        - !streak top           -> leaderboard
-        - !streak setchannel ...-> set channel streak
+        - mstreak @user -> info pair kamu dengan user tsb
+        - mstreak request @user -> ajukan pasangan streak
+        - mstreak accept @user  -> terima
+        - mstreak deny @user    -> tolak
+        - mstreak restore @user -> restore kalau bolong 1 hari (max 5x/bulan)
+        - mstreak top           -> leaderboard
+        - mstreak setchannel ...-> set channel streak
         """
         if member is None:
             return await ctx.send(
-                "Gunakan: `!streak request @user`, `!streak accept @user`, "
-                "`!streak deny @user`, `!streak @user` untuk info."
+                "Gunakan: `mstreak request @user`, `mstreak accept @user`, "
+                "`mstreak deny @user`, `mstreak @user` untuk info."
             )
 
         guild_id = ctx.guild.id
@@ -457,7 +377,7 @@ class StreakCog(commands.Cog):
 
         await ctx.send(embed=embed)
 
-    # ----- !streak request @user -----
+    # ----- mstreak request @user -----
 
     @streak_group.command(name="request")
     async def streak_request(self, ctx: commands.Context, member: discord.Member):
@@ -473,7 +393,7 @@ class StreakCog(commands.Cog):
         if pair["status"] == "PENDING":
             await ctx.send(
                 f"Permintaan streak dibuat: {format_pair_mention(pair)}\n"
-                f"{member.mention}, ketik `!streak accept {ctx.author.mention}` untuk menerima."
+                f"{member.mention}, ketik `mstreak accept {ctx.author.mention}` untuk menerima."
             )
         elif pair["status"] == "ACTIVE":
             await ctx.send(
@@ -485,7 +405,7 @@ class StreakCog(commands.Cog):
                 f"Permintaan streak ditemukan dengan status: **{pair['status']}**."
             )
 
-    # ----- !streak accept @user -----
+    # ----- mstreak accept @user -----
 
     @streak_group.command(name="accept")
     async def streak_accept(self, ctx: commands.Context, member: discord.Member):
@@ -507,7 +427,7 @@ class StreakCog(commands.Cog):
             f"✅ Permintaan streak diterima! Sekarang {format_pair_mention(pair)} resmi jadi pasangan streak."
         )
 
-    # ----- !streak deny @user -----
+    # ----- mstreak deny @user -----
 
     @streak_group.command(name="deny")
     async def streak_deny(self, ctx: commands.Context, member: discord.Member):
@@ -526,7 +446,7 @@ class StreakCog(commands.Cog):
             f"❌ Permintaan streak ditolak. ({format_pair_mention(pair)})"
         )
 
-    # ----- !streak restore @user -----
+    # ----- mstreak restore @user -----
 
     @streak_group.command(name="restore")
     async def streak_restore(self, ctx: commands.Context, member: discord.Member):
@@ -573,7 +493,7 @@ class StreakCog(commands.Cog):
             f"menjadi **{new_pair['current_streak']}** (gap hari: {result['delta_days']})."
         )
 
-    # ----- !streak top -----
+    # ----- mstreak top -----
 
     @streak_group.command(name="top")
     async def streak_top(self, ctx: commands.Context):
@@ -611,14 +531,14 @@ class StreakCog(commands.Cog):
         await ctx.send(embed=embed)
 
 
-    # ----- !streak setchannel -----
+    # ----- mstreak setchannel -----
 
     @streak_group.command(name="setchannel")
     async def streak_setchannel(self, ctx: commands.Context, tipe: str, channel: discord.TextChannel):
         """
         Set channel streak:
-        - !streak setchannel command #streak
-        - !streak setchannel log #streak-log
+        - mstreak setchannel command #streak
+        - mstreak setchannel log #streak-log
         """
 
         DEV_ID = 416234104317804544
@@ -652,7 +572,7 @@ class StreakCog(commands.Cog):
         await ctx.send(f"✅ Channel **{tipe}** streak di-set ke {channel.mention}.")
 
 
-    # ----- !streak pending -----
+    # ----- mstreak pending -----
 
     @streak_group.command(name="pending")
     async def streak_pending(self, ctx: commands.Context):
