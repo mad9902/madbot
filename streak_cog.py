@@ -534,28 +534,23 @@ class StreakCog(commands.Cog):
     @commands.command(name="helpstreak")
     async def helpstreak(self, ctx: commands.Context):
         """
-        Tampilkan bantuan lengkap untuk fitur streak.
+        Help streak dengan pagination.
         """
         # Ambil prefix bot secara dinamis
         try:
             prefix = (await self.bot.get_prefix(ctx.message))[0]
         except:
-            prefix = "!"  # fallback kalau ada error
+            prefix = "!"
 
-        embed = discord.Embed(
-            title="🔥 Panduan Fitur Streak",
-            description=(
-                "Fitur ini membuat **pasangan streak** berdasarkan pesan `api @user` "
-                "dan reaction 🔥 dari user yang di-mention.\n"
-                "Fitur **hanya aktif** di channel yang sudah di-set sebagai channel streak."
-            ),
-            colour=discord.Colour.orange()
+        # ==========================
+        # PAGE 1 — CARA KERJA
+        # ==========================
+        page1 = discord.Embed(
+            title="🔥 Panduan Fitur Streak — Halaman 1/4",
+            description="Dasar cara kerja fitur pasangan streak.",
+            colour=discord.Colour.orange(),
         )
-
-        # -------------------------------------------------
-        # CARA KERJA
-        # -------------------------------------------------
-        embed.add_field(
+        page1.add_field(
             name="📌 Cara Kerja Utama",
             value=(
                 "1. Admin set channel streak:\n"
@@ -565,50 +560,57 @@ class StreakCog(commands.Cog):
                 f"   • `{prefix}streak request @user`\n"
                 f"   • `{prefix}streak accept @user`\n\n"
                 "3. Jika status pasangan sudah **ACTIVE**:\n"
-                "   • Kirim pesan di channel streak: `api @pasangan`\n"
+                "   • Kirim pesan: `api @pasangan`\n"
                 "   • Bot react 🔥 otomatis\n"
                 "   • User yang di-mention harus react 🔥 kembali → streak naik."
             ),
             inline=False,
         )
 
-        # -------------------------------------------------
-        # ATURAN STREAK
-        # -------------------------------------------------
-        embed.add_field(
+        # ==========================
+        # PAGE 2 — ATURAN + RESTORE
+        # ==========================
+        page2 = discord.Embed(
+            title="🔥 Panduan Fitur Streak — Halaman 2/4",
+            description="Aturan perhitungan streak dan restore.",
+            colour=discord.Colour.orange(),
+        )
+
+        page2.add_field(
             name="🔥 Aturan Streak Harian",
             value=(
                 "• Hitungan streak per **hari**.\n"
-                "• Jika sudah tercatat hari ini → reaction berikutnya **tidak menambah** streak.\n"
-                "• Jika bolong 1 hari (gap = 2):\n"
-                f"  → Gunakan: `{prefix}streak restore @user`\n"
-                "• Jika bolong ≥ 2 hari (gap ≥ 3):\n"
-                "  → Streak **putus** dan mulai dari 1 (tidak bisa di-restore)."
+                "• Jika sudah dihitung hari ini → reaction berikutnya **tidak menambah** streak.\n"
+                "• Bolong 1 hari (gap = 2): bisa restore.\n"
+                "• Bolong ≥ 2 hari (gap ≥ 3): streak **putus**."
             ),
             inline=False,
         )
 
-        # -------------------------------------------------
-        # RESTORE
-        # -------------------------------------------------
-        embed.add_field(
+        page2.add_field(
             name="♻️ Aturan Restore",
             value=(
-                f"• `{prefix}streak restore @user` memulihkan streak yang bolong 1 hari.\n"
-                "• Syarat:\n"
-                "  - Pasangan streak harus **ACTIVE**.\n"
-                "  - Gap hari tepat = **2**.\n"
-                "• Limit restore: **5x per bulan per pasangan**.\n"
-                "• Gap ≥ 3 hari → tidak bisa restore."
+                f"• `{prefix}streak restore @user` untuk pulihkan streak.\n"
+                "• Syarat restore:\n"
+                "  - Pasangan streak **ACTIVE**.\n"
+                "  - Gap = **2 hari**.\n"
+                "• Batas restore: **5x per bulan per pasangan**.\n"
+                "• Gap ≥ 3 tidak bisa restore."
             ),
             inline=False,
         )
 
-        # -------------------------------------------------
-        # TIER API DEFAULT
-        # -------------------------------------------------
-        embed.add_field(
-            name="🔥 Tier Api (Default)",
+        # ==========================
+        # PAGE 3 — TIER + CUSTOM EMOJI
+        # ==========================
+        page3 = discord.Embed(
+            title="🔥 Panduan Fitur Streak — Halaman 3/4",
+            description="Tier api & custom emoji tier.",
+            colour=discord.Colour.orange(),
+        )
+
+        page3.add_field(
+            name="🔥 Tier Api Default",
             value=(
                 "• 1–4 : ✨ COMMON\n"
                 "• 5–9 : 🔥 UNCOMMON\n"
@@ -620,87 +622,83 @@ class StreakCog(commands.Cog):
             inline=False,
         )
 
-        # -------------------------------------------------
-        # CUSTOM EMOJI TIER
-        # -------------------------------------------------
-        embed.add_field(
+        page3.add_field(
             name="🎨 Custom Emoji Tier",
             value=(
-                "Kamu bisa mengganti emoji 🔥 sesuai streak tertentu.\n"
+                "Kamu bisa ganti emoji sesuai streak tertentu.\n"
                 "Gunakan:\n"
-                f"• `{prefix}streak emoji set <min_streak> <emoji>`\n"
-                f"• `{prefix}streak emoji delete <min_streak>`\n"
-                f"• `{prefix}streak emoji list`\n\n"
+                f"• `{prefix}streak tiers set <min_streak> <emoji>`\n"
+                f"• `{prefix}streak tiers delete <min_streak>`\n"
+                f"• `{prefix}streak tiers list`\n\n"
                 "Contoh:\n"
-                f"• `{prefix}streak emoji set 5 <:flame5:1234567890>`\n"
-                f"• `{prefix}streak emoji set 100 <:epicflame:9876543210>`"
+                f"• `{prefix}streak tiers set 5 <:flame5:1234567890>`\n"
+                f"• `{prefix}streak tiers set 100 <:epic:9876543210>`"
             ),
             inline=False,
         )
 
-        # -------------------------------------------------
-        # DAFTAR COMMAND
-        # -------------------------------------------------
-        embed.add_field(
+        # ==========================
+        # PAGE 4 — COMMAND LIST
+        # ==========================
+        page4 = discord.Embed(
+            title="🔥 Panduan Fitur Streak — Halaman 4/4",
+            description="Daftar lengkap command streak.",
+            colour=discord.Colour.orange(),
+        )
+
+        page4.add_field(
             name="📜 Daftar Command",
             value=(
                 f"• `{prefix}streak request @user` — ajukan pasangan streak.\n"
-                f"• `{prefix}streak accept @user` — terima ajakan.\n"
-                f"• `{prefix}streak deny @user` — tolak ajakan.\n"
-                f"• `{prefix}streak @user` — lihat info pasangan streak.\n"
+                f"• `{prefix}streak accept @user` — terima.\n"
+                f"• `{prefix}streak deny @user` — tolak.\n"
+                f"• `{prefix}streak @user` — info pasangan.\n"
                 f"• `{prefix}streak restore @user` — pulihkan streak.\n"
-                f"• `{prefix}streak top` — lihat leaderboard.\n"
+                f"• `{prefix}streak top` — leaderboard.\n"
                 f"• `{prefix}streak pending` — lihat request pending.\n"
-                f"• `{prefix}streak setchannel command #ch` — set channel utama.\n"
+                f"• `{prefix}streak setchannel command #ch` — set channel.\n"
                 f"• `{prefix}streak setchannel log #ch` — set channel log.\n"
-                f"• `{prefix}streak emoji ...` — atur emoji tier."
+                f"• `{prefix}streak tiers ...` — pengaturan emoji tier."
             ),
             inline=False,
         )
 
-        embed.set_footer(text="Contoh penggunaan: api @username → bot react 🔥 → user react balik → streak naik.")
+        pages = [page1, page2, page3, page4]
+        current = 0
 
-        await ctx.send(embed=embed)
+        # Send first page
+        msg = await ctx.send(embed=pages[current])
 
+        # Add buttons
+        await msg.add_reaction("◀️")
+        await msg.add_reaction("▶️")
 
-        # -------------------------------------------------
-        # TIER API
-        # -------------------------------------------------
-        embed.add_field(
-            name="🔥 Tier Api Berdasarkan Streak",
-            value=(
-                "• 1–4 : ✨ COMMON\n"
-                "• 5–9 : 🔥 UNCOMMON\n"
-                "• 10–29 : 🔥🔥 RARE\n"
-                "• 30–99 : 🔥🔥🔥 EPIC\n"
-                "• 100–199 : 🔥🔥🔥🔥 MYTHIC\n"
-                "• 200+ : 🔥🔥🔥🔥🔥 LEGENDARY"
-            ),
-            inline=False,
-        )
+        def check(reaction, user):
+            return (
+                user == ctx.author
+                and reaction.message.id == msg.id
+                and str(reaction.emoji) in ["◀️", "▶️"]
+            )
 
-        # -------------------------------------------------
-        # COMMAND LIST
-        # -------------------------------------------------
-        embed.add_field(
-            name="📜 Daftar Command",
-            value=(
-                f"• `{prefix}streak request @user` — ajukan pasangan streak.\n"
-                f"• `{prefix}streak accept @user` — terima permintaan streak.\n"
-                f"• `{prefix}streak deny @user` — tolak permintaan.\n"
-                f"• `{prefix}streak @user` — lihat info pair kamu.\n"
-                f"• `{prefix}streak restore @user` — pulihkan streak.\n"
-                f"• `{prefix}streak top` — leaderboard streak.\n"
-                f"• `{prefix}streak pending` — lihat request pending.\n"
-                f"• `{prefix}streak setchannel command #ch` — set channel streak.\n"
-                f"• `{prefix}streak setchannel log #ch` — set channel log."
-            ),
-            inline=False,
-        )
+        # Pagination loop
+        while True:
+            try:
+                reaction, user = await self.bot.wait_for(
+                    "reaction_add", timeout=120, check=check
+                )
+            except:
+                break
 
-        embed.set_footer(text="Contoh: api @username → bot react 🔥 → user react balik → streak naik.")
+            if str(reaction.emoji) == "▶️":
+                current = (current + 1) % len(pages)
+            elif str(reaction.emoji) == "◀️":
+                current = (current - 1) % len(pages)
 
-        await ctx.send(embed=embed)
+            await msg.edit(embed=pages[current])
+            try:
+                await msg.remove_reaction(reaction.emoji, user)
+            except:
+                pass
 
     def format_tier_emoji(bot, emoji_id):
         """
