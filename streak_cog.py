@@ -717,8 +717,8 @@ class StreakCog(commands.Cog):
     #  SUBCOMMAND GROUP: streak tiers
     # =========================
 
-    @streak_group.group(name="tiers", invoke_without_command=True)
-    async def tiers_group(self, ctx: commands.Context):
+    @commands.group(name="tiers", invoke_without_command=True)
+    async def tiers(self, ctx: commands.Context):
         """
         Pengaturan emoji tier:
         - streak tiers set <min_streak> <emoji>
@@ -732,8 +732,9 @@ class StreakCog(commands.Cog):
             "`streak tiers list`"
         )
 
+
     # ---- SET EMOJI TIER ----
-    @emoji_group.command(name="set")
+    @tiers.command(name="set")
     async def emoji_set(self, ctx: commands.Context, min_streak: int, emoji: str):
         """
         Set custom emoji untuk tier tertentu.
@@ -782,7 +783,7 @@ class StreakCog(commands.Cog):
         await ctx.send(f"✅ Emoji untuk streak **≥ {min_streak}** di-set ke {disp}")
 
     # ---- DELETE EMOJI TIER ----
-    @tiers_group.command(name="delete")
+    @tiers.command(name="delete")
     async def tiers_delete(self, ctx: commands.Context, min_streak: int):
         """
         Hapus emoji tier tertentu.
@@ -798,7 +799,7 @@ class StreakCog(commands.Cog):
         await ctx.send(f"🗑️ Emoji untuk tier streak **≥ {min_streak}** dihapus.")
 
     # ---- LIST EMOJI TIER ----
-    @tiers_group.command(name="list")
+    @tiers.command(name="list")
     async def tiers_list(self, ctx: commands.Context):
         """
         Lihat semua emoji tier yang sudah di-set.
