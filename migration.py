@@ -348,6 +348,18 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS streak_emoji_map (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            min_streak INT NOT NULL,
+            emoji_id BIGINT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_guild_min (guild_id, min_streak),
+            INDEX idx_guild (guild_id)
+        );
+    """)
+
     db.commit()
     cursor.close()
     

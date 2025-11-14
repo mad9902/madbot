@@ -1269,3 +1269,87 @@ def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, au
         "broken": broken,
         "delta_days": delta_days,
     }
+
+def set_tier_emoji(guild_id, min_streak, emoji_id):
+    """
+    Simpan atau update emoji untuk tier tertentu.
+    UNIQUE per (guild_id, min_streak).
+    """
+    db = connect_db()
+    cursor = db.cursor()
+
+    cursor.execute("""
+        INSERT INTO streak_emoji_map (guild_id, min_streak, emoji_id)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            emoji_id = VALUES(emoji_id),
+            created_at = CURRENT_TIMESTAMP
+    """, (guild_id, min_streak, emoji_id))
+
+    db.commit()
+    cursor.close()
+    db.close()
+
+def get_tier_emojis(guild_id):
+    """
+    Ambil semua tier emoji untuk guild,
+    diurutkan dari min_streak kecil ke besar.
+    """
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM streak_emoji_map
+        WHERE guild_id = %s
+        ORDER BY min_streak ASC
+    """, (guild_id,))
+
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return rows
+
+def delete_tier_emoji(guild_id, min_streak):
+    """
+    Hapus emoji tier tertentu.
+    """
+    db = connect_db()
+    cursor = db.cursor()
+
+    cursor.execute("""
+        DELETE FROM streak_emoji_map
+        WHERE guild_id = %s AND min_streak = %s
+    """, (guild_id, min_streak))
+
+    db.commit()
+    cursor.close()
+    db.close()
+
+def get_emoji_for_streak(guild_id, streak):
+    """
+    Ambil emoji ID yang cocok untuk streak tertentu.
+    Pilih min_streak terbesar yang <= streak.
+
+    Return:
+        emoji_id atau None
+    """
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT emoji_id
+        FROM streak_emoji_map
+        WHERE guild_id = %s AND min_streak <= %s
+        ORDER BY min_streak DESC
+        LIMIT 1
+    """, (guild_id, streak))
+
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+
+    if row:
+        return row["emoji_id"]
+
+    return None

@@ -12,6 +12,10 @@ from database import (
     get_streak_settings,
     upsert_streak_settings,
     apply_streak_update,
+    get_tier_emojis,
+    set_tier_emoji,
+    delete_tier_emoji,
+    get_emoji_for_streak,
 )
 
 # =========================
@@ -117,7 +121,9 @@ class StreakCog(commands.Cog):
 
         # semua valid -> bot react 🔥
         try:
-            await message.add_reaction("🔥")
+            emoji_id = get_emoji_for_streak(guild_id, pair["current_streak"])
+            e = self.bot.get_emoji(emoji_id) if emoji_id else None
+            await message.add_reaction(e or "🔥")
         except discord.Forbidden:
             pass
 
@@ -448,13 +454,20 @@ class StreakCog(commands.Cog):
     # ----- !streak setchannel -----
 
     @streak_group.command(name="setchannel")
-    @commands.has_permissions(manage_guild=True)
     async def streak_setchannel(self, ctx: commands.Context, tipe: str, channel: discord.TextChannel):
         """
         Set channel streak:
-        - !streak setchannel command #streak  -> channel untuk 'api @user' + reaction
-        - !streak setchannel log #streak-log -> channel untuk log embed
+        - !streak setchannel command #streak
+        - !streak setchannel log #streak-log
         """
+
+        DEV_ID = 416234104317804544
+        is_admin = ctx.author.guild_permissions.manage_guild
+        is_dev = ctx.author.id == DEV_ID
+
+        if not (is_admin or is_dev):
+            return await ctx.send("❌ Kamu tidak punya izin untuk set channel streak.")
+
         tipe = tipe.lower()
         guild_id = ctx.guild.id
         settings = get_streak_settings(guild_id) or {}
@@ -477,6 +490,7 @@ class StreakCog(commands.Cog):
         )
 
         await ctx.send(f"✅ Channel **{tipe}** streak di-set ke {channel.mention}.")
+
 
     # ----- !streak pending -----
 
@@ -628,6 +642,103 @@ class StreakCog(commands.Cog):
         embed.set_footer(text="Contoh: api @username → bot react 🔥 → user react balik → streak naik.")
 
         await ctx.send(embed=embed)
+
+    def format_tier_emoji(bot, emoji_id):
+        """
+        Kembalikan emoji object jika ada (server emoji),
+        kalau tidak ada → tampilkan <:id:id>.
+        """
+        if not emoji_id:
+            return "🔥"  # fallback
+
+        obj = bot.get_emoji(int(emoji_id))
+        if obj:
+            return str(obj)
+        return f"<:e:{emoji_id}>"
+    
+    @commands.group(name="emoji", invoke_without_command=True)
+    async def emoji_group(self, ctx: commands.Context):
+        """
+        Pengaturan emoji tier:
+        - streak emoji set <min_streak> <emoji>
+        - streak emoji delete <min_streak>
+        - streak emoji list
+        """
+        await ctx.send("Gunakan:\n"
+                       "`streak emoji set <min_streak> <emoji>`\n"
+                       "`streak emoji delete <min_streak>`\n"
+                       "`streak emoji list`")
+
+    # ---- SET EMOJI TIER ----
+    @emoji_group.command(name="set")
+    async def emoji_set(self, ctx: commands.Context, min_streak: int, emoji: str):
+        """
+        Atur emoji custom untuk tier tertentu.
+        Contoh:
+            streak emoji set 5 <:flame:1234567890>
+            streak emoji set 100 1234567890
+        """
+        DEV_ID = 416234104317804544
+        is_admin = ctx.author.guild_permissions.manage_guild
+        is_dev = ctx.author.id == DEV_ID
+
+        if not (is_admin or is_dev):
+            return await ctx.send("❌ Kamu tidak punya izin untuk mengatur emoji.")
+
+        # Extract emoji ID
+        emoji_id = None
+        import re
+
+        # Format <:name:id> atau <a:name:id>
+        m = re.match(r"<a?:\w+:(\d+)>", emoji)
+        if m:
+            emoji_id = int(m.group(1))
+        elif emoji.isdigit():
+            emoji_id = int(emoji)
+        else:
+            return await ctx.send("❌ Emoji harus custom emoji (bukan unicode).")
+
+        set_tier_emoji(ctx.guild.id, min_streak, emoji_id)
+
+        obj = self.bot.get_emoji(emoji_id)
+        disp = obj if obj else f"<:e:{emoji_id}>"
+
+        await ctx.send(f"✅ Emoji untuk streak **≥ {min_streak}** di-set ke {disp}")
+
+    # ---- DELETE EMOJI TIER ----
+    @emoji_group.command(name="delete")
+    async def emoji_delete(self, ctx: commands.Context, min_streak: int):
+        """
+        Hapus emoji tier tertentu.
+        """
+        DEV_ID = 416234104317804544
+        is_admin = ctx.author.guild_permissions.manage_guild
+        is_dev = ctx.author.id == DEV_ID
+
+        if not (is_admin or is_dev):
+            return await ctx.send("❌ Kamu tidak punya izin.")
+
+        delete_tier_emoji(ctx.guild.id, min_streak)
+        await ctx.send(f"🗑️ Emoji untuk tier streak **≥ {min_streak}** dihapus.")
+
+    # ---- LIST EMOJI TIER ----
+    @emoji_group.command(name="list")
+    async def emoji_list(self, ctx: commands.Context):
+        """
+        Lihat semua emoji tier yang sudah di-set.
+        """
+        rows = get_tier_emojis(ctx.guild.id)
+        if not rows:
+            return await ctx.send("Belum ada emoji tier yang di-set.")
+
+        lines = []
+        for r in rows:
+            eid = r["emoji_id"]
+            obj = self.bot.get_emoji(int(eid))
+            disp = obj if obj else f"<:e:{eid}>"
+            lines.append(f"- Streak ≥ **{r['min_streak']}** : {disp}")
+
+        await ctx.send("🔥 **Daftar Emoji Tier:**\n" + "\n".join(lines))
 
 
 
