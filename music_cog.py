@@ -1047,18 +1047,32 @@ class music_cog(commands.Cog):
     # ======================================================
 
     def build_queue_page(self, guild, page):
-        # Combine current song + queue + pending list
+        """
+        Display queue hanya berdasarkan:
+        1. current_song
+        2. music_queue (urutan REAL yang bot mainkan)
+        """
         display_list = []
 
+        # NOW PLAYING → nomor 1
         if self.current_song:
-            display_list.append(self.current_song)
+            display_list.append({
+                "title": f"▶️ {self.current_song['title']}",
+                "duration": self.current_song.get("duration", "?"),
+            })
 
-        # queue internal (placeholder & real songs)
+        # SISANYA: QUEUE INTERNAL
         for song, _ in self.music_queue:
-            display_list.append(song)
+            display_list.append({
+                "title": song["title"],
+                "duration": song.get("duration", "?"),
+            })
 
         if len(display_list) == 0:
-            return discord.Embed(title="📭 Queue kosong.", color=discord.Color.red())
+            return discord.Embed(
+                title="📭 Queue kosong.",
+                color=discord.Color.red()
+            )
 
         PER_PAGE = 10
         start = page * PER_PAGE
@@ -1070,6 +1084,7 @@ class music_cog(commands.Cog):
             color=discord.Color.blurple()
         )
 
+        # BUILD DESCRIPTION
         desc = ""
         for i, song in enumerate(display_list[start:end], start=start + 1):
             desc += f"**{i}.** {song['title']}\n"
