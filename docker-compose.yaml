@@ -4,6 +4,8 @@ services:
   madbot-service:
     build: .
     container_name: madbot-service
+    environment:
+      - TZ=Asia/Jakarta
     depends_on:
       - madbot-db
     env_file:
