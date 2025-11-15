@@ -44,9 +44,9 @@ intents.presences = True
 def get_prefix(bot, message):
     if message.guild and message.guild.id in DISABLED_GUILDS:
         if message.content.strip().lower().startswith(("mad boton", "md boton", "mboton")):
-            return ['mad ', 'md ', 'm', 'k', 'kos ']
+            return ['mad', 'm', 'k', 'kos ']
         return commands.when_mentioned(bot)
-    return ['mad ', 'md ', 'm', 'k', 'kos ']
+    return ['mad', 'm', 'k', 'kos ']
 
 # Subclass Bot
 class MadBot(commands.Bot):

@@ -13,7 +13,7 @@ class main_cog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        activity = discord.Game(name="mad help|md help|mhelp")
+        activity = discord.Game(name="mad help|mhelp")
         await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
 
         for guild in self.bot.guilds:
@@ -57,7 +57,7 @@ class main_cog(commands.Cog):
     async def help(self, ctx):
         embed = discord.Embed(
             title="📜 MAD BOT HELP",
-            description="Daftar command yang tersedia:\nGunakan prefix `k, kos, mad , md , m` sebelum command.\nContoh: `mad play | md play | mplay`",
+            description="Daftar command yang tersedia:\nGunakan prefix `k, m, mad , kos ` sebelum command.\nContoh: `mad play | mplay`",
             color=discord.Color.purple()
         )
 
