@@ -1,7 +1,7 @@
 # streak_cog.py
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from database import (
     get_streak_pair,
@@ -24,6 +24,7 @@ from database import (
 
 )
 
+import pytz
 import io
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -186,6 +187,52 @@ class StreakCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.daily_reset_check.start()
+
+    def cog_unload(self):
+        self.daily_reset_check.cancel()
+    
+    @tasks.loop(minutes=1)
+    async def daily_reset_check(self):
+        # timezone Jakarta
+        wib = pytz.timezone("Asia/Jakarta")
+        now = datetime.now(wib)
+
+        # kapan dianggap reset?
+        # Jam 00:00—00:01 WIB
+        if now.hour == 0 and now.minute == 0:
+            print("[STREAK] Menjalankan reset harian jam 00:00 WIB")
+            await self.process_daily_reset()
+
+    async def process_daily_reset(self):
+        """
+        Di sini kamu cek semua pasangan ACTIVE, lalu hitung gap,
+        lalu update needs_restore / BROKEN sesuai aturan kamu.
+        """
+        guilds = self.bot.guilds
+        for guild in guilds:
+            settings = get_streak_settings(guild.id)
+            if not settings:
+                continue
+
+            rows = get_active_streaks(guild.id, limit=5000, offset=0)
+
+            for pair in rows:
+                # panggil auto gap
+                updated = auto_process_gap(pair)
+
+                # kalau masuk mode restore → kirim warning
+                if updated and updated.get("needs_restore") == 1:
+                    await self.send_warning_near_dead(guild, updated)
+
+                # kalau gap >= 3 → streak mati
+                if updated and updated["status"] == "BROKEN":
+                    await self.send_streak_dead(guild, updated)
+
+
+    @daily_reset_check.before_loop
+    async def before_daily_reset(self):
+        await self.bot.wait_until_ready()
 
     async def send_warning_near_dead(self, guild, pair):
         """Kirim embed warning ke log channel."""

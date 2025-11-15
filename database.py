@@ -1236,8 +1236,23 @@ def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, au
             # normal naik
             current = before + 1
 
+            cursor.execute("""
+                UPDATE streak_pairs
+                SET needs_restore = 0,
+                    restore_deadline = NULL
+                WHERE id = %s
+            """, (pair["id"],))
+
         elif delta_days == 2:
             if is_restore:
+                cursor2 = db.cursor()
+                cursor2.execute("""
+                    UPDATE streak_pairs
+                    SET needs_restore = 0,
+                        restore_deadline = NULL
+                    WHERE id = %s
+                """, (pair["id"],))
+                db.commit()
 
                 # --- Reset restore cycle jika perlu ---
                 pair = ensure_restore_cycle(pair)
