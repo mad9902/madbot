@@ -110,6 +110,32 @@ class PlayerControl(View):
 
         await interaction.response.send_message(msg, ephemeral=True)
 
+class QueueView(View):
+    def __init__(self, cog, ctx, page=0):
+        super().__init__(timeout=30)
+        self.cog = cog
+        self.ctx = ctx
+        self.page = page
+
+    async def update(self, interaction):
+        embed = self.cog.build_queue_page(self.ctx.guild, self.page)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="⬅ Prev", style=discord.ButtonStyle.gray)
+    async def prev_page(self, interaction, button):
+        if self.page > 0:
+            self.page -= 1
+        await self.update(interaction)
+
+    @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.gray)
+    async def next_page(self, interaction, button):
+        total = len(self.cog.music_queue)
+        max_page = max(0, (total - 1) // 10)
+
+        if self.page < max_page:
+            self.page += 1
+        await self.update(interaction)
+
 
 class music_cog(commands.Cog):
     def __init__(self, bot):
@@ -119,6 +145,8 @@ class music_cog(commands.Cog):
         self.MAX_BATCH = 15
 
         self.loading_spotify = False
+
+        self.song_cache = {}  # title -> song_data
 
         # autoplay state
         self.autoplay = False
@@ -328,56 +356,53 @@ class music_cog(commands.Cog):
     # YOUTUBE SEARCH & EXTRACT — Anti SABR 2025
     # ======================================================
 
-    def search_yt(self, query):
-        """
-        Return dict:
-        {
-            "source": direct_audio_url,
-            "title": "...",
-            "thumbnail": "...",
-            "duration": "..."
-        }
-        """
+    async def search_yt(self, query):
+        # Cek cache dulu
+        key = query.lower().strip()
+        if key in self.song_cache:
+            return self.song_cache[key]
 
-        YDL_OPTIONS = {
-            "format": "bestaudio/best",
-            "quiet": True,
-            "noplaylist": True,
-            "default_search": "auto",
-            "extract_flat": False,
-            "ignoreerrors": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "nocheckcertificate": True,
-            "cachedir": False,
-        }
+        loop = asyncio.get_running_loop()
 
-        with YoutubeDL(YDL_OPTIONS) as ydl:
-            try:
-                info = ydl.extract_info(query, download=False)
-            except Exception as e:
-                print(f"[YT ERROR] {e}")
-                return None
+        def run():
+            YDL_OPTIONS = {
+                "format": "bestaudio/best",
+                "quiet": True,
+                "noplaylist": True,
+                "default_search": "auto",
+                "ignoreerrors": True,
+                "no_warnings": True,
+                "geo_bypass": True,
+                "nocheckcertificate": True,
+                "cachedir": False,
+            }
+            with YoutubeDL(YDL_OPTIONS) as ydl:
+                try:
+                    return ydl.extract_info(query, download=False)
+                except:
+                    return None
+
+        info = await loop.run_in_executor(None, run)
+        if not info:
+            return None
+
+        if "entries" in info:
+            info = info["entries"][0]
 
         if not info:
             return None
 
-        # If search results
-        if "entries" in info:
-            info = info["entries"][0]
-
-        if not info or "url" not in info:
-            return None
-
-        # Fallback for SABR HLS streams
-        stream_url = info.get("url")
-
-        return {
-            "source": stream_url,
-            "title": info.get("title", "Unknown title"),
+        result = {
+            "source": info.get("url"),
+            "title": info.get("title", "Unknown"),
             "thumbnail": info.get("thumbnail"),
             "duration": info.get("duration_string") or info.get("duration"),
         }
+
+        # Simpan ke CACHE!
+        self.song_cache[key] = result
+
+        return result
 
 
     def yt_search_filtered(self, query):
@@ -480,16 +505,12 @@ class music_cog(commands.Cog):
     # ======================================================
 
     async def preload_next(self):
-        """
-        Pre-fetch next track source for low-latency transition.
-        """
-        if len(self.music_queue) == 0:
+        if not self.music_queue:
             self.preloaded_source = None
             return
 
-        song_data, _ = self.music_queue[0]
-        self.preloaded_source = song_data["source"]
-        print(f"[PRELOAD] next source ready: {song_data['title']}")
+        next_song, _ = self.music_queue[0]
+        self.preloaded_source = next_song["source"]
 
     # ======================================================
     # PLAY MUSIC (MAIN EXECUTION)
@@ -549,10 +570,11 @@ class music_cog(commands.Cog):
             "-nostdin "
             "-reconnect 1 "
             "-reconnect_streamed 1 "
-            "-reconnect_on_network_error 1 "
             "-reconnect_delay_max 5 "
+            "-reconnect_on_network_error 1 "
             "-reconnect_at_eof 1 "
-            "-protocol_whitelist file,http,https,tcp,tls,crypto"
+            "-protocol_whitelist file,http,https,tcp,tls,crypto "
+            "-fflags +genpts "
         )
 
         options_str = (
@@ -694,6 +716,9 @@ class music_cog(commands.Cog):
     # ======================================================
 
     async def _continue_next(self, error=None):
+
+        if not self.vc:
+            return
 
         async with self.after_lock:  # <--- ANTI DUPLIKASI
             # jika stop dipicu refresh_current
@@ -850,6 +875,18 @@ class music_cog(commands.Cog):
                     self.empty_vc_disconnect_task.cancel()
                     self.empty_vc_disconnect_task = None
 
+    @commands.Cog.listener()
+    async def on_disconnect(self):
+        # untuk kasus region pindah / IP drop
+        if self.vc and not self.vc.is_connected():
+            try:
+                await asyncio.sleep(2)
+                await self.vc.connect()
+                print("[VC] Reconnected after drop.")
+            except:
+                pass
+
+
     # ======================================================
     # COMMAND: PLAY
     # ======================================================
@@ -873,22 +910,45 @@ class music_cog(commands.Cog):
             first_batch = tracks[:self.MAX_BATCH]
             backlog = tracks[self.MAX_BATCH:]
 
-            # simpan backlog
-            self.spotify_backlog.extend(backlog)
+            self.spotify_backlog = backlog
+            self.loading_spotify = True
+
+            # parallel-safe batch convert
+            loop = asyncio.get_running_loop()
+
+            def convert_list(batch):
+                results = []
+                with YoutubeDL({"quiet": True, "format": "bestaudio"}) as ydl:
+                    for q in batch:
+                        try:
+                            info = ydl.extract_info(q, download=False)
+                            if "entries" in info:
+                                info = info["entries"][0]
+                            if info:
+                                results.append(info)
+                        except:
+                            pass
+                return results
+
+            infos = await loop.run_in_executor(None, lambda: convert_list(first_batch))
 
             added = 0
+            for info in infos:
+                song = {
+                    "source": info.get("url"),
+                    "title": info.get("title"),
+                    "thumbnail": info.get("thumbnail"),
+                    "duration": info.get("duration_string") or info.get("duration"),
+                }
+                self.music_queue.append([song, vc])
+                added += 1
 
-            for t in first_batch:
-                song = self.search_yt(t)
-                if song:
-                    self.music_queue.append([song, vc])
-                    added += 1
-                    if not self.is_playing and not first_play:
-                        await self.play_music()
-                        first_play = True
+            if not self.is_playing:
+                await self.play_music()
 
-            await ctx.send(f"🎧 Menambahkan **{added}** lagu pertama. Sisanya {len(backlog)} lagu akan dimuat otomatis bertahap.")
+            await ctx.send(f"🎧 Menambahkan **{added}** lagu. Sisa: {len(backlog)}")
             return
+
 
         # YouTube search
         self.loading_spotify = False
@@ -925,41 +985,52 @@ class music_cog(commands.Cog):
     # COMMAND: QUEUE AND LOOP
     # ======================================================
 
-    @commands.command(name="queue", aliases=["q"])
-    async def queue_cmd(self, ctx):
-        if not self.current_song and len(self.music_queue)==0:
-            return await ctx.send("📭 Queue kosong.")
+    def build_queue_page(self, guild, page):
+        if not self.current_song:
+            return discord.Embed(title="📭 Queue kosong.")
 
         embed = discord.Embed(
-            title="🎶 Music Queue",
+            title=f"🎶 Music Queue (Page {page+1})",
             color=discord.Color.blurple()
         )
 
-        if self.current_song:
-            embed.add_field(
-                name="▶️ Now Playing",
-                value=f"**{self.current_song['title']}**",
-                inline=False
-            )
-
-        if len(self.music_queue) > 0:
-            desc = ""
-            for i,(song,_) in enumerate(self.music_queue[:15], start=1):
-                desc += f"**{i}.** {song['title']}\n"
-            embed.add_field(
-                name="🎵 Next Up",
-                value=desc,
-                inline=False
-            )
-
-        loop_status = self.loop_mode or "off"
-        autoplay_status = "on" if self.autoplay else "off"
-        embed.set_footer(
-            text=f"Total: {len(self.music_queue)} songs • Loop: {loop_status} • Autoplay: {autoplay_status}"
+        embed.add_field(
+            name="▶️ Now Playing",
+            value=f"**{self.current_song['title']}**",
+            inline=False
         )
 
+        start = page * 10
+        end = start + 10
 
-        await ctx.send(embed=embed)
+        items = self.music_queue[start:end]
+
+        if not items:
+            embed.add_field(name="Kosong", value="Tidak ada lagu.", inline=False)
+            return embed
+
+        desc = ""
+        for i, (song, _) in enumerate(items, start=start+1):
+            desc += f"**{i}.** {song['title']}\n"
+
+        embed.add_field(
+            name="🎵 Next Up",
+            value=desc,
+            inline=False
+        )
+
+        return embed
+
+
+    @commands.command(name="queue", aliases=["q"])
+    async def queue_cmd(self, ctx):
+        if not self.current_song and len(self.music_queue) == 0:
+            return await ctx.send("📭 Queue kosong.")
+
+        embed = self.build_queue_page(ctx.guild, page=0)
+        view = QueueView(self, ctx, page=0)
+
+        await ctx.send(embed=embed, view=view)
 
     @commands.command(name="loop")
     async def loop_cmd(self, ctx, mode=None):
