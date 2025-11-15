@@ -1134,25 +1134,32 @@ class music_cog(commands.Cog):
 
     async def send_to_music_channel(self, guild, embed, view=None):
         gid = str(guild.id)
+        print("[DEBUG] channel_settings:", self.channel_settings)
+
+        if gid not in self.channel_settings:
+            print("[ERROR] Tidak ada entry guild di channel_settings")
+            return
+
         ch_id = self.channel_settings.get(gid, {}).get("music")
+        print("[DEBUG] ch_id:", ch_id)
 
         if not ch_id:
-            print("[ERROR] Music channel belum di-set. Gunakan: setchmusic #channel")
-            return None
+            print("[ERROR] Music channel belum di-set atau value kosong.")
+            return
 
         target = guild.get_channel(int(ch_id))
+        print("[DEBUG] target channel object:", target)
 
         if not target:
-            print("[ERROR] Channel ID tidak valid atau tidak ditemukan di guild.")
-            return None
+            print("[ERROR] Channel ID tidak ditemukan di guild!")
+            return
 
         try:
+            print("[DEBUG] Sending embed now....")
             return await target.send(embed=embed, view=view)
         except Exception as e:
-            print("[ERROR] Tidak bisa send ke channel musik:", e)
+            print("[FATAL SEND ERROR]", e)
             return None
-
-
 
     # ======================================================
     # COG SETUP
