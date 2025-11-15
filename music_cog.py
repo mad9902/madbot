@@ -918,17 +918,25 @@ class music_cog(commands.Cog):
 
             def convert_list(batch):
                 results = []
-                with YoutubeDL({"quiet": True, "format": "bestaudio"}) as ydl:
+                with YoutubeDL({
+                    "format": "bestaudio/best",
+                    "quiet": True,
+                    "noplaylist": True,
+                    "default_search": "auto",
+                    "ignoreerrors": True,
+                    "no_warnings": True,
+                }) as ydl:
                     for q in batch:
                         try:
                             info = ydl.extract_info(q, download=False)
-                            if "entries" in info:
-                                info = info["entries"][0]
                             if info:
+                                if "entries" in info:
+                                    info = info["entries"][0]
                                 results.append(info)
                         except:
                             pass
                 return results
+
 
             infos = await loop.run_in_executor(None, lambda: convert_list(first_batch))
 
