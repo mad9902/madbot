@@ -46,7 +46,7 @@ def get_prefix(bot, message):
         if message.content.strip().lower().startswith(("mad boton", "md boton", "mboton")):
             return ['mad', 'm', 'k', 'kos ']
         return commands.when_mentioned(bot)
-    return ['mad', 'm', 'k', 'kos ']
+    return ['kos', 'mad ', 'm', 'k']
 
 # Subclass Bot
 class MadBot(commands.Bot):
