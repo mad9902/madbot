@@ -378,12 +378,22 @@ class StreakCog(commands.Cog):
 
         # ★ mode needs_restore, bot tetap react tapi hanya memberi peringatan
         if pair["needs_restore"] == 1:
+            # Tentukan siapa partner-nya
+            u1 = pair["user1_id"]
+            u2 = pair["user2_id"]
+            author = message.author.id
+            
+            # partner_id = user yang bukan author
+            partner_id = u1 if author == u2 else u2
+
             await message.add_reaction("⚠️")
             await message.channel.send(
-                f"⚠️ {message.author.mention}, pasanganmu **butuh restore**.\n"
-                f"Pasanganmu harus react 🔥 untuk memulihkan streak sebelum `{pair['restore_deadline']}`."
+                f"⚠️ {message.author.mention}, pasanganmu **butuh restore**."
+                f"\n<@{partner_id}> harus mengetik `mstreak restore @{message.author.display_name}`"
+                f"\nSebelum **{pair['restore_deadline']}**."
             )
             return
+
 
         if not pair:
             await message.channel.send(
