@@ -6,7 +6,7 @@ import asyncio
 import requests
 
 # ================================
-#  VALIDASI KATA MENGGUNAKAN API KATEGLO
+#  VALIDASI KATA MENGGUNAKAN API KBBI (herokuapp)
 # ================================
 
 CACHE_KATA = {}
@@ -17,18 +17,15 @@ def cek_kata(kata: str) -> bool:
     if kata in CACHE_KATA:
         return CACHE_KATA[kata]
 
-    url = f"https://kateglo.com/api.php?format=json&phrase={kata}"
+    url = f"https://kbbi-api-amm.herokuapp.com/search?q={kata}"
 
     try:
         r = requests.get(url, timeout=5)
         data = r.json()
 
-        if data.get("definition"):
-            CACHE_KATA[kata] = True
-            return True
-
-        CACHE_KATA[kata] = False
-        return False
+        valid = data.get("status", False)
+        CACHE_KATA[kata] = valid
+        return valid
 
     except:
         CACHE_KATA[kata] = False
@@ -57,7 +54,7 @@ class SambungKataMultiplayer(commands.Cog):
         view = JoinSambungKata(self.bot, ctx.author.id, ctx.guild.id, self.active_games)
         embed = discord.Embed(
             title="🔤 Game Sambung Kata Multiplayer",
-            description="Klik tombol **Join Game** untuk bergabung!\n\nBelum ada pemain yang bergabung.",
+            description="Klik tombol **Join Game** untuk ikut bermain!",
             color=discord.Color.blurple()
         )
         msg = await ctx.send(embed=embed, view=view)
@@ -79,7 +76,7 @@ class SambungKataMultiplayer(commands.Cog):
             view.game_active = False
             view.stop()
         else:
-            await ctx.send("❌ Tidak ada game yang berjalan atau kamu bukan host.")
+            await ctx.send("❌ Tidak ada game berjalan atau kamu bukan host.")
 
 
 class JoinSambungKata(View):
@@ -88,13 +85,19 @@ class JoinSambungKata(View):
         self.bot = bot
         self.host_id = host_id
         self.guild_id = guild_id
-        self.players = {}
-        self.message = None
         self.game_dict = game_dict
-        self.game_active = False
-        self.skip_counts = {}
-        self.miss_counts = {}  # ✨ baru: hitung miss per player
 
+        self.players = {}         # id: user
+        self.skip_counts = {}     # id: skip counter
+        self.miss_counts = {}     # id: timeout counter
+
+        self.message = None
+        self.game_active = False
+
+
+    # =======================
+    #  JOIN
+    # =======================
     @discord.ui.button(label="Join Game", style=discord.ButtonStyle.success)
     async def join_button(self, interaction, button):
         if interaction.user.id in self.players:
@@ -103,7 +106,7 @@ class JoinSambungKata(View):
 
         self.players[interaction.user.id] = interaction.user
         self.skip_counts[interaction.user.id] = 0
-        self.miss_counts[interaction.user.id] = 0  # ✨ reset miss count player baru
+        self.miss_counts[interaction.user.id] = 0
 
         await interaction.response.send_message(f"✅ {interaction.user.name} telah bergabung!", ephemeral=True)
         await self.update_embed()
@@ -112,18 +115,24 @@ class JoinSambungKata(View):
             self.children[1].disabled = False
             await self.message.edit(view=self)
 
+
+    # =======================
+    #  START GAME
+    # =======================
     @discord.ui.button(label="Start Game", style=discord.ButtonStyle.primary, disabled=True)
     async def start_button(self, interaction, button):
         if interaction.user.id != self.host_id:
-            await interaction.response.send_message("❌ Hanya host yang bisa memulai game!", ephemeral=True)
+            await interaction.response.send_message("❌ Hanya host yang bisa memulai!", ephemeral=True)
             return
 
+        # Disable join & start
         self.children[0].disabled = True
         self.children[1].disabled = True
         await self.message.edit(view=self)
 
         await interaction.response.defer()
         await self.start_game(interaction)
+
 
     async def update_embed(self):
         desc = "\n".join(f"- {u.name}" for u in self.players.values())
@@ -134,39 +143,46 @@ class JoinSambungKata(View):
         )
         await self.message.edit(embed=embed, view=self)
 
+
+    # =======================
+    #  GAME LOGIC
+    # =======================
     async def start_game(self, interaction):
         self.game_active = True
-        players = list(self.players.values())
 
+        players = list(self.players.values())
         random.shuffle(players)
+
         poin = {p.id: 0 for p in players}
 
         kata_awal = random.choice(["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"])
-        used_words = {kata_awal}
+        used = {kata_awal}
         kata_terakhir = kata_awal
+
         index = 0
 
         def potong(k): return k[-2:]
 
-        await interaction.followup.send(f"🎮 Game dimulai!\nKata pertama: **{kata_terakhir}**")
+        await interaction.followup.send(f"🎮 Game dimulai!\nKata pertama: **{kata_awal}**")
 
-        # ==========================
-        #  GAME LOOP
-        # ==========================
-
+        # ========================
+        #  MAIN GAME LOOP
+        # ========================
         while self.game_active and len(players) > 1:
-            round_miss = 0  # ✨ reset miss untuk ronde ini
+            ronde_miss = 0
 
-            for _ in range(len(players)):  # iterate ronde
-                if not self.game_active: 
+            for _ in range(len(players)):
+                if not self.game_active:
                     break
 
                 player = players[index]
-                akhir = potong(kata_terakhir)
+                awalan = potong(kata_terakhir)
 
                 await interaction.followup.send(
-                    f"{player.mention}, giliranmu! Kata harus diawali dengan **'{akhir}'**.\n"
-                    f"Skip tersisa: {3 - self.skip_counts[player.id]}"
+                    f"{player.mention}, giliranmu!\n"
+                    f"Kata harus diawali **'{awalan}'**\n"
+                    f"⏳ Waktu: **15 detik**\n"
+                    f"⏭ Skip tersisa: {3 - self.skip_counts[player.id]}"
                 )
 
                 def check(m):
@@ -175,9 +191,10 @@ class JoinSambungKata(View):
                 start = asyncio.get_event_loop().time()
                 kata = None
 
-                while (asyncio.get_event_loop().time() - start) < 20:
+                # ========== 15 DETIK WAIT ==========
+                while (asyncio.get_event_loop().time() - start) < 15:
                     try:
-                        timeout = 20 - (asyncio.get_event_loop().time() - start)
+                        timeout = 15 - (asyncio.get_event_loop().time() - start)
                         msg = await self.bot.wait_for("message", check=check, timeout=timeout)
                         kata = msg.content.lower().strip()
                         break
@@ -185,23 +202,27 @@ class JoinSambungKata(View):
                         kata = None
                         break
 
-                # ========== TIMEOUT HANDLING ==========
+                # ============================================
+                #              TIMEOUT HANDLING
+                # ============================================
                 if kata is None:
                     self.miss_counts[player.id] += 1
-                    round_miss += 1
+                    ronde_miss += 1
 
-                    # Diskualifikasi jika miss 2x
                     if self.miss_counts[player.id] >= 2:
                         await interaction.followup.send(
-                            f"⏰ {player.mention} tidak merespon **2 kali**, kamu **didiskualifikasi!**"
+                            f"⛔ {player.mention} tidak merespon **2 kali**, kamu **didiskualifikasi!**"
                         )
+
                         players.remove(player)
                         self.players.pop(player.id, None)
                         self.skip_counts.pop(player.id, None)
                         self.miss_counts.pop(player.id, None)
 
                         if len(players) == 1:
-                            await interaction.followup.send(f"🏆 {players[0].mention} menang otomatis!")
+                            await interaction.followup.send(
+                                f"🏆 {players[0].mention} menang otomatis!"
+                            )
                             self.game_active = False
                         break
 
@@ -212,7 +233,10 @@ class JoinSambungKata(View):
                     index = (index + 1) % len(players)
                     continue
 
-                # ========== KATA VALIDASI ==========
+                # ============================================
+                #               INPUT HANDLING
+                # ============================================
+
                 if kata == "stopgame" and player.id == self.host_id:
                     await interaction.followup.send("🛑 Game dihentikan oleh host.")
                     self.game_active = False
@@ -223,24 +247,24 @@ class JoinSambungKata(View):
                         await interaction.followup.send("❌ Skip sudah habis.")
                     else:
                         self.skip_counts[player.id] += 1
-                        await interaction.followup.send(f"⏩ {player.mention} skip!")
+                        await interaction.followup.send(f"⏭ {player.mention} melakukan skip.")
                     index = (index + 1) % len(players)
                     continue
 
-                if not kata.startswith(akhir):
+                if not kata.startswith(awalan):
                     await interaction.followup.send("❌ Kata tidak sesuai awalan.")
                     continue
 
-                if kata in used_words:
+                if kata in used:
                     await interaction.followup.send("⚠️ Kata sudah pernah dipakai.")
                     continue
 
                 if not cek_kata(kata):
-                    await interaction.followup.send("❌ Kata tidak valid menurut Kateglo/KBBI.")
+                    await interaction.followup.send("❌ Kata tidak valid menurut KBBI.")
                     continue
 
-                # Kata valid
-                used_words.add(kata)
+                # ========== KATA VALID ==========
+                used.add(kata)
                 poin[player.id] += len(kata)
                 kata_terakhir = kata
 
@@ -255,10 +279,12 @@ class JoinSambungKata(View):
 
                 index = (index + 1) % len(players)
 
-            # ========== CEK RONDE TIDAK ADA PEMAIN RESPON ==========
-            if self.game_active and round_miss >= len(players):
+            # ============================================
+            # STOP JIKA SEMUA PLAYER DALAM 1 RONDE DIAM
+            # ============================================
+            if self.game_active and ronde_miss >= len(players):
                 await interaction.followup.send(
-                    "🛑 **Semua pemain tidak merespon di ronde ini. Game otomatis dihentikan.**"
+                    "🛑 **Semua pemain tidak merespon di ronde ini. Game dihentikan!**"
                 )
                 self.game_active = False
                 break
