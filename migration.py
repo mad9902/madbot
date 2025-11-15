@@ -435,6 +435,20 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE disabled_channels (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+
+            guild_id BIGINT UNSIGNED NOT NULL,
+            channel_id BIGINT UNSIGNED NOT NULL,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE KEY uq_disabled_channel (guild_id, channel_id),
+            INDEX idx_guild (guild_id)
+        );
+    """)
+
     db.commit()
     cursor.close()
     

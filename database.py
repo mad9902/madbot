@@ -56,6 +56,48 @@ def connect_db():
         database=os.getenv("MYSQL_DB")
     )
 
+class ChannelBlockManager:
+    def __init__(self, db):
+        self.db = db
+        self.cache = {}  # {guild_id: set(channel_ids)}
+
+    def load_all_guilds(self, guilds):
+        cursor = self.db.cursor()
+        for guild in guilds:
+            gid = guild.id
+            cursor.execute("SELECT channel_id FROM disabled_channels WHERE guild_id=%s", (gid,))
+            rows = cursor.fetchall()
+            self.cache[gid] = {row[0] for row in rows}
+
+    def is_channel_disabled(self, guild_id, channel_id):
+        return guild_id in self.cache and channel_id in self.cache[guild_id]
+
+    def disable_channel(self, guild_id, channel_id):
+        cursor = self.db.cursor()
+        cursor.execute("""
+            INSERT INTO disabled_channels (guild_id, channel_id)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE channel_id = channel_id;
+        """, (guild_id, channel_id))
+        self.db.commit()
+
+        self.cache.setdefault(guild_id, set()).add(channel_id)
+
+    def enable_channel(self, guild_id, channel_id):
+        cursor = self.db.cursor()
+        cursor.execute("""
+            DELETE FROM disabled_channels
+            WHERE guild_id = %s AND channel_id = %s
+        """, (guild_id, channel_id))
+        self.db.commit()
+
+        if guild_id in self.cache:
+            self.cache[guild_id].discard(channel_id)
+
+    def get_disabled_channels(self, guild_id):
+        return self.cache.get(guild_id, set())
+
+
 class CommandManager:
     """Handles command disabling/enabling functionality"""
     
