@@ -17,19 +17,23 @@ def cek_kata(kata: str) -> bool:
     if kata in CACHE_KATA:
         return CACHE_KATA[kata]
 
-    url = f"https://x-labs.my.id/api/kbbi/search/{kata}"
+    url = f"https://x-labs.my.id/api/kbbi?search={kata}"
 
     try:
         r = requests.get(url, timeout=5)
         data = r.json()
 
-        valid = data.get("status", False)
+        # Format API x-labs:
+        # success = True → kata valid
+        valid = bool(data.get("success", False))
+
         CACHE_KATA[kata] = valid
         return valid
 
     except:
         CACHE_KATA[kata] = False
         return False
+
 
 
 # ==================================================
