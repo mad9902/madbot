@@ -115,6 +115,11 @@ class music_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+        self.spotify_backlog = []
+        self.MAX_BATCH = 15
+
+        self.loading_spotify = False
+
         # autoplay state
         self.autoplay = False
 
@@ -746,11 +751,24 @@ class music_cog(commands.Cog):
                 await self.start_idle_timer()
                 return
 
+            # ===== AUTO LOAD SPOTIFY BACKLOG =====
+            if self.loading_spotify and len(self.music_queue) < 5 and len(self.spotify_backlog) > 0:
+                next_batch = self.spotify_backlog[:self.MAX_BATCH]
+                self.spotify_backlog = self.spotify_backlog[self.MAX_BATCH:]
+
+                vc = self.vc.channel
+                loaded = 0
+
+                for t in next_batch:
+                    song = self.search_yt(t)
+                    if song:
+                        self.music_queue.append([song, vc])
+                        loaded += 1
+
+                print(f"[SPOTIFY BATCH] Loaded {loaded} more tracks from backlog.")
+
             # ===== LANJUT =====
             await self.play_music()
-
-
-
 
 
     # ======================================================
@@ -845,22 +863,38 @@ class music_cog(commands.Cog):
 
         # Spotify link
         if "open.spotify.com" in query:
+            self.loading_spotify = True
             tracks = await self.handle_spotify(query)
             if not tracks:
                 return await ctx.send("❌ Tidak bisa ambil lagu dari Spotify.")
 
             first_play = False
-            for t in tracks:
+            # ambil batch pertama
+            first_batch = tracks[:self.MAX_BATCH]
+            backlog = tracks[self.MAX_BATCH:]
+
+            # simpan backlog
+            self.spotify_backlog.extend(backlog)
+
+            added = 0
+
+            for t in first_batch:
                 song = self.search_yt(t)
                 if song:
                     self.music_queue.append([song, vc])
+                    added += 1
                     if not self.is_playing and not first_play:
                         await self.play_music()
                         first_play = True
-            return await ctx.send(f"🎧 Menambahkan **{len(tracks)}** lagu ke queue.")
+
+            await ctx.send(f"🎧 Menambahkan **{added}** lagu pertama. Sisanya {len(backlog)} lagu akan dimuat otomatis bertahap.")
+            return
 
         # YouTube search
+        self.loading_spotify = False
+        self.spotify_backlog.clear()
         song = self.search_yt(query)
+
         if not song:
             return await ctx.send("❌ Lagu tidak ditemukan.")
 
