@@ -6,42 +6,43 @@ import asyncio
 import requests
 
 # ================================
-#  VALIDASI KATA MENGGUNAKAN API
+#  VALIDASI KATA MENGGUNAKAN API KATEGLO
 # ================================
 
-CACHE_KATA = {}  # Cache biar ga spam API
+CACHE_KATA = {}
 
 def cek_kata(kata: str) -> bool:
     kata = kata.lower().strip()
 
-    # Cek di cache dulu
     if kata in CACHE_KATA:
         return CACHE_KATA[kata]
 
-    url = f"https://x-labs.my.id/api/kbbi/search/{kata}"
+    url = f"https://kateglo.com/api.php?format=json&phrase={kata}"
 
     try:
         r = requests.get(url, timeout=5)
         data = r.json()
 
-        valid = data.get("status", False)
+        if data.get("definition"):
+            CACHE_KATA[kata] = True
+            return True
 
-        CACHE_KATA[kata] = valid
-        return valid
+        CACHE_KATA[kata] = False
+        return False
 
-    except Exception:
+    except:
         CACHE_KATA[kata] = False
         return False
 
 
 # ==================================================
-#  COG GAME SAMBUNG KATA MULTIPLAYER (TETAP SAMA)
+#  COG GAME SAMBUNG KATA MULTIPLAYER
 # ==================================================
 
 class SambungKataMultiplayer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_games = {}  # guild_id: JoinSambungKata instance
+        self.active_games = {}
 
     def cog_unload(self):
         for view in self.active_games.values():
@@ -56,11 +57,12 @@ class SambungKataMultiplayer(commands.Cog):
         view = JoinSambungKata(self.bot, ctx.author.id, ctx.guild.id, self.active_games)
         embed = discord.Embed(
             title="🔤 Game Sambung Kata Multiplayer",
-            description="Klik tombol **Join Game** di bawah untuk bergabung!\n\nBelum ada pemain yang bergabung.",
+            description="Klik tombol **Join Game** untuk bergabung!\n\nBelum ada pemain yang bergabung.",
             color=discord.Color.blurple()
         )
         msg = await ctx.send(embed=embed, view=view)
         view.message = msg
+
         self.active_games[ctx.guild.id] = view
 
         async def wait_finish():
@@ -86,202 +88,182 @@ class JoinSambungKata(View):
         self.bot = bot
         self.host_id = host_id
         self.guild_id = guild_id
-        self.players = {}  # user.id: discord.User
+        self.players = {}
         self.message = None
-        self.current_player = None
-        self.skip_event = asyncio.Event()
-        self.stop_event = asyncio.Event()
         self.game_dict = game_dict
         self.game_active = False
-        self.skip_counts = {}  # user.id: jumlah skip yang sudah dipakai
+        self.skip_counts = {}
+        self.miss_counts = {}  # ✨ baru: hitung miss per player
 
     @discord.ui.button(label="Join Game", style=discord.ButtonStyle.success)
-    async def join_button(self, interaction: discord.Interaction, button: Button):
+    async def join_button(self, interaction, button):
         if interaction.user.id in self.players:
             await interaction.response.send_message("❗ Kamu sudah join!", ephemeral=True)
             return
 
         self.players[interaction.user.id] = interaction.user
         self.skip_counts[interaction.user.id] = 0
+        self.miss_counts[interaction.user.id] = 0  # ✨ reset miss count player baru
+
         await interaction.response.send_message(f"✅ {interaction.user.name} telah bergabung!", ephemeral=True)
         await self.update_embed()
 
         if len(self.players) >= 2:
-            self.children[1].disabled = False  # Enable Start Game
+            self.children[1].disabled = False
             await self.message.edit(view=self)
 
     @discord.ui.button(label="Start Game", style=discord.ButtonStyle.primary, disabled=True)
-    async def start_button(self, interaction: discord.Interaction, button: Button):
+    async def start_button(self, interaction, button):
         if interaction.user.id != self.host_id:
             await interaction.response.send_message("❌ Hanya host yang bisa memulai game!", ephemeral=True)
             return
 
-        self.children[0].disabled = True  # Join
-        self.children[1].disabled = True  # Start
+        self.children[0].disabled = True
+        self.children[1].disabled = True
         await self.message.edit(view=self)
+
         await interaction.response.defer()
         await self.start_game(interaction)
 
     async def update_embed(self):
-        desc = "\n".join(f"- {user.name}" for user in self.players.values()) or "Belum ada pemain."
+        desc = "\n".join(f"- {u.name}" for u in self.players.values())
         embed = discord.Embed(
             title="🔤 Game Sambung Kata Multiplayer",
-            description=f"Klik tombol **Join Game** untuk bergabung!\n\nPemain:\n{desc}",
+            description=f"Pemain:\n{desc}",
             color=discord.Color.blurple()
         )
         await self.message.edit(embed=embed, view=self)
 
     async def start_game(self, interaction):
         self.game_active = True
-
         players = list(self.players.values())
+
         random.shuffle(players)
         poin = {p.id: 0 for p in players}
+
         kata_awal = random.choice(["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"])
         used_words = {kata_awal}
         kata_terakhir = kata_awal
         index = 0
 
-        def potong_suku(kata):
-            return kata[-2:]
+        def potong(k): return k[-2:]
 
         await interaction.followup.send(f"🎮 Game dimulai!\nKata pertama: **{kata_terakhir}**")
 
+        # ==========================
+        #  GAME LOOP
+        # ==========================
+
         while self.game_active and len(players) > 1:
-            player = players[index]
-            self.current_player = player
-            akhir = potong_suku(kata_terakhir)
+            round_miss = 0  # ✨ reset miss untuk ronde ini
 
-            if index == 0:
-                sorted_players = sorted(players, key=lambda p: poin[p.id], reverse=True)
-                poin_embed = discord.Embed(
-                    title="📊 Skor Sementara",
-                    description="\n".join(f"**{p.name}**: {poin[p.id]} poin" for p in sorted_players),
-                    color=discord.Color.green()
+            for _ in range(len(players)):  # iterate ronde
+                if not self.game_active: 
+                    break
+
+                player = players[index]
+                akhir = potong(kata_terakhir)
+
+                await interaction.followup.send(
+                    f"{player.mention}, giliranmu! Kata harus diawali dengan **'{akhir}'**.\n"
+                    f"Skip tersisa: {3 - self.skip_counts[player.id]}"
                 )
-                await interaction.followup.send(embed=poin_embed)
 
-            await interaction.followup.send(
-                f"{player.mention}, giliranmu! Kata harus diawali dengan **'{akhir}'**. (20 detik)\n"
-                f"Skip tersisa: {3 - self.skip_counts.get(player.id, 0)}\n"
-                f"Ketik kata baru, atau ketik **skip** untuk melewatkan giliran."
-            )
+                def check(m):
+                    return m.channel == interaction.channel and m.author.id == player.id
 
-            def check(m):
-                return m.channel == interaction.channel and m.author.id == player.id
+                start = asyncio.get_event_loop().time()
+                kata = None
 
-            start_time = asyncio.get_event_loop().time()
-            time_limit = 20.0
-            kata = None
-
-            # ============================================
-            #   LOOP INPUT PEMAIN
-            # ============================================
-
-            while (asyncio.get_event_loop().time() - start_time) < time_limit:
-                try:
-                    timeout = time_limit - (asyncio.get_event_loop().time() - start_time)
-                    msg = await self.bot.wait_for("message", check=check, timeout=timeout)
-                    kata = msg.content.lower().strip()
-
-                    if not self.game_active:
+                while (asyncio.get_event_loop().time() - start) < 20:
+                    try:
+                        timeout = 20 - (asyncio.get_event_loop().time() - start)
+                        msg = await self.bot.wait_for("message", check=check, timeout=timeout)
+                        kata = msg.content.lower().strip()
+                        break
+                    except asyncio.TimeoutError:
+                        kata = None
                         break
 
-                    # STOP GAME
-                    if kata == "stopgame":
-                        if player.id == self.host_id:
-                            await interaction.followup.send("🛑 Game dihentikan oleh host.")
-                            self.game_active = False
-                            break
-                        else:
-                            await interaction.followup.send("❌ Hanya host yang bisa menghentikan game.")
-                            continue
+                # ========== TIMEOUT HANDLING ==========
+                if kata is None:
+                    self.miss_counts[player.id] += 1
+                    round_miss += 1
 
-                    # SKIP
-                    if kata == "skip":
-                        if self.skip_counts.get(player.id, 0) >= 3:
-                            await interaction.followup.send(f"❌ {player.mention}, skip kamu sudah habis.")
-                            continue
-                        self.skip_counts[player.id] += 1
-                        new_candidates = [w for w in ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"] if w not in used_words]
-                        if not new_candidates:
-                            new_candidates = ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"]
-                        kata_terakhir = random.choice(new_candidates)
-                        used_words.add(kata_terakhir)
-                        akhir = kata_terakhir[-2:]
+                    # Diskualifikasi jika miss 2x
+                    if self.miss_counts[player.id] >= 2:
                         await interaction.followup.send(
-                            f"⏩ {player.mention} skip! Kata baru: **{kata_terakhir}**"
+                            f"⏰ {player.mention} tidak merespon **2 kali**, kamu **didiskualifikasi!**"
                         )
-                        continue
+                        players.remove(player)
+                        self.players.pop(player.id, None)
+                        self.skip_counts.pop(player.id, None)
+                        self.miss_counts.pop(player.id, None)
 
-                    # VALIDASI AWALAN
-                    if not kata.startswith(akhir):
-                        await interaction.followup.send("❌ Kata tidak sesuai awalan.")
-                        continue
-
-                    # KATA SUDAH DIPAKAI
-                    if kata in used_words:
-                        await interaction.followup.send("⚠️ Kata sudah pernah dipakai.")
-                        continue
-
-                    # VALIDASI API KBBI BARU DI SINI
-                    if not cek_kata(kata):
-                        await interaction.followup.send("❌ Kata tidak valid menurut KBBI.")
-                        continue
-
-                    # KATA VALID
-                    used_words.add(kata)
-                    poin[player.id] += len(kata)
-                    kata_terakhir = kata
-                    await interaction.followup.send(
-                        f"✅ {player.mention} dapat **{len(kata)} poin!** Total: **{poin[player.id]}**"
-                    )
-
-                    if poin[player.id] >= 100:
-                        await interaction.followup.send(f"🏆 {player.mention} menang dengan 100 poin!")
-                        self.game_active = False
-
-                    break
-
-                except asyncio.TimeoutError:
-                    kata = None
-                    break
-
-            if not self.game_active:
-                break
-
-            # PLAYER TIMEOUT
-            if kata is None:
-                if self.skip_counts.get(player.id, 0) >= 3:
-                    await interaction.followup.send(
-                        f"⏰ {player.mention} tidak merespon & skip habis. Kamu gugur!"
-                    )
-                    poin.pop(player.id, None)
-                    players.remove(player)
-                    self.players.pop(player.id, None)
-                    self.skip_counts.pop(player.id, None)
-
-                    if len(players) == 1:
-                        await interaction.followup.send(f"🏆 {players[0].mention} menang otomatis!")
-                        self.game_active = False
+                        if len(players) == 1:
+                            await interaction.followup.send(f"🏆 {players[0].mention} menang otomatis!")
+                            self.game_active = False
                         break
 
-                    if index >= len(players):
-                        index = 0
-
-                    continue
-                else:
-                    new_candidates = [w for w in ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"] if w not in used_words]
-                    if not new_candidates:
-                        new_candidates = ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"]
-                    kata_terakhir = random.choice(new_candidates)
-                    used_words.add(kata_terakhir)
                     await interaction.followup.send(
-                        f"⏰ {player.mention} tidak merespon. Kata diganti menjadi **{kata_terakhir}**."
+                        f"⚠️ {player.mention} tidak merespon. Peringatan {self.miss_counts[player.id]}/2."
                     )
 
-            index = (index + 1) % len(players)
+                    index = (index + 1) % len(players)
+                    continue
+
+                # ========== KATA VALIDASI ==========
+                if kata == "stopgame" and player.id == self.host_id:
+                    await interaction.followup.send("🛑 Game dihentikan oleh host.")
+                    self.game_active = False
+                    break
+
+                if kata == "skip":
+                    if self.skip_counts[player.id] >= 3:
+                        await interaction.followup.send("❌ Skip sudah habis.")
+                    else:
+                        self.skip_counts[player.id] += 1
+                        await interaction.followup.send(f"⏩ {player.mention} skip!")
+                    index = (index + 1) % len(players)
+                    continue
+
+                if not kata.startswith(akhir):
+                    await interaction.followup.send("❌ Kata tidak sesuai awalan.")
+                    continue
+
+                if kata in used_words:
+                    await interaction.followup.send("⚠️ Kata sudah pernah dipakai.")
+                    continue
+
+                if not cek_kata(kata):
+                    await interaction.followup.send("❌ Kata tidak valid menurut Kateglo/KBBI.")
+                    continue
+
+                # Kata valid
+                used_words.add(kata)
+                poin[player.id] += len(kata)
+                kata_terakhir = kata
+
+                await interaction.followup.send(
+                    f"✅ {player.mention} mendapat **{len(kata)} poin!** Total: **{poin[player.id]}**"
+                )
+
+                if poin[player.id] >= 100:
+                    await interaction.followup.send(f"🏆 {player.mention} mencapai 100 poin! Menang!")
+                    self.game_active = False
+                    break
+
+                index = (index + 1) % len(players)
+
+            # ========== CEK RONDE TIDAK ADA PEMAIN RESPON ==========
+            if self.game_active and round_miss >= len(players):
+                await interaction.followup.send(
+                    "🛑 **Semua pemain tidak merespon di ronde ini. Game otomatis dihentikan.**"
+                )
+                self.game_active = False
+                break
 
         if self.guild_id in self.game_dict:
             self.game_dict.pop(self.guild_id)
+
         self.stop()
