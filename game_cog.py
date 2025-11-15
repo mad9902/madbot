@@ -3,23 +3,40 @@ from discord.ext import commands
 from discord.ui import Button, View
 import random
 import asyncio
-from kbbi import KBBI  # Pastikan module kbbi sudah terinstall dan bisa dipanggil
+import requests
+
+# ================================
+#  VALIDASI KATA MENGGUNAKAN API
+# ================================
+
+CACHE_KATA = {}  # Cache biar ga spam API
 
 def cek_kata(kata: str) -> bool:
+    kata = kata.lower().strip()
+
+    # Cek di cache dulu
+    if kata in CACHE_KATA:
+        return CACHE_KATA[kata]
+
+    url = f"https://x-labs.my.id/api/kbbi/search/{kata}"
+
     try:
-        kbbi_obj = KBBI(kata)
-        if not kbbi_obj.entri:
-            return False
-        for entri in kbbi_obj.entri:
-            if hasattr(entri, 'baku') and entri.baku:
-                return True
-            else:
-                deskripsi = str(entri)
-                if "bentuk tidak baku" not in deskripsi.lower():
-                    return True
-        return False
+        r = requests.get(url, timeout=5)
+        data = r.json()
+
+        valid = data.get("status", False)
+
+        CACHE_KATA[kata] = valid
+        return valid
+
     except Exception:
+        CACHE_KATA[kata] = False
         return False
+
+
+# ==================================================
+#  COG GAME SAMBUNG KATA MULTIPLAYER (TETAP SAMA)
+# ==================================================
 
 class SambungKataMultiplayer(commands.Cog):
     def __init__(self, bot):
@@ -61,6 +78,7 @@ class SambungKataMultiplayer(commands.Cog):
             view.stop()
         else:
             await ctx.send("❌ Tidak ada game yang berjalan atau kamu bukan host.")
+
 
 class JoinSambungKata(View):
     def __init__(self, bot, host_id, guild_id, game_dict):
@@ -146,7 +164,7 @@ class JoinSambungKata(View):
             await interaction.followup.send(
                 f"{player.mention}, giliranmu! Kata harus diawali dengan **'{akhir}'**. (20 detik)\n"
                 f"Skip tersisa: {3 - self.skip_counts.get(player.id, 0)}\n"
-                f"Ketik kata baru, atau ketik **skip** untuk melewatkan giliran jika masih ada skip. mstopgame untuk stop game (hanya host yang bisa)"
+                f"Ketik kata baru, atau ketik **skip** untuk melewatkan giliran."
             )
 
             def check(m):
@@ -155,6 +173,10 @@ class JoinSambungKata(View):
             start_time = asyncio.get_event_loop().time()
             time_limit = 20.0
             kata = None
+
+            # ============================================
+            #   LOOP INPUT PEMAIN
+            # ============================================
 
             while (asyncio.get_event_loop().time() - start_time) < time_limit:
                 try:
@@ -165,6 +187,7 @@ class JoinSambungKata(View):
                     if not self.game_active:
                         break
 
+                    # STOP GAME
                     if kata == "stopgame":
                         if player.id == self.host_id:
                             await interaction.followup.send("🛑 Game dihentikan oleh host.")
@@ -174,6 +197,7 @@ class JoinSambungKata(View):
                             await interaction.followup.send("❌ Hanya host yang bisa menghentikan game.")
                             continue
 
+                    # SKIP
                     if kata == "skip":
                         if self.skip_counts.get(player.id, 0) >= 3:
                             await interaction.followup.send(f"❌ {player.mention}, skip kamu sudah habis.")
@@ -186,33 +210,38 @@ class JoinSambungKata(View):
                         used_words.add(kata_terakhir)
                         akhir = kata_terakhir[-2:]
                         await interaction.followup.send(
-                            f"⏩ {player.mention} skip! Kata baru diganti: **{kata_terakhir}**\n"
-                            f"{player.mention}, giliranmu! Kata harus diawali dengan **'{akhir}'**. (20 detik)\n"
-                            f"Skip tersisa: {3 - self.skip_counts.get(player.id, 0)}\n"
-                            f"Ketik kata baru, atau ketik **skip** untuk melewatkan giliran jika masih ada skip. mstopgame untuk stop game (hanya host yang bisa)"
+                            f"⏩ {player.mention} skip! Kata baru: **{kata_terakhir}**"
                         )
                         continue
 
+                    # VALIDASI AWALAN
                     if not kata.startswith(akhir):
                         await interaction.followup.send("❌ Kata tidak sesuai awalan.")
                         continue
-                    elif kata in used_words:
+
+                    # KATA SUDAH DIPAKAI
+                    if kata in used_words:
                         await interaction.followup.send("⚠️ Kata sudah pernah dipakai.")
                         continue
-                    elif not cek_kata(kata):
+
+                    # VALIDASI API KBBI BARU DI SINI
+                    if not cek_kata(kata):
                         await interaction.followup.send("❌ Kata tidak valid menurut KBBI.")
                         continue
-                    else:
-                        used_words.add(kata)
-                        poin[player.id] += len(kata)
-                        kata_terakhir = kata
-                        await interaction.followup.send(
-                            f"✅ {player.mention} dapat **{len(kata)} poin!** Total: **{poin[player.id]}**"
-                        )
-                        if poin[player.id] >= 100:
-                            await interaction.followup.send(f"🏆 {player.mention} menang dengan 100 poin!")
-                            self.game_active = False
-                        break
+
+                    # KATA VALID
+                    used_words.add(kata)
+                    poin[player.id] += len(kata)
+                    kata_terakhir = kata
+                    await interaction.followup.send(
+                        f"✅ {player.mention} dapat **{len(kata)} poin!** Total: **{poin[player.id]}**"
+                    )
+
+                    if poin[player.id] >= 100:
+                        await interaction.followup.send(f"🏆 {player.mention} menang dengan 100 poin!")
+                        self.game_active = False
+
+                    break
 
                 except asyncio.TimeoutError:
                     kata = None
@@ -221,19 +250,25 @@ class JoinSambungKata(View):
             if not self.game_active:
                 break
 
+            # PLAYER TIMEOUT
             if kata is None:
                 if self.skip_counts.get(player.id, 0) >= 3:
-                    await interaction.followup.send(f"⏰ {player.mention} tidak merespon dan sudah tidak punya skip tersisa. Kamu kalah dan dikeluarkan dari game.")
+                    await interaction.followup.send(
+                        f"⏰ {player.mention} tidak merespon & skip habis. Kamu gugur!"
+                    )
                     poin.pop(player.id, None)
                     players.remove(player)
                     self.players.pop(player.id, None)
                     self.skip_counts.pop(player.id, None)
+
                     if len(players) == 1:
-                        await interaction.followup.send(f"🏆 {players[0].mention} menang karena semua pemain lain kalah!")
+                        await interaction.followup.send(f"🏆 {players[0].mention} menang otomatis!")
                         self.game_active = False
                         break
+
                     if index >= len(players):
                         index = 0
+
                     continue
                 else:
                     new_candidates = [w for w in ["jalan", "nasi", "baca", "main", "lari", "tulis", "apel", "besar"] if w not in used_words]
@@ -242,7 +277,7 @@ class JoinSambungKata(View):
                     kata_terakhir = random.choice(new_candidates)
                     used_words.add(kata_terakhir)
                     await interaction.followup.send(
-                        f"⏰ {player.mention} tidak merespon. Kata diganti menjadi **{kata_terakhir}**.\n➡️ Giliran berpindah ke pemain berikutnya."
+                        f"⏰ {player.mention} tidak merespon. Kata diganti menjadi **{kata_terakhir}**."
                     )
 
             index = (index + 1) % len(players)
