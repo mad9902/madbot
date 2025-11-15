@@ -254,6 +254,17 @@ class StreakCog(commands.Cog):
             ),
             colour=discord.Colour.gold()
         )
+        # --- Hitung sisa restore bulan ini ---
+        pair = ensure_restore_cycle(pair)
+        used = pair.get("restore_used_this_cycle", 0) or 0
+        left = max(0, 5 - used)
+
+        embed.add_field(
+            name="♻️ Sisa Restore Bulan Ini",
+            value=f"{left} / 5",
+            inline=True
+        )
+
         embed.set_footer(text="Jika tidak, besok streak mati total 💀")
         await log_channel.send(embed=embed)
 
@@ -275,6 +286,16 @@ class StreakCog(commands.Cog):
             ),
             colour=discord.Colour.red()
         )
+        pair = ensure_restore_cycle(pair)
+        used = pair.get("restore_used_this_cycle", 0) or 0
+        left = max(0, 5 - used)
+
+        embed.add_field(
+            name="♻️ Sisa Restore Bulan Ini",
+            value=f"{left} / 5",
+            inline=True
+        )
+
         await log_channel.send(embed=embed)
 
 
@@ -506,10 +527,17 @@ class StreakCog(commands.Cog):
             new_pair = result["pair"]
             emoji = get_display_emoji(self.bot, guild_id, new_pair["current_streak"])
 
+            # --- Hitung sisa restore bulan ini ---
+            pair_after = ensure_restore_cycle(result["pair"])
+            used = pair_after.get("restore_used_this_cycle", 0) or 0
+            left = max(0, 5 - used)
+
             await channel.send(
-                f"{emoji} **RESTORE BERHASIL!** Streak kembali menyala 🔥 "
-                f"(hari terakhir restore: {result['delta_days']})."
+                f"{emoji} **RESTORE BERHASIL!** Streak kembali menyala 🔥\n"
+                f"(hari terakhir restore: {result['delta_days']})\n"
+                f"♻️ Sisa restore bulan ini: **{left} / 5**"
             )
+
             return
 
 
@@ -600,6 +628,18 @@ class StreakCog(commands.Cog):
         embed.add_field(name="Sesudah", value=str(streak_now))
         embed.add_field(name="Tier", value=tier, inline=False)
 
+        # --- Info sisa restore ---
+        new_pair = ensure_restore_cycle(new_pair)
+        used = new_pair.get("restore_used_this_cycle", 0) or 0
+        left = max(0, 5 - used)
+
+        embed.add_field(
+            name="♻️ Sisa Restore Bulan Ini",
+            value=f"{left} / 5",
+            inline=True,
+        )
+
+
         if result["delta_days"] is not None:
             embed.set_footer(text=f"Gap hari: {result['delta_days']}")
 
@@ -662,6 +702,16 @@ class StreakCog(commands.Cog):
         embed.add_field(name="Max Streak", value=str(pair["max_streak"]), inline=True)
         embed.add_field(name="Tier", value=tier, inline=True)
         # ★ Informasi jika sedang butuh restore
+        pair = ensure_restore_cycle(pair)  # pastikan bulan update
+
+        used = pair.get("restore_used_this_cycle", 0) or 0
+        left = max(0, 5 - used)
+
+        embed.add_field(
+            name="♻️ Sisa Restore Bulan Ini",
+            value=f"{left} / 5",
+            inline=True
+        )
         if pair.get("needs_restore", 0) == 1:
             embed.add_field(
                 name="⚠️ Status Restore",
@@ -793,10 +843,17 @@ class StreakCog(commands.Cog):
         new_pair = result["pair"]
         emoji = get_display_emoji(self.bot, guild_id, new_pair["current_streak"])
 
+        # --- Hitung sisa restore bulan ini ---
+        pair_after = ensure_restore_cycle(new_pair)
+        used = pair_after.get("restore_used_this_cycle", 0) or 0
+        left = max(0, 5 - used)
+
         await ctx.send(
-            f"{emoji} Streak {format_pair_mention(new_pair)} berhasil di-**RESTORE** "
-            f"menjadi **{new_pair['current_streak']}** (gap: {result['delta_days']})."
+            f"{emoji} Streak {format_pair_mention(new_pair)} berhasil di-**RESTORE**\n"
+            f"Menjadi **{new_pair['current_streak']}** (gap: {result['delta_days']})\n"
+            f"♻️ Sisa restore bulan ini: **{left} / 5**"
         )
+
 
     # ----- mstreak top -----
 

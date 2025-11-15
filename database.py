@@ -934,7 +934,6 @@ def _normalize_pair_users(user1_id, user2_id):
     """
     return (user1_id, user2_id) if user1_id <= user2_id else (user2_id, user1_id)
 
-
 def get_streak_pair(guild_id, user1_id, user2_id):
     """
     Ambil data pasangan streak (kalau ada).
@@ -954,16 +953,50 @@ def get_streak_pair(guild_id, user1_id, user2_id):
     db.close()
     return row
 
-
 def create_streak_pair(guild_id, user1_id, user2_id, initiator_id):
     """
-    Buat pasangan streak baru dengan status PENDING.
-    Kalau sudah ada, balikin row yang lama.
+    Buat pasangan streak baru.
+    - Jika belum ada → buat baru (status PENDING)
+    - Jika sudah ada & status BROKEN → reset dan set ke PENDING
+    - Jika sudah ada dengan status lain → balikin existing row
     """
     existing = get_streak_pair(guild_id, user1_id, user2_id)
+
     if existing:
+        # 🔥 Jika sudah BROKEN → reset total dan jadikan PENDING ulang
+        if existing["status"] == "BROKEN":
+            db = connect_db()
+            cursor = db.cursor(dictionary=True)
+
+            cursor.execute("""
+                UPDATE streak_pairs
+                SET 
+                    status = 'PENDING',
+                    initiator_id = %s,
+                    current_streak = 0,
+                    max_streak = 0,
+                    needs_restore = 0,
+                    restore_deadline = NULL,
+                    restore_used_this_cycle = 0,
+                    restore_month = NULL,
+                    restore_year = NULL,
+                    last_update_date = NULL
+                WHERE id = %s
+            """, (initiator_id, existing["id"]))
+
+            db.commit()
+
+            cursor.execute("SELECT * FROM streak_pairs WHERE id = %s", (existing["id"],))
+            row = cursor.fetchone()
+
+            cursor.close()
+            db.close()
+            return row
+
+        # Kalau bukan BROKEN, cukup return existing
         return existing
 
+    # 🔥 Kalau belum ada → buat baru
     db = connect_db()
     cursor = db.cursor(dictionary=True)
 
@@ -982,7 +1015,6 @@ def create_streak_pair(guild_id, user1_id, user2_id, initiator_id):
     db.close()
     return row
 
-
 def set_streak_status(pair_id, status):
     """
     Ubah status streak_pairs: PENDING / ACTIVE / DENIED / BROKEN.
@@ -997,7 +1029,6 @@ def set_streak_status(pair_id, status):
     db.commit()
     cursor.close()
     db.close()
-
 
 def get_pending_streak_requests(guild_id, target_user_id=None, limit=20, offset=0):
     """
@@ -1033,8 +1064,6 @@ def get_pending_streak_requests(guild_id, target_user_id=None, limit=20, offset=
     db.close()
     return rows
 
-
-
 def get_active_streaks(guild_id, limit=20, offset=0, order_by="current"):
     """
     Ambil list pasangan streak aktif untuk command /topstreak.
@@ -1062,7 +1091,6 @@ def get_active_streaks(guild_id, limit=20, offset=0, order_by="current"):
     db.close()
     return rows
 
-
 def get_streak_settings(guild_id):
     """
     Ambil pengaturan streak per guild.
@@ -1080,7 +1108,6 @@ def get_streak_settings(guild_id):
     cursor.close()
     db.close()
     return row
-
 
 def upsert_streak_settings(guild_id, command_channel_id=None, log_channel_id=None, auto_update=True):
     """
@@ -1102,34 +1129,6 @@ def upsert_streak_settings(guild_id, command_channel_id=None, log_channel_id=Non
     db.commit()
     cursor.close()
     db.close()
-
-
-def _first_day_next_month(year, month):
-    if month == 12:
-        return date(year + 1, 1, 1)
-    return date(year, month + 1, 1)
-
-
-def _get_monthly_restore_count(cursor, pair_id, year, month):
-    """
-    Hitung berapa kali RESTORE yang sudah dipakai pair ini
-    di bulan (year, month) ini (pakai cursor yang sama).
-    """
-    start_date = date(year, month, 1)
-    end_date = _first_day_next_month(year, month)
-
-    cursor.execute("""
-        SELECT COUNT(*) AS cnt
-        FROM streak_logs
-        WHERE pair_id = %s
-          AND action_type = 'RESTORE'
-          AND created_at >= %s
-          AND created_at < %s
-    """, (pair_id, start_date, end_date))
-
-    row = cursor.fetchone()
-    return row[0] if row and row[0] is not None else 0
-
 
 def apply_streak_update(guild_id, user1_id, user2_id, channel_id, message_id, author_id,
                         is_restore=False, today=None):
@@ -1359,31 +1358,21 @@ def mark_needs_restore(pair_id, deadline_date):
     cursor.close()
     db.close()
 
-
 def clear_restore_flags(pair_id):
     """
-    Reset flags restore ketika pasangan berhasil menyalakan api di hari deadline.
-    Reset cycle jika ini adalah restore bulan baru.
+    Hanya reset flag restore, JANGAN reset kuota.
     """
-    today = date.today()
-    cur_month = today.month
-    cur_year = today.year
-
     db = connect_db()
     cursor = db.cursor()
     cursor.execute("""
         UPDATE streak_pairs
         SET needs_restore = 0,
-            restore_deadline = NULL,
-            restore_used_this_cycle = 0,
-            restore_month = %s,
-            restore_year = %s
+            restore_deadline = NULL
         WHERE id = %s
-    """, (cur_month, cur_year, pair_id))
+    """, (pair_id,))
     db.commit()
     cursor.close()
     db.close()
-
 
 def kill_streak_due_to_deadline(pair_id):
     db = connect_db()
@@ -1407,13 +1396,20 @@ def auto_process_gap(pair):
     """
     Evaluasi gap hari dan tentukan apakah perlu restore
     atau apakah streak otomatis putus.
-    Dipanggil SETIAP kali pair diakses (lazy evaluation).
+    
+    LOGIC (tanpa jam):
+    - days_since = today - last_update_date
+    - 0  -> hari yang sama, aman
+    - 1  -> hari setelahnya, masih normal (belum bolong 1 hari)
+    - 2  -> dianggap bolong 1 hari -> masuk mode restore
+    - >=3:
+        - kalau sudah mode restore dan sudah lewat deadline -> BROKEN
+        - kalau belum mode restore -> langsung BROKEN
     """
     if not pair:
         return pair
 
     pair = ensure_restore_cycle(pair)
-
 
     last = pair["last_update_date"]
     needs_restore = pair.get("needs_restore", 0)
@@ -1421,51 +1417,52 @@ def auto_process_gap(pair):
 
     today = date.today()
 
+    if last is None:
+        return pair
+
     # Convert string → date
     if isinstance(last, str):
         last = datetime.strptime(last, "%Y-%m-%d").date()
 
-    # Jika belum pernah update sebelumnya
-    if last is None:
-        return pair
-
     delta = (today - last).days
 
-    # CASE A — Hari ini masih sama → tidak ada perubahan
+    # CASE A — Hari yang sama atau mundur → abaikan
     if delta <= 0:
         return pair
 
-    # CASE B — Sudah tanda restore sebelumnya
+    # CASE B — Sudah dalam mode RESTORE
     if needs_restore == 1:
-        # cek deadline apakah lewat
         if deadline:
             if isinstance(deadline, str):
                 deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
 
-            # lewat deadline → streak mati
+            # Kalau sudah LEWAT deadline → streak mati
+            # (deadline = hari restore, begitu masuk hari berikutnya → mati)
             if today > deadline:
                 kill_streak_due_to_deadline(pair["id"])
                 return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
 
+        # Masih dalam masa restore, belum lewat deadline
         pair = ensure_restore_cycle(pair)
         return pair
 
-
-    # CASE C — Baru bolong 1 hari → tandai restore
+    # CASE C — days_since == 1 → masih normal, belum bolong 1 hari
     if delta == 1:
-        deadline_date = today + timedelta(days=1)
+        return pair
+
+    # CASE D — days_since == 2 → baru dianggap bolong 1 hari → masuk mode RESTORE
+    if delta == 2:
+        # hari ini = hari restore terakhir
+        deadline_date = today  # HARUS restore hari ini
         mark_needs_restore(pair["id"], deadline_date.strftime("%Y-%m-%d"))
         pair["needs_restore"] = 1
         pair["restore_deadline"] = deadline_date.strftime("%Y-%m-%d")
 
-        # Tambahan penting
         pair = ensure_restore_cycle(pair)
-
         return pair
 
-
-    # CASE D — Bolong ≥ 2 hari → langsung putus (tanpa restore)
-    if delta >= 2:
+    # CASE E — days_since >= 3 → sudah lewat 2 hari penuh -> langsung BROKEN
+    if delta >= 3:
         kill_streak_due_to_deadline(pair["id"])
         return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
 
@@ -1526,7 +1523,6 @@ def ensure_restore_cycle(pair):
         pair["restore_used_this_cycle"] = 0
 
     return pair
-
 
 def set_tier_emoji(guild_id, min_streak, emoji_id):
     """
