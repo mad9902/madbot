@@ -111,30 +111,40 @@ class SubmitImageConfessionButton(discord.ui.Button):
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
+
+        # TRY DM USER
+        try:
+            dm = await interaction.user.create_dm()
+            await dm.send(
+                "📸 Kirim **gambar + caption (opsional)** di sini.\n"
+                "Setelah kamu kirim, bot akan otomatis memposting sebagai confession anonim."
+            )
+        except:
+            return await interaction.response.send_message(
+                "❌ Aku tidak bisa mengirim DM. Aktifkan DM dari server dulu.",
+                ephemeral=True
+            )
+
         await interaction.response.send_message(
-            "📸 Silakan kirim **gambar + caption (opsional)** dalam 30 detik.\n"
-            "Bot akan otomatis mengirimnya sebagai confession anonim.",
+            "📨 Cek DM! Kirim gambarnya lewat DM ya untuk tetap anonim.",
             ephemeral=True
         )
 
         def check(msg: discord.Message):
             return (
                 msg.author.id == interaction.user.id
-                and msg.channel.id == interaction.channel.id
+                and isinstance(msg.channel, discord.DMChannel)
                 and len(msg.attachments) > 0
             )
 
         try:
-            msg = await self.bot.wait_for("message", timeout=30.0, check=check)
+            msg = await self.bot.wait_for("message", timeout=120.0, check=check)
         except asyncio.TimeoutError:
-            return await interaction.followup.send(
-                "⏱️ Waktu habis. Confession gambar dibatalkan.",
-                ephemeral=True
-            )
+            return await dm.send("⏱️ Waktu habis, confession dibatalkan.")
 
+        # AMBIL ATTACHMENT & CAPTION
         attachment = msg.attachments[0]
         caption = msg.content or " "
-
         confession_id = str(uuid.uuid4())[:8]
 
         embed = discord.Embed(
@@ -144,51 +154,44 @@ class SubmitImageConfessionButton(discord.ui.Button):
         )
         embed.set_image(url=attachment.url)
 
-        # Ambil channel tujuan
+        # CHANNEL TARGET
         db = connect_db()
         channel_id = get_channel_settings(db, interaction.guild_id, "confession")
         db.close()
 
-        target_channel = (
-            interaction.guild.get_channel(int(channel_id))
-            if channel_id else interaction.channel
-        )
+        target_channel = interaction.guild.get_channel(int(channel_id))
 
-        # Kirim confession
+        # POST CONFESSION SECARA ANONIM
         sent = await target_channel.send(embed=embed)
 
-        # Create thread
+        # THREAD
         thread = await sent.create_thread(name=f"Confession #{confession_id}")
 
-        # Save map
         CONFESSION_THREAD_MAP[sent.id] = {
             "thread_id": thread.id,
             "channel_id": target_channel.id
         }
         save_confession_map()
 
-        # Add buttons to main message
+        # ADD BUTTONS
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
         view.add_item(SubmitImageConfessionButton(self.bot))
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
-        # Thread reply button
+        # THREAD REPLY BUTTON
         thread_view = discord.ui.View(timeout=None)
         thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await thread.send(
-            "Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:",
+            "Gunakan tombol di bawah untuk membalas confession ini secara anonim:",
             view=thread_view
         )
 
-        # Save DB
+        # SAVE
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, caption)
 
-        await interaction.followup.send(
-            "✅ Confession gambar kamu telah dikirim secara anonim!",
-            ephemeral=True
-        )
+        await dm.send("✅ Confession gambar kamu sudah diposting secara anonim!")
 
 
 # ==============================
