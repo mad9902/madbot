@@ -785,7 +785,7 @@ class music_cog(commands.Cog):
                 loaded = 0
 
                 for t in next_batch:
-                    song = self.search_yt(t)
+                    song = await self.search_yt(t)
                     if song:
                         self.music_queue.append([song, vc])
                         loaded += 1
@@ -953,7 +953,7 @@ class music_cog(commands.Cog):
         # YouTube search
         self.loading_spotify = False
         self.spotify_backlog.clear()
-        song = self.search_yt(query)
+        song = await self.search_yt(query)
 
         if not song:
             return await ctx.send("❌ Lagu tidak ditemukan.")
