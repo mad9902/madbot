@@ -965,7 +965,7 @@ class music_cog(commands.Cog):
                 self.music_queue.append([
                     {
                         "source": None,
-                        "title": f"⏳ {t}",  # tanda menunggu convert
+                        "title": f"{t}",  # tanda menunggu convert
                         "thumbnail": None,
                         "duration": None,
                     },
@@ -1042,7 +1042,7 @@ class music_cog(commands.Cog):
         for t in self.pending_spotify_tracks:
             if isinstance(t, str):
                 display_list.append({
-                    "title": f"⏳ {t}",
+                    "title": f"{t}",
                     "duration": "?",
                 })
             else:
