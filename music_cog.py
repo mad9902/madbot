@@ -513,7 +513,18 @@ class music_cog(commands.Cog):
             return
 
         next_song, _ = self.music_queue[0]
+
+        # FIX: resolve placeholder
+        if next_song["source"] is None:
+            resolved = await self.search_yt(next_song["title"])
+            if resolved:
+                next_song["source"] = resolved["source"]
+                next_song["title"] = resolved["title"]
+                next_song["thumbnail"] = resolved["thumbnail"]
+                next_song["duration"] = resolved["duration"]
+
         self.preloaded_source = next_song["source"]
+
 
     # ======================================================
     # PLAY MUSIC (MAIN EXECUTION)
@@ -591,6 +602,11 @@ class music_cog(commands.Cog):
         # Start playing
         try:
             # gunakan Hasil preload jika ada (lebih cepat karena sudah resolve)
+            if self.current_song["source"] is None:
+                resolved = await self.search_yt(self.current_song["title"])
+                if resolved:
+                    self.current_song.update(resolved)
+
             source = self.preloaded_source or self.current_song["source"]
 
             self.vc.play(
@@ -788,7 +804,8 @@ class music_cog(commands.Cog):
                 loaded = 0
 
                 # Replace placeholder sesuai posisi
-                replace_start = len([x for x in self.music_queue if x[0]["source"] is not None])
+                replace_start = 0
+
 
                 infos = []
                 for t in next_batch:
@@ -988,7 +1005,9 @@ class music_cog(commands.Cog):
             if not self.is_playing:
                 await self.play_music()
 
-            await ctx.send(f"🎧 Menambahkan **{added}** lagu. Sisa: {len(backlog)}")
+            total_tracks = len(tracks)
+            await ctx.send(f"🎧 Berhasil menambahkan **{total_tracks}** lagu ke queue.")
+
             return
 
 
@@ -1130,11 +1149,75 @@ class music_cog(commands.Cog):
     # ======================================================
     @commands.command(name="shuffle")
     async def shuffle_cmd(self, ctx):
-        if len(self.music_queue) < 2:
-            return await ctx.send("🔀 Queue kurang dari 2 lagu.")
+        # kalau tidak ada lagu
+        if len(self.pending_spotify_tracks) == 0 and len(self.music_queue) < 2:
+            return await ctx.send("🔀 Tidak ada yang bisa di-shuffle.")
 
+        # 1. SHUFFLE FULL LIST
+        if len(self.pending_spotify_tracks) > 0:
+            random.shuffle(self.pending_spotify_tracks)
+
+            # 2. RESET ulang music_queue menjadi placeholder sesuai urutan baru
+            vc = ctx.author.voice.channel if ctx.author.voice else None
+            self.music_queue.clear()
+
+            for t in self.pending_spotify_tracks:
+                self.music_queue.append([
+                    {
+                        "source": None,
+                        "title": t,
+                        "thumbnail": None,
+                        "duration": None,
+                    },
+                    vc
+                ])
+
+            # 3. Batch convert ulang 5 lagu pertama
+            self.spotify_backlog = self.pending_spotify_tracks[self.MAX_BATCH:]
+            self.loading_spotify = True
+
+            loop = asyncio.get_running_loop()
+
+            def convert_list(batch):
+                results = []
+                with YoutubeDL({
+                    "format": "bestaudio/best",
+                    "quiet": True,
+                    "noplaylist": True,
+                    "default_search": "auto",
+                    "ignoreerrors": True,
+                    "no_warnings": True,
+                }) as ydl:
+                    for q in batch:
+                        try:
+                            info = ydl.extract_info(q, download=False)
+                            if info:
+                                if "entries" in info:
+                                    info = info["entries"][0]
+                                results.append(info)
+                        except:
+                            pass
+                return results
+
+            first_batch = self.pending_spotify_tracks[:self.MAX_BATCH]
+            infos = await loop.run_in_executor(None, lambda: convert_list(first_batch))
+
+            i = 0
+            for info in infos:
+                self.music_queue[i][0] = {
+                    "source": info.get("url"),
+                    "title": info.get("title"),
+                    "thumbnail": info.get("thumbnail"),
+                    "duration": info.get("duration_string") or info.get("duration"),
+                }
+                i += 1
+
+            return await ctx.send("🔀 Queue telah di-shuffle!")
+
+        # FALLBACK: jika bukan Spotify
         random.shuffle(self.music_queue)
         await ctx.send("🔀 Queue di-shuffle!")
+
 
 
     # ======================================================
