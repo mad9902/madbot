@@ -1057,16 +1057,6 @@ class music_cog(commands.Cog):
         for song, _ in self.music_queue:
             display_list.append(song)
 
-        # spotify full list (pending)
-        for t in self.pending_spotify_tracks:
-            if isinstance(t, str):
-                display_list.append({
-                    "title": f"{t}",
-                    "duration": "?",
-                })
-            else:
-                display_list.append(t)
-
         if len(display_list) == 0:
             return discord.Embed(title="📭 Queue kosong.", color=discord.Color.red())
 
