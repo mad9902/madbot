@@ -14,33 +14,32 @@ CACHE_KATA = {}
 def cek_kata(kata: str) -> bool:
     kata = kata.lower().strip()
 
-    # cek cache
     if kata in CACHE_KATA:
         return CACHE_KATA[kata]
 
     url = "https://x-labs.my.id/api/kbbi"
     try:
         r = requests.get(url, params={"search": kata}, timeout=5)
-        # kalau status code bukan 200 langsung dianggap tidak valid
         if r.status_code != 200:
             CACHE_KATA[kata] = False
             return False
 
         data = r.json()
 
-        # success bisa True / "true"
         success = data.get("success", False)
-        success_bool = (success is True) or (str(success).lower() == "true")
 
-        # pastikan ada data & tidak kosong
-        data_list = data.get("data", [])
-        valid = success_bool and bool(data_list)
+        # NORMALISASI semua kemungkinan bentuk "success"
+        success_norm = str(success).lower().strip() in ["true", "1", "yes", "ok"]
+
+        # cek apakah "data" berisi sesuatu
+        has_data = isinstance(data.get("data", None), list) and len(data["data"]) > 0
+
+        valid = success_norm and has_data
 
         CACHE_KATA[kata] = valid
         return valid
 
-    except Exception:
-        # kalau error (timeout, parse, dsb) jangan bikin bot crash
+    except:
         CACHE_KATA[kata] = False
         return False
 
