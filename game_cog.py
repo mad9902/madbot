@@ -107,9 +107,7 @@ class JoinSambungKata(View):
         self.skip_counts[uid] = 0
         self.miss_counts[uid] = 0
 
-        await interaction.response.send_message(
-            f"✅ {interaction.user.name} bergabung!", ephemeral=True
-        )
+        await interaction.response.send_message(f"✅ {interaction.user.name} bergabung!", ephemeral=True)
         await self.update_embed()
 
         if len(self.players) >= 2:
@@ -148,59 +146,35 @@ class JoinSambungKata(View):
         await self.message.edit(embed=embed, view=self)
 
 
+
     # ==================================================
-    #              ULTRA GAMEBOARD EMBED
+    #              ROUND SUMMARY EMBED (ULTRA CLEAN)
     # ==================================================
-    def build_ultra_embed(
-        self, player, awalan, poin, used_words,
-        skips_left, kata_terakhir, miss_counts
-    ):
+    def build_round_embed(self, players, poin, miss_counts):
         embed = discord.Embed(
-            title=f"🎮 GILIRAN — {player.name}",
+            title="🧾 Rekap Ronde",
             color=discord.Color.gold()
         )
 
-        embed.add_field(name="🔡 Awalan", value=f"`{awalan}`", inline=True)
-        embed.add_field(name="⏳ Timer", value="`15 detik`", inline=True)
-        embed.add_field(name="⏭ Skip", value=f"`{skips_left}/3`", inline=True)
-
-        embed.add_field(
-            name="📜 Kata Terakhir",
-            value=f"**{kata_terakhir}**",
-            inline=False
-        )
-
-        # kata terpakai
-        used_preview = ", ".join(list(used_words)[-15:]) or "-"
-        embed.add_field(
-            name=f"🗂 Kata Terpakai ({len(used_words)})",
-            value=used_preview,
-            inline=False
-        )
-
-        # scoreboard
+        # Scoreboard
         sorted_scores = sorted(poin.items(), key=lambda x: x[1], reverse=True)
-        skor_text = "\n".join(f"**{self.players[uid].name}** — {score}" for uid, score in sorted_scores)
-        embed.add_field(name="📊 Skor Sementara", value=skor_text, inline=False)
-
-        # status pemain
-        status_lines = []
-        for uid, u in self.players.items():
-            if uid not in miss_counts:
-                continue
-            if miss_counts[uid] == 0:
-                status_lines.append(f"{u.name} — ✔ aman")
-            elif miss_counts[uid] == 1:
-                status_lines.append(f"{u.name} — ⚠ 1/2 miss")
-            elif miss_counts[uid] >= 2:
-                status_lines.append(f"{u.name} — ❌ eliminated")
-
-        embed.add_field(
-            name="⚠ Status Pemain",
-            value="\n".join(status_lines) if status_lines else "-",
-            inline=False
+        skor_text = "\n".join(
+            f"**{players[uid].name}** — {score}" for uid, score in sorted_scores
         )
+        embed.add_field(name="📊 Skor", value=skor_text, inline=False)
 
+        # Status pemain
+        status_lines = []
+        for uid, p in players.items():
+            miss = miss_counts.get(uid, 0)
+            if miss == 0:
+                status_lines.append(f"{p.name} — ✔ aman")
+            elif miss == 1:
+                status_lines.append(f"{p.name} — ⚠ 1/2 miss")
+            elif miss >= 2:
+                status_lines.append(f"{p.name} — ❌ eliminated")
+
+        embed.add_field(name="⚠ Status Pemain", value="\n".join(status_lines), inline=False)
         return embed
 
 
@@ -233,6 +207,7 @@ class JoinSambungKata(View):
         while self.game_active and len(players) > 1:
             ronde_miss = 0
 
+            # LOOP SATU RONDE
             for _ in range(len(players)):
                 if not self.game_active or len(players) <= 1:
                     break
@@ -241,19 +216,12 @@ class JoinSambungKata(View):
                 uid = player.id
                 awalan = potong(kata_terakhir)
 
-                # ===============================
-                #     SEND ULTRA GAMEBOARD
-                # ===============================
-                embed = self.build_ultra_embed(
-                    player=player,
-                    awalan=awalan,
-                    poin=poin,
-                    used_words=used_words,
-                    skips_left=3 - self.skip_counts[uid],
-                    kata_terakhir=kata_terakhir,
-                    miss_counts=self.miss_counts
+                # ===== pesan kecil giliran =====
+                await interaction.followup.send(
+                    f"🎯 **{player.mention}, giliranmu!**\n"
+                    f"Awalan: **`{awalan}`**\n"
+                    f"Skip: **{3 - self.skip_counts[uid]}/3**"
                 )
-                await interaction.followup.send(embed=embed)
 
                 # WAIT FOR INPUT
                 def check(m):
@@ -300,7 +268,7 @@ class JoinSambungKata(View):
                             awalan = potong(kata_terakhir)
                             continue
 
-                        # INVALID AWALAN
+                        # INVALID
                         if not kata.startswith(awalan):
                             await interaction.followup.send("❌ Kata tidak sesuai awalan.")
                             continue
@@ -319,7 +287,7 @@ class JoinSambungKata(View):
                         kata_terakhir = kata
 
                         await interaction.followup.send(
-                            f"✅ {player.mention} mendapat **{len(kata)} poin!** Total: **{poin[uid]}**"
+                            f"✅ {player.mention} mendapat **{len(kata)} poin!**"
                         )
 
                         if poin[uid] >= 100:
@@ -332,9 +300,7 @@ class JoinSambungKata(View):
                     except asyncio.TimeoutError:
                         break
 
-                # END INPUT
-
-                # MISS
+                # MISS HANDLING
                 if not responded:
                     self.miss_counts[uid] += 1
                     ronde_miss += 1
@@ -347,17 +313,22 @@ class JoinSambungKata(View):
                         continue
                     else:
                         await interaction.followup.send(
-                            f"⚠️ {player.mention} tidak merespon. Peringatan {self.miss_counts[uid]}/2"
+                            f"⚠️ {player.mention} tidak merespon. Peringatan **{self.miss_counts[uid]}/2**"
                         )
 
+                # NEXT PLAYER
                 if self.game_active and len(players) > 1:
                     index = (index + 1) % len(players)
 
-            # Semua pemain diam 1 ronde
+            # Semua pemain diam satu ronde
             if ronde_miss >= len(players):
                 await interaction.followup.send("🛑 Semua pemain diam 1 ronde → Game dihentikan.")
                 self.game_active = False
                 break
+
+            # ===== KIRIM EMBED ULTRA CLEAN SETELAH SELESAI RONDE =====
+            summary = self.build_round_embed(self.players, poin, self.miss_counts)
+            await interaction.followup.send(embed=summary)
 
         # END GAME
         if self.guild_id in self.game_dict:
