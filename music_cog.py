@@ -151,6 +151,12 @@ class music_cog(commands.Cog):
         # database
         self.db = bot.db
 
+        try:
+            self.channel_settings = get_channel_settings(self.db) or {}
+        except Exception as e:
+            print(f"[MUSIC_COG] Gagal load channel_settings dari DB: {e}")
+            self.channel_settings = {}
+
         # FFmpeg executable (Windows)
         self.ffmpeg_executable = shutil.which("ffmpeg")
 
@@ -1128,6 +1134,7 @@ class music_cog(commands.Cog):
 
     async def send_to_music_channel(self, guild, embed, view=None):
         gid = str(guild.id)
+        print("[DEBUG SEND]", self.channel_settings)
         ch_id = self.channel_settings.get(gid, {}).get("music")
 
         # fallback jika belum diset
