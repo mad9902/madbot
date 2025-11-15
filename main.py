@@ -92,7 +92,6 @@ class MadBot(commands.Bot):
 
         birthday_cog = Birthday(self)
         await self.add_cog(birthday_cog)
-        self.loop.create_task(birthday_cog.start_birthday_loop())
 
         await self.add_cog(WelcomeMessageConfig(self))
         await self.add_cog(BannedWordsCog(self))
