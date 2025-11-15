@@ -1134,22 +1134,24 @@ class music_cog(commands.Cog):
 
     async def send_to_music_channel(self, guild, embed, view=None):
         gid = str(guild.id)
-        print("[DEBUG SEND]", self.channel_settings)
         ch_id = self.channel_settings.get(gid, {}).get("music")
 
-        # fallback jika belum diset
         if not ch_id:
-            for ch in guild.text_channels:
-                if ch.permissions_for(guild.me).send_messages:
-                    return await ch.send(embed=embed, view=view)
-            return
+            print("[ERROR] Music channel belum di-set. Gunakan: setchmusic #channel")
+            return None
 
         target = guild.get_channel(int(ch_id))
-        if target:
-            try:
-                return await target.send(embed=embed, view=view)
-            except:
-                pass
+
+        if not target:
+            print("[ERROR] Channel ID tidak valid atau tidak ditemukan di guild.")
+            return None
+
+        try:
+            return await target.send(embed=embed, view=view)
+        except Exception as e:
+            print("[ERROR] Tidak bisa send ke channel musik:", e)
+            return None
+
 
 
     # ======================================================
