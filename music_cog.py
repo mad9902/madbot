@@ -142,7 +142,10 @@ class music_cog(commands.Cog):
         self.bot = bot
 
         self.spotify_backlog = []
-        self.MAX_BATCH = 15
+
+        self.MAX_BATCH = 5
+
+        self.pending_spotify_tracks = []
 
         self.loading_spotify = False
 
@@ -777,20 +780,35 @@ class music_cog(commands.Cog):
                 return
 
             # ===== AUTO LOAD SPOTIFY BACKLOG =====
-            if self.loading_spotify and len(self.music_queue) < 5 and len(self.spotify_backlog) > 0:
+            if self.loading_spotify and len(self.music_queue) < self.MAX_BATCH and len(self.spotify_backlog) > 0:
                 next_batch = self.spotify_backlog[:self.MAX_BATCH]
                 self.spotify_backlog = self.spotify_backlog[self.MAX_BATCH:]
 
                 vc = self.vc.channel
                 loaded = 0
 
-                for t in next_batch:
-                    song = await self.search_yt(t)
-                    if song:
-                        self.music_queue.append([song, vc])
-                        loaded += 1
+                # Replace placeholder sesuai posisi
+                replace_start = len([x for x in self.music_queue if x[0]["source"] is not None])
 
-                print(f"[SPOTIFY BATCH] Loaded {loaded} more tracks from backlog.")
+                infos = []
+                for t in next_batch:
+                    s = await self.search_yt(t)
+                    if s:
+                        infos.append(s)
+
+                for info in infos:
+                    real_song = {
+                        "source": info["source"],
+                        "title": info["title"],
+                        "thumbnail": info["thumbnail"],
+                        "duration": info["duration"],
+                    }
+                    self.music_queue[replace_start][0] = real_song
+                    replace_start += 1
+                    loaded += 1
+
+                print(f"[SPOTIFY BATCH] Updated {loaded} placeholders with real tracks.")
+
 
             # ===== LANJUT =====
             await self.play_music()
@@ -902,6 +920,7 @@ class music_cog(commands.Cog):
         if "open.spotify.com" in query:
             self.loading_spotify = True
             tracks = await self.handle_spotify(query)
+            self.pending_spotify_tracks = tracks.copy()
             if not tracks:
                 return await ctx.send("❌ Tidak bisa ambil lagu dari Spotify.")
 
@@ -941,15 +960,30 @@ class music_cog(commands.Cog):
             infos = await loop.run_in_executor(None, lambda: convert_list(first_batch))
 
             added = 0
+            # Masukkan placeholder terlebih dahulu untuk SEMUA tracks
+            for t in tracks:
+                self.music_queue.append([
+                    {
+                        "source": None,
+                        "title": f"⏳ {t}",  # tanda menunggu convert
+                        "thumbnail": None,
+                        "duration": None,
+                    },
+                    vc
+                ])
+
+            # Setelah itu baru process batch pertama
+            insert_index = 0
             for info in infos:
-                song = {
+                real_song = {
                     "source": info.get("url"),
                     "title": info.get("title"),
                     "thumbnail": info.get("thumbnail"),
                     "duration": info.get("duration_string") or info.get("duration"),
                 }
-                self.music_queue.append([song, vc])
-                added += 1
+                self.music_queue[insert_index][0] = real_song
+                insert_index += 1
+
 
             if not self.is_playing:
                 await self.play_music()
@@ -994,39 +1028,44 @@ class music_cog(commands.Cog):
     # ======================================================
 
     def build_queue_page(self, guild, page):
-        if not self.current_song:
-            return discord.Embed(title="📭 Queue kosong.")
+        # Combine current song + queue + pending list
+        display_list = []
+
+        if self.current_song:
+            display_list.append(self.current_song)
+
+        # queue internal (placeholder & real songs)
+        for song, _ in self.music_queue:
+            display_list.append(song)
+
+        # spotify full list (pending)
+        for t in self.pending_spotify_tracks:
+            if isinstance(t, str):
+                display_list.append({
+                    "title": f"⏳ {t}",
+                    "duration": "?",
+                })
+            else:
+                display_list.append(t)
+
+        if len(display_list) == 0:
+            return discord.Embed(title="📭 Queue kosong.", color=discord.Color.red())
+
+        PER_PAGE = 10
+        start = page * PER_PAGE
+        end = start + PER_PAGE
+        total_pages = max(1, (len(display_list) - 1) // PER_PAGE + 1)
 
         embed = discord.Embed(
-            title=f"🎶 Music Queue (Page {page+1})",
+            title=f"🎶 Music Queue (Page {page+1}/{total_pages})",
             color=discord.Color.blurple()
         )
 
-        embed.add_field(
-            name="▶️ Now Playing",
-            value=f"**{self.current_song['title']}**",
-            inline=False
-        )
-
-        start = page * 10
-        end = start + 10
-
-        items = self.music_queue[start:end]
-
-        if not items:
-            embed.add_field(name="Kosong", value="Tidak ada lagu.", inline=False)
-            return embed
-
         desc = ""
-        for i, (song, _) in enumerate(items, start=start+1):
+        for i, song in enumerate(display_list[start:end], start=start + 1):
             desc += f"**{i}.** {song['title']}\n"
 
-        embed.add_field(
-            name="🎵 Next Up",
-            value=desc,
-            inline=False
-        )
-
+        embed.add_field(name="Daftar Lagu", value=desc, inline=False)
         return embed
 
 
