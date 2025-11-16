@@ -509,22 +509,19 @@ class music_cog(commands.Cog):
 
     async def preload_next(self):
         if not self.music_queue:
-            self.preloaded_source = None
             return
 
         next_song, _ = self.music_queue[0]
 
-        # FIX: resolve placeholder hanya jika benar placeholder
+        # Resolve hanya kalau masih placeholder
         if next_song.get("source") in [None, ""]:
             resolved = await self.search_yt(next_song["title"])
-
             if resolved:
                 next_song["source"] = resolved["source"]
                 next_song["title"] = resolved["title"]
                 next_song["thumbnail"] = resolved["thumbnail"]
                 next_song["duration"] = resolved["duration"]
 
-        self.preloaded_source = next_song["source"]
 
 
 
@@ -533,39 +530,27 @@ class music_cog(commands.Cog):
     # ======================================================
 
     async def play_music(self):
-        """
-        Pop song from queue, connect VC if needed, play song with filters.
-        """
         if len(self.music_queue) == 0:
             self.is_playing = False
             self.current_song = None
             self.started_at = None
             self.current_duration = None
 
-            # stop updater progress kalau masih jalan
             if self.progress_task:
                 self.progress_task.cancel()
                 self.progress_task = None
 
-            # optional: jangan lupa referensi message-nya dihapus
             self.now_playing_message = None
-
             await self.start_idle_timer()
             return
 
         song_data, voice_channel = self.music_queue.pop(0)
         self.current_song = song_data
 
-        # set waktu mulai & durasi
         self.started_at = discord.utils.utcnow()
         self.current_duration = self.parse_duration_seconds(
             self.current_song.get("duration")
         )
-
-        # FIX: preload hanya boleh jika current_song sudah FULL resolved
-        if self.current_song and self.current_song.get("source") not in [None, ""]:
-            await self.preload_next()
-
 
         # Connect VC
         try:
@@ -581,7 +566,6 @@ class music_cog(commands.Cog):
         if self.vc.is_playing():
             self.vc.stop()
 
-        # Build FFmpeg filters dynamically
         filter_chain = self.build_ffmpeg_filters()
 
         before_opt = (
@@ -603,15 +587,14 @@ class music_cog(commands.Cog):
             "-nostats -hide_banner -loglevel error"
         )
 
-        # Start playing
         try:
-            # gunakan Hasil preload jika ada (lebih cepat karena sudah resolve)
-            if self.current_song["source"] is None:
+            # Pastikan current_song sudah punya source
+            if self.current_song.get("source") in [None, ""]:
                 resolved = await self.search_yt(self.current_song["title"])
                 if resolved:
                     self.current_song.update(resolved)
 
-            source = self.preloaded_source or self.current_song["source"]
+            source = self.current_song["source"]  # ⬅⬅ HANYA ini, TANPA preloaded_source
 
             self.vc.play(
                 discord.FFmpegPCMAudio(
@@ -624,32 +607,29 @@ class music_cog(commands.Cog):
                     asyncio.create_task, self._continue_next(e)
                 )
             )
-            self.preloaded_source = None
+
             self.is_playing = True
 
             embed = self.build_now_playing_embed()
             controls = PlayerControl(self)
-            # simpan message Now Playing biar bisa diedit progress-nya
             self.now_playing_message = await self.send_to_music_channel(
                 self.vc.guild, embed, view=controls
             )
 
-            # mulai updater progress
             await self.start_progress_updater()
+
+            # ⬅ Baru preload NEXT di sini, setelah lagu ini sukses start
+            await self.preload_next()
 
         except Exception as e:
             print(f"[PLAY ERROR] {e}")
             self.is_playing = False
 
+
     async def refresh_current(self):
-        """
-        Restart ulang lagu yg sedang diputar dengan filter FFmpeg terbaru
-        tanpa ngutik-ngutik queue.
-        """
         if not self.current_song or not self.vc:
             return
 
-        # tandai biar _continue_next tidak jalan ketika stop ini
         self.skip_after = True
 
         if self.vc.is_playing() or self.vc.is_paused():
@@ -675,9 +655,7 @@ class music_cog(commands.Cog):
             "-nostats -hide_banner -loglevel error"
         )
 
-        source = self.preloaded_source or self.current_song["source"]
-        self.preloaded_source = None  # clear setelah dipakai
-
+        source = self.current_song["source"]  # ⬅ langsung pakai ini
 
         self.vc.play(
             discord.FFmpegPCMAudio(
@@ -691,7 +669,6 @@ class music_cog(commands.Cog):
             )
         )
         self.is_playing = True
-        # reset start time & progress ketika refresh
         self.started_at = discord.utils.utcnow()
 
     async def start_progress_updater(self):
@@ -1113,7 +1090,7 @@ class music_cog(commands.Cog):
 
         embed.add_field(name="Daftar Lagu", value=desc, inline=False)
 
-        # Info tambahan
+        # ⬅ Tambahan
         embed.set_footer(
             text=f"Now Playing berada di urutan pertama • Total lagu: {len(display_list)}"
         )
