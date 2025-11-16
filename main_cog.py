@@ -70,7 +70,7 @@ class main_cog(commands.Cog):
                 "`giveaway <hadiah> <durasi>` - Buat giveaway\n"
                 "`poll <pertanyaan>`          - Buat polling ya/tidak\n"
                 "`ping`                       - Cek Ping Bot\n"
-                "`ttss <teks>`                 - Ubah teks jadi text-to-speech\n"
+                "`ttsss <teks>`                 - Ubah teks jadi text-to-speech\n"
             ),
             inline=False
         )
