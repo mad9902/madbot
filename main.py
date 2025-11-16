@@ -40,7 +40,7 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-intents.presences = True
+intents.guild_reactions = True
 intents.reactions = True
 
 # Prefix logic
