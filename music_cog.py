@@ -964,6 +964,17 @@ class music_cog(commands.Cog):
             # Masukkan placeholder terlebih dahulu untuk SEMUA tracks
             # === FIX: convert lagu pertama dulu (agar tidak skip ke lagu #2) ===
             first_info = await self.search_yt(tracks[0])
+            # Paksa current_song punya semua data
+            if 'duration' not in first_info or not first_info['duration']:
+                first_info['duration'] = first_info.get('duration_string') or first_info.get('duration')
+
+            if not first_info.get("thumbnail"):
+                # Resolusi ulang untuk ambil thumbnail
+                fixed = await self.search_yt(first_info["title"])
+                if fixed:
+                    first_info["thumbnail"] = fixed.get("thumbnail")
+                    first_info["duration"] = fixed.get("duration", first_info["duration"])
+
             if not first_info:
                 return await ctx.send("❌ Gagal memuat lagu pertama dari Spotify.")
 
