@@ -1469,16 +1469,22 @@ def auto_process_gap(pair):
     return pair
 
 def force_new_day(pair_id):
+    """
+    Jangan pernah mengubah last_update_date.
+    Fungsi ini hanya membersihkan restore flags
+    agar perhitungan gap berjalan normal.
+    """
     db = connect_db()
     cursor = db.cursor()
-    today = date.today()
+
     cursor.execute("""
         UPDATE streak_pairs
-        SET last_update_date = %s,
+        SET 
             needs_restore = 0,
             restore_deadline = NULL
         WHERE id = %s
-    """, (today, pair_id))
+    """, (pair_id,))
+
     db.commit()
     cursor.close()
     db.close()
