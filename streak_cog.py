@@ -423,114 +423,181 @@ class StreakCog(commands.Cog):
     # -------------------------------------------------
     # Listener 2: kalau target react 🔥 -> streak naik
     # -------------------------------------------------
+    # -------------------------------------------------
+    # Listener 2: kalau target react 🔥 -> streak naik
+    # -------------------------------------------------
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        print(
+            "[STREAK] REACT STEP0: TRIGGERED | "
+            f"user_id={payload.user_id}, emoji={payload.emoji}, "
+            f"guild_id={payload.guild_id}, channel_id={payload.channel_id}, "
+            f"message_id={payload.message_id}"
+        )
+
         if payload.user_id == self.bot.user.id:
+            print("[STREAK] STEP1: Reaction dari bot sendiri, abaikan")
             return
 
         guild = self.bot.get_guild(payload.guild_id)
         if guild is None:
+            print("[STREAK] STEP2: guild tidak ditemukan")
             return
 
         member = guild.get_member(payload.user_id)
-        if member is None or member.bot:
+        if member is None:
+            print("[STREAK] STEP3: member tidak ditemukan di guild (mungkin belum cache)")
+            return
+        if member.bot:
+            print("[STREAK] STEP4: member adalah bot, abaikan")
             return
 
         # hanya api unicode
+        print(f"[STREAK] STEP5: emoji.name = {payload.emoji.name}")
         if payload.emoji.name != "🔥":
+            print("[STREAK] STEP5b: Emoji bukan 🔥, abaikan")
             return
 
         settings = get_streak_settings(guild.id)
+        print(f"[STREAK] STEP6: settings = {settings}")
         if not settings:
+            print("[STREAK] STEP6b: settings streak belum di-set untuk guild ini")
             return
 
         cmd_channel_id = settings.get("command_channel_id")
+        print(
+            f"[STREAK] STEP7: cmd_channel_id={cmd_channel_id}, "
+            f"payload.channel_id={payload.channel_id}"
+        )
         if cmd_channel_id is None or payload.channel_id != cmd_channel_id:
+            print("[STREAK] STEP7b: reaction bukan di channel command streak, abaikan")
             return
 
         channel = guild.get_channel(payload.channel_id)
         if channel is None:
+            print("[STREAK] STEP8: channel tidak ditemukan di guild")
             return
 
         try:
             message = await channel.fetch_message(payload.message_id)
-        except:
+            print(f"[STREAK] STEP9: Berhasil fetch message id={payload.message_id}")
+        except Exception as e:
+            print(f"[STREAK] STEP9b: Gagal fetch message: {e}")
             return
 
         if message.author.bot or message.guild is None:
+            print("[STREAK] STEP10: message author bot atau message bukan di guild, abaikan")
             return
 
-        parts = message.content.strip().split()
+        content = message.content.strip()
+        print(f"[STREAK] STEP11: message.content = {content!r}")
+        parts = content.split()
         if len(parts) < 2 or parts[0].lower() != "api":
+            print("[STREAK] STEP11b: Bukan format 'api @user', abaikan")
             return
 
         mentions = [m for m in message.mentions if not m.bot and m.id != message.author.id]
+        print(f"[STREAK] STEP12: mentions valid = {[m.id for m in mentions]}")
         if len(mentions) != 1:
+            print("[STREAK] STEP12b: mentions tidak tepat 1 orang, abaikan")
             return
 
         target = mentions[0]
+        print(
+            f"[STREAK] STEP13: author_id={message.author.id}, "
+            f"target_id={target.id}, reactor_id={member.id}"
+        )
 
+        # Hanya target yang boleh react untuk naikkan streak
         if member.id != target.id:
+            print("[STREAK] STEP13b: Yang react bukan target yang di-mention, abaikan")
             return
 
         guild_id = guild.id
 
+        # Ambil pair
         pair = get_streak_pair(guild_id, message.author.id, target.id)
+        print(f"[STREAK] STEP14: pair dari DB = {pair}")
+
+        if not pair:
+            print("[STREAK] STEP14b: pair tidak ditemukan di DB, abort")
+            return
 
         # ====== AUTO-RESET SAAT REACT ======
         wib = pytz.timezone("Asia/Jakarta")
         today = datetime.now(wib).date()
+        print(f"[STREAK] STEP15: Today WIB = {today}")
 
-        # ===== DEBUG ==========
-        print("=== DEBUG REACT ===")
-        print("Today WIB:", today)
-        print("Pair last_update_date RAW:", pair.get("last_update_date"))
-        print("Pair status:", pair.get("status"))
-        print("Needs restore:", pair.get("needs_restore"))
-        print("=====================")
-        # ===== END DEBUG ======
-
+        # DEBUG sebelum parse last_update_date
+        print(f"[STREAK] STEP16: pair.last_update_date RAW = {pair.get('last_update_date')}")
 
         last = pair.get("last_update_date")
         if isinstance(last, str):
             try:
-                last = datetime.strptime(last, "%Y-%m-%d").date()
-            except:
+                parsed = datetime.strptime(last, "%Y-%m-%d").date()
+                print(f"[STREAK] STEP16b: last_update_date parsed = {parsed}")
+                last = parsed
+            except Exception as e:
+                print(f"[STREAK] STEP16c: Gagal parse last_update_date: {e}, fallback today")
                 last = today
+        elif isinstance(last, date):
+            print(f"[STREAK] STEP16d: last_update_date sudah tipe date = {last}")
+        else:
+            print(f"[STREAK] STEP16e: last_update_date None/unknown type = {last}, fallback today")
+            last = today
 
         # Jika last_update_date = kemarin → anggap day reset -> gap normal
-        # RESET DAY KALAU KEMARIN
         if last == (today - timedelta(days=1)):
-            from database import force_new_day
-            force_new_day(pair["id"])
+            print(
+                "[STREAK] STEP17: last_update_date == kemarin, panggil force_new_day() "
+                f"pair_id={pair['id']}"
+            )
+            try:
+                from database import force_new_day
+                force_new_day(pair["id"])
+                print("[STREAK] STEP17b: force_new_day OK, re-fetch pair")
+            except Exception as e:
+                print(f"[STREAK] STEP17c: ERROR force_new_day: {e}")
 
             # refresh pair dari DB biar clean
             pair = get_streak_pair(guild_id, message.author.id, target.id)
-
-
+            print(f"[STREAK] STEP17d: pair setelah force_new_day = {pair}")
 
         if not pair:
+            print("[STREAK] STEP18: pair None setelah force_new_day, abort")
             return
 
         # ★ AUTO GAP PROCESSING (diproses hanya untuk pengecekan, tidak overwrite pair)
+        print("[STREAK] STEP19: panggil auto_process_gap(pair)")
         gap_check = auto_process_gap(pair)
+        print(f"[STREAK] STEP19b: hasil auto_process_gap = {gap_check}")
+
+        if not gap_check:
+            print("[STREAK] STEP19c: gap_check None, abort")
+            return
 
         # trigger warning jika baru masuk mode restore
         if gap_check.get("needs_restore", 0) == 1:
-            last = gap_check.get("last_update_date")
-            if last:
-                last_str = str(last).split(" ")[0]
+            last2 = gap_check.get("last_update_date")
+            print(f"[STREAK] STEP20: needs_restore=1, last_update_date={last2}")
+            if last2:
+                last_str = str(last2).split(" ")[0]
                 if last_str != str(date.today()):
+                    print("[STREAK] STEP20b: Kirim warning near dead")
                     await self.send_warning_near_dead(guild, gap_check)
-
-        if not gap_check:
-            return
 
         pair = gap_check
 
+        print(
+            f"[STREAK] STEP21: setelah gap_check -> status={pair.get('status')}, "
+            f"needs_restore={pair.get('needs_restore')}, "
+            f"current_streak={pair.get('current_streak')}, "
+            f"gap_days={pair.get('gap_days') if 'gap_days' in pair else 'N/A'}"
+        )
 
         # ★ Jika streak sudah mati
         if pair["status"] == "BROKEN":
+            print("[STREAK] STEP22: status=BROKEN, kirim notifikasi mati total")
             await self.send_streak_dead(guild, pair)
             await channel.send(
                 f"💀 Streak kalian sudah mati karena melewati batas restore."
@@ -541,17 +608,25 @@ class StreakCog(commands.Cog):
         # ★ CASE 1 — pasangan sedang butuh RESTORE
         # ==========================================
         if pair.get("needs_restore", 0) == 1:
+            print("[STREAK] STEP23: Masuk mode RESTORE")
 
             # Cek deadline restore
             if pair.get("restore_deadline"):
                 dead = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
+                print(
+                    f"[STREAK] STEP23b: restore_deadline={dead}, today={date.today()}"
+                )
                 if date.today() > dead:
+                    print("[STREAK] STEP23c: Lewat deadline, kill_streak_due_to_deadline")
                     kill_streak_due_to_deadline(pair["id"])
                     await channel.send("💀 Terlambat restore → streak mati total.")
                     return
 
-            wib = pytz.timezone("Asia/Jakarta")
             today_wib = datetime.now(wib).date()
+            print(
+                f"[STREAK] STEP24: CALL apply_streak_update RESTORE | "
+                f"pair_id={pair['id']}, today_wib={today_wib}"
+            )
 
             result = apply_streak_update(
                 guild_id=guild_id,
@@ -564,12 +639,21 @@ class StreakCog(commands.Cog):
                 today=today_wib,  # ← FIX TERPENTING
             )
 
+            print(
+                f"[STREAK] STEP24b: RESULT RESTORE -> "
+                f"ok={result.get('ok')}, reason={result.get('reason')}, "
+                f"before={result.get('before')}, "
+                f"after={result.get('pair', {}).get('current_streak')}, "
+                f"delta_days={result.get('delta_days')}, "
+                f"broken={result.get('broken')}"
+            )
 
             if not result["ok"]:
                 await channel.send("❌ Gagal restore streak.")
                 return
 
             # sukses restore → clear flags
+            print(f"[STREAK] STEP25: clear_restore_flags pair_id={pair['id']}")
             clear_restore_flags(pair["id"])
 
             new_pair = result["pair"]
@@ -580,6 +664,11 @@ class StreakCog(commands.Cog):
             used = pair_after.get("restore_used_this_cycle", 0) or 0
             left = max(0, 5 - used)
 
+            print(
+                f"[STREAK] STEP26: RESTORE SUCCESS | new_streak={new_pair['current_streak']}, "
+                f"sisa_restore_bulan_ini={left}"
+            )
+
             await channel.send(
                 f"{emoji} **RESTORE BERHASIL!** Streak kembali menyala 🔥\n"
                 f"(hari terakhir restore: {result['delta_days']})\n"
@@ -588,16 +677,19 @@ class StreakCog(commands.Cog):
 
             return
 
-
-
         # ========================
         # CASE NORMAL UPDATE MODE
         # ========================
         if pair["status"] != "ACTIVE":
+            print(f"[STREAK] STEP27: status bukan ACTIVE ({pair['status']}), abort")
             return
 
-        wib = pytz.timezone("Asia/Jakarta")
         today_wib = datetime.now(wib).date()
+        print(
+            f"[STREAK] STEP28: CALL apply_streak_update NORMAL | "
+            f"pair_id={pair['id']}, today_wib={today_wib}, "
+            f"current_streak={pair['current_streak']}"
+        )
 
         result = apply_streak_update(
             guild_id=guild_id,
@@ -610,8 +702,17 @@ class StreakCog(commands.Cog):
             today=today_wib,   # ← PERBAIKAN TERPENTING
         )
 
+        print(
+            f"[STREAK] STEP28b: RESULT NORMAL -> "
+            f"ok={result.get('ok')}, reason={result.get('reason')}, "
+            f"before={result.get('before')}, "
+            f"after={result.get('pair', {}).get('current_streak')}, "
+            f"delta_days={result.get('delta_days')}, "
+            f"broken={result.get('broken')}"
+        )
 
         if not result["ok"]:
+            print("[STREAK] STEP28c: result.ok=False, tidak lanjut kirim pesan / card")
             return
 
         new_pair = result["pair"]
@@ -621,6 +722,11 @@ class StreakCog(commands.Cog):
         emoji = get_display_emoji(self.bot, guild_id, streak_now)
         _, tier = get_flame_tier(streak_now)
 
+        print(
+            f"[STREAK] STEP29: AFTER UPDATE | before={before}, "
+            f"now={streak_now}, broken={broken}, tier={tier}"
+        )
+
         # Message to streak channel
         if broken:
             text = (
@@ -629,6 +735,7 @@ class StreakCog(commands.Cog):
             )
         else:
             if streak_now == before:
+                print("[STREAK] STEP29b: streak_now == before (tidak berubah), tidak kirim pesan")
                 return
             text = (
                 f"{emoji} Streak {format_pair_mention(new_pair)} naik dari "
@@ -636,22 +743,27 @@ class StreakCog(commands.Cog):
             )
 
         try:
+            print(f"[STREAK] STEP30: Kirim pesan ke channel streak: {text}")
             await channel.send(text)
-        except:
-            pass
+        except Exception as e:
+            print(f"[STREAK] STEP30b: Gagal kirim pesan ke channel streak: {e}")
 
         # LOG CHANNEL → dengan card grafik 🔥
         log_channel_id = settings.get("log_channel_id")
+        print(f"[STREAK] STEP31: log_channel_id = {log_channel_id}")
         if not log_channel_id:
+            print("[STREAK] STEP31b: log_channel_id belum di-set, skip log card")
             return
 
         log_channel = guild.get_channel(log_channel_id)
         if not log_channel:
+            print("[STREAK] STEP31c: log_channel tidak ditemukan, skip log card")
             return
 
         # === Build card image ===
         pfp1 = message.author.display_avatar.with_size(512).with_format("png").url
         pfp2 = target.display_avatar.with_size(512).with_format("png").url
+        print(f"[STREAK] STEP32: pfp1={pfp1}, pfp2={pfp2}")
 
         emoji_id = get_emoji_for_streak(guild_id, streak_now)
         emoji_url = None
@@ -659,6 +771,7 @@ class StreakCog(commands.Cog):
             e = self.bot.get_emoji(emoji_id)
             if e and hasattr(e, "url"):
                 emoji_url = e.url
+        print(f"[STREAK] STEP33: emoji_id={emoji_id}, emoji_url={emoji_url}")
 
         card = await make_streak_card(
             pfp1_url=pfp1,
@@ -666,7 +779,6 @@ class StreakCog(commands.Cog):
             emoji_url=emoji_url,
             streak=streak_now
         )
-
 
         file = discord.File(card, filename="streak.png")
 
@@ -684,6 +796,10 @@ class StreakCog(commands.Cog):
         new_pair = ensure_restore_cycle(new_pair)
         used = new_pair.get("restore_used_this_cycle", 0) or 0
         left = max(0, 5 - used)
+        print(
+            f"[STREAK] STEP34: sisa_restore_bulan_ini={left}, "
+            f"restore_used_this_cycle={used}"
+        )
 
         embed.add_field(
             name="♻️ Sisa Restore Bulan Ini",
@@ -691,14 +807,15 @@ class StreakCog(commands.Cog):
             inline=True,
         )
 
-
         if result["delta_days"] is not None:
             embed.set_footer(text=f"Gap hari: {result['delta_days']}")
 
         try:
+            print("[STREAK] STEP35: Kirim embed + card ke log_channel")
             await log_channel.send(file=file, embed=embed)
-        except:
-            pass
+        except Exception as e:
+            print(f"[STREAK] STEP35b: Gagal kirim ke log_channel: {e}")
+
     # =========================
     #  COMMAND GROUP mstreak
     # =========================
