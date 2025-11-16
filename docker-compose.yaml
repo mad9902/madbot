@@ -19,16 +19,16 @@ services:
 
 
   madbot-db:
-    image: mysql:8.0
-    container_name: madbot-db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASS}
-      MYSQL_DATABASE: ${MYSQL_DB}
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_volume:/var/lib/mysql
+  image: mariadb:10.5
+  container_name: madbot-db
+  restart: always
+  environment:
+    MYSQL_ROOT_PASSWORD: ${MYSQL_PASS}
+    MYSQL_DATABASE: ${MYSQL_DB}
+  ports:
+    - "3306:3306"
+  volumes:
+    - db_volume:/var/lib/mysql
 
 
 volumes:
