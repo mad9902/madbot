@@ -236,6 +236,11 @@ class StreakCog(commands.Cog):
     async def before_daily_reset(self):
         await self.bot.wait_until_ready()
 
+        # Set initial date biar tidak langsung nge-reset saat start
+        wib = pytz.timezone("Asia/Jakarta")
+        self.last_reset_date = datetime.now(wib).date()
+
+
     async def send_warning_near_dead(self, guild, pair):
         """Kirim embed warning ke log channel."""
         settings = get_streak_settings(guild.id)
