@@ -540,7 +540,6 @@ class music_cog(commands.Cog):
                 self.progress_task.cancel()
                 self.progress_task = None
 
-            self.now_playing_message = None
             await self.start_idle_timer()
             return
 
@@ -612,9 +611,20 @@ class music_cog(commands.Cog):
 
             embed = self.build_now_playing_embed()
             controls = PlayerControl(self)
-            self.now_playing_message = await self.send_to_music_channel(
-                self.vc.guild, embed, view=controls
-            )
+            # Kalau belum ada message (lagu pertama), kirim embed baru
+            if not self.now_playing_message:
+                self.now_playing_message = await self.send_to_music_channel(
+                    self.vc.guild, embed, view=controls
+                )
+            else:
+                # Kalau sudah ada (next track), cukup EDIT embed lama
+                try:
+                    await self.now_playing_message.edit(embed=embed, view=controls)
+                except:
+                    # fallback kalau message hilang
+                    self.now_playing_message = await self.send_to_music_channel(
+                        self.vc.guild, embed, view=controls
+                    )
 
             await self.start_progress_updater()
 
