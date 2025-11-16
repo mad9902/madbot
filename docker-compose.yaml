@@ -19,7 +19,7 @@ services:
 
 
   madbot-db:
-    image: mariadb:10.5
+    image: mysql:8.0
     container_name: madbot-db
     restart: always
     environment:
