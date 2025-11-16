@@ -143,16 +143,73 @@ class SubmitImageConfessionButton(discord.ui.Button):
             return await dm.send("⏱️ Waktu habis, confession dibatalkan.")
 
         # AMBIL ATTACHMENT & CAPTION
+        # ATTACHMENT VALIDATION
         attachment = msg.attachments[0]
+        file_size = attachment.size
+
+        if file_size > 5 * 1024 * 1024:  # 5 MB
+            return await dm.send("❌ File terlalu besar. Max **5 MB** ya.")
+
+        # Tipe file
+        content_type = attachment.content_type or ""
+
+        is_image = content_type.startswith("image/")
+        is_video = content_type.startswith("video/")
+
+        if not (is_image or is_video):
+            return await dm.send("❌ Format tidak didukung. Kirim **gambar, GIF, atau video** saja.")
+
         caption = msg.content or " "
         confession_id = str(uuid.uuid4())[:8]
 
+        # DOWNLOAD FILE KE DISK SEMENTARA
+        temp_path = f"/tmp/confess_{uuid.uuid4().hex}"
+
+        await attachment.save(temp_path)
+
+        # AMBIL CONFESSION CHANNEL
+        db = connect_db()
+        channel_id = get_channel_settings(db, interaction.guild_id, "confession")
+        db.close()
+
+        target_channel = interaction.guild.get_channel(int(channel_id))
+
+        # EMBED
         embed = discord.Embed(
             title=f"Anonymous Confession (#{confession_id})",
             description=f'"{caption}"',
             color=discord.Color.dark_gray()
         )
-        embed.set_image(url=attachment.url)
+
+        # SEND FILE
+        file = discord.File(temp_path)
+
+        if is_image:
+            embed.set_image(url=f"attachment://{attachment.filename}")
+
+        sent = await target_channel.send(embed=embed, file=file)
+
+        # HAPUS FILE LOKAL
+        try:
+            import os
+            os.remove(temp_path)
+        except:
+            pass
+
+        # CREATE THREAD
+        thread = await sent.create_thread(name=f"Confession #{confession_id}")
+
+        # SIMPAN MAP
+        CONFESSION_THREAD_MAP[sent.id] = {
+            "thread_id": thread.id,
+            "channel_id": target_channel.id
+        }
+        save_confession_map()
+
+        # BUTTON VIEW
+        view = discord.ui.View(timeout=None)
+        view.add_i_
+
 
         # CHANNEL TARGET
         db = connect_db()
