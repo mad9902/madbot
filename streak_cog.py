@@ -452,12 +452,6 @@ class StreakCog(commands.Cog):
             print("[STREAK] STEP4: member adalah bot, abaikan")
             return
 
-        # hanya api unicode
-        print(f"[STREAK] STEP5: emoji.name = {payload.emoji.name}")
-        if payload.emoji.name != "🔥":
-            print("[STREAK] STEP5b: Emoji bukan 🔥, abaikan")
-            return
-
         settings = get_streak_settings(guild.id)
         print(f"[STREAK] STEP6: settings = {settings}")
         if not settings:
@@ -518,6 +512,20 @@ class StreakCog(commands.Cog):
         # Ambil pair
         pair = get_streak_pair(guild_id, message.author.id, target.id)
         print(f"[STREAK] STEP14: pair dari DB = {pair}")
+
+        # --- STEP14.5: VALIDASI EMOJI (unicode 🔥 atau custom DB) ---
+        allowed = ["🔥"]
+
+        custom_emoji_id = get_emoji_for_streak(guild.id, pair["current_streak"])
+        if custom_emoji_id:
+            allowed.append(str(custom_emoji_id))
+
+        print(f"[STREAK] STEP14.5: emoji.id={payload.emoji.id}, allowed={allowed}")
+
+        if payload.emoji.name != "🔥" and str(payload.emoji.id) not in allowed:
+            print("[STREAK] STEP14.5b: Emoji bukan api valid, abaikan")
+            return
+
 
         if not pair:
             print("[STREAK] STEP14b: pair tidak ditemukan di DB, abort")
