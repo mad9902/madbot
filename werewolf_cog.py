@@ -172,6 +172,7 @@ class Werewolf(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cog = self
+        self.guild_locks = {}
         self.lovers = {}
         self.active_games = {}  # guild_id: game_id
         self.night_actions = {}  # game_id: dict
@@ -299,6 +300,16 @@ class Werewolf(commands.Cog):
 
     @commands.command(name="startwerewolf")
     async def startwerewolf_cmd(self, ctx):
+        lock = self.guild_locks.setdefault(ctx.guild.id, asyncio.Lock())
+
+        async with lock:
+            game = get_active_game(ctx.guild.id)
+            if game:
+                await self.send_embed(ctx, "Game Aktif", "Sudah ada game aktif.")
+                return
+
+            # lanjut buat game
+
         game = get_active_game(ctx.guild.id)
         if game:
             await self.send_embed(ctx, "Game Aktif", "Sudah ada game aktif. Gunakan `mstopwerewolf` untuk mengakhiri.")
@@ -374,7 +385,7 @@ class Werewolf(commands.Cog):
             return
 
         # Ambil dan acak role & pemain
-        roles = ROLE_POOL.get(len(players), ROLE_POOL[max(ROLE_POOL)])
+        roles = ROLE_POOL.get(len(players), ROLE_POOL[max(ROLE_POOL)]).copy()
         random.shuffle(roles)
         random.shuffle(players)
 
