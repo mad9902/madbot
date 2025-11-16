@@ -514,9 +514,10 @@ class music_cog(commands.Cog):
 
         next_song, _ = self.music_queue[0]
 
-        # FIX: resolve placeholder
-        if next_song["source"] is None:
+        # FIX: resolve placeholder hanya jika benar placeholder
+        if next_song.get("source") in [None, ""]:
             resolved = await self.search_yt(next_song["title"])
+
             if resolved:
                 next_song["source"] = resolved["source"]
                 next_song["title"] = resolved["title"]
@@ -524,6 +525,7 @@ class music_cog(commands.Cog):
                 next_song["duration"] = resolved["duration"]
 
         self.preloaded_source = next_song["source"]
+
 
 
     # ======================================================
@@ -560,8 +562,10 @@ class music_cog(commands.Cog):
             self.current_song.get("duration")
         )
 
-        # Preload next track
-        await self.preload_next()
+        # FIX: preload hanya boleh jika current_song sudah FULL resolved
+        if self.current_song and self.current_song.get("source") not in [None, ""]:
+            await self.preload_next()
+
 
         # Connect VC
         try:
@@ -759,8 +763,10 @@ class music_cog(commands.Cog):
                 print(f"[AFTER ERROR] {error}")
 
             # ===== LOOP SINGLE =====
-            if self.loop_mode == "single" and last_song:
-                self.music_queue.insert(0, [last_song, self.vc.channel])
+            if self.loop_mode == "single" and last_song and not self.skip_after:
+                # Anti duplicate-insert: cek source, bukan cuma title
+                if not self.music_queue or self.music_queue[0][0].get("source") != last_song.get("source"):
+                    self.music_queue.insert(0, [last_song, self.vc.channel])
 
             # ===== LOOP QUEUE ===== (autoplay OFF)
             elif self.loop_mode == "queue" and not self.autoplay and last_song:
@@ -973,24 +979,38 @@ class music_cog(commands.Cog):
                             pass
                 return results
 
-
-            infos = await loop.run_in_executor(None, lambda: convert_list(first_batch))
+            # convert hanya track ke-2 dst sampai MAX_BATCH
+            batch_for_convert = tracks[1:self.MAX_BATCH]
+            infos = await loop.run_in_executor(None, lambda: convert_list(batch_for_convert))
 
             added = 0
             # Masukkan placeholder terlebih dahulu untuk SEMUA tracks
-            for t in tracks:
+            # === FIX: convert lagu pertama dulu (agar tidak skip ke lagu #2) ===
+            first_info = await self.search_yt(tracks[0])
+            if not first_info:
+                return await ctx.send("❌ Gagal memuat lagu pertama dari Spotify.")
+
+            # Masukkan track pertama sebagai REAL SONG
+            self.music_queue.append([
+                {
+                    "source": first_info["source"],
+                    "title": first_info["title"],
+                    "thumbnail": first_info["thumbnail"],
+                    "duration": first_info["duration"],
+                },
+                vc
+            ])
+
+            # Masukkan sisanya sebagai placeholder
+            for t in tracks[1:]:
                 self.music_queue.append([
-                    {
-                        "source": None,
-                        "title": f"{t}",  # tanda menunggu convert
-                        "thumbnail": None,
-                        "duration": None,
-                    },
+                    {"source": None, "title": t, "thumbnail": None, "duration": None},
                     vc
                 ])
 
+
             # Setelah itu baru process batch pertama
-            insert_index = 0
+            insert_index = 1  # index 0 sudah real (first_info)
             for info in infos:
                 real_song = {
                     "source": info.get("url"),
@@ -998,8 +1018,11 @@ class music_cog(commands.Cog):
                     "thumbnail": info.get("thumbnail"),
                     "duration": info.get("duration_string") or info.get("duration"),
                 }
-                self.music_queue[insert_index][0] = real_song
+                if insert_index < len(self.music_queue):
+                    self.music_queue[insert_index][0] = real_song
                 insert_index += 1
+
+
 
 
             if not self.is_playing:
@@ -1048,24 +1071,24 @@ class music_cog(commands.Cog):
 
     def build_queue_page(self, guild, page):
         """
-        Display queue hanya berdasarkan:
-        1. current_song
-        2. music_queue (urutan REAL yang bot mainkan)
+        Display queue berbasis urutan REAL:
+        1. Now Playing
+        2. Antrian queue
         """
         display_list = []
 
-        # NOW PLAYING → nomor 1
+        # NOW PLAYING → selalu item 1
         if self.current_song:
             display_list.append({
                 "title": f"▶️ {self.current_song['title']}",
-                "duration": self.current_song.get("duration", "?"),
+                "duration": self.current_song.get("duration", "?")
             })
 
-        # SISANYA: QUEUE INTERNAL
+        # SISANYA → dari self.music_queue
         for song, _ in self.music_queue:
             display_list.append({
                 "title": song["title"],
-                "duration": song.get("duration", "?"),
+                "duration": song.get("duration", "?")
             })
 
         if len(display_list) == 0:
@@ -1084,12 +1107,17 @@ class music_cog(commands.Cog):
             color=discord.Color.blurple()
         )
 
-        # BUILD DESCRIPTION
         desc = ""
         for i, song in enumerate(display_list[start:end], start=start + 1):
             desc += f"**{i}.** {song['title']}\n"
 
         embed.add_field(name="Daftar Lagu", value=desc, inline=False)
+
+        # Info tambahan
+        embed.set_footer(
+            text=f"Now Playing berada di urutan pertama • Total lagu: {len(display_list)}"
+        )
+
         return embed
 
 
@@ -1162,66 +1190,36 @@ class music_cog(commands.Cog):
         if len(self.pending_spotify_tracks) > 0:
             random.shuffle(self.pending_spotify_tracks)
 
-            # 2. RESET ulang music_queue menjadi placeholder sesuai urutan baru
+            # ambil VC user (kalau ada)
             vc = ctx.author.voice.channel if ctx.author.voice else None
+
+            # bangun ulang queue dari hasil shuffle
             self.music_queue.clear()
 
-            for t in self.pending_spotify_tracks:
+            first_info = await self.search_yt(self.pending_spotify_tracks[0])
+            if not first_info:
+                return await ctx.send("❌ Gagal memuat lagu pertama dari Spotify setelah shuffle.")
+
+            # masukkan track pertama sebagai REAL
+            self.music_queue.append([
+                {
+                    "source": first_info["source"],
+                    "title": first_info["title"],
+                    "thumbnail": first_info["thumbnail"],
+                    "duration": first_info["duration"],
+                },
+                vc
+            ])
+
+            # sisanya placeholder
+            for t in self.pending_spotify_tracks[1:]:
                 self.music_queue.append([
-                    {
-                        "source": None,
-                        "title": t,
-                        "thumbnail": None,
-                        "duration": None,
-                    },
+                    {"source": None, "title": t, "thumbnail": None, "duration": None},
                     vc
                 ])
 
-            # 3. Batch convert ulang 5 lagu pertama
-            self.spotify_backlog = self.pending_spotify_tracks[self.MAX_BATCH:]
-            self.loading_spotify = True
-
-            loop = asyncio.get_running_loop()
-
-            def convert_list(batch):
-                results = []
-                with YoutubeDL({
-                    "format": "bestaudio/best",
-                    "quiet": True,
-                    "noplaylist": True,
-                    "default_search": "auto",
-                    "ignoreerrors": True,
-                    "no_warnings": True,
-                }) as ydl:
-                    for q in batch:
-                        try:
-                            info = ydl.extract_info(q, download=False)
-                            if info:
-                                if "entries" in info:
-                                    info = info["entries"][0]
-                                results.append(info)
-                        except:
-                            pass
-                return results
-
-            first_batch = self.pending_spotify_tracks[:self.MAX_BATCH]
-            infos = await loop.run_in_executor(None, lambda: convert_list(first_batch))
-
-            i = 0
-            for info in infos:
-                self.music_queue[i][0] = {
-                    "source": info.get("url"),
-                    "title": info.get("title"),
-                    "thumbnail": info.get("thumbnail"),
-                    "duration": info.get("duration_string") or info.get("duration"),
-                }
-                i += 1
-
             return await ctx.send("🔀 Queue telah di-shuffle!")
 
-        # FALLBACK: jika bukan Spotify
-        random.shuffle(self.music_queue)
-        await ctx.send("🔀 Queue di-shuffle!")
 
 
 
