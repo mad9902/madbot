@@ -481,6 +481,23 @@ class StreakCog(commands.Cog):
 
         pair = get_streak_pair(guild_id, message.author.id, target.id)
 
+        # ====== AUTO-RESET SAAT REACT ======
+        wib = pytz.timezone("Asia/Jakarta")
+        today = datetime.now(wib).date()
+
+        last = pair.get("last_update_date")
+        if isinstance(last, str):
+            try:
+                last = datetime.strptime(last, "%Y-%m-%d").date()
+            except:
+                last = today
+
+        # Jika last_update_date = kemarin → anggap day reset -> gap normal
+        if last == (today - timedelta(days=1)):
+            # jalankan auto_process_gap agar pindah hari
+            pair = auto_process_gap(pair)
+
+
         if not pair:
             return
 
