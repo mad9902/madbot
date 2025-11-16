@@ -188,6 +188,8 @@ class StreakCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.daily_reset_check.start()
+        self.last_reset_date = None
+
 
     def cog_unload(self):
         self.daily_reset_check.cancel()
@@ -196,13 +198,13 @@ class StreakCog(commands.Cog):
     async def daily_reset_check(self):
         # timezone Jakarta
         wib = pytz.timezone("Asia/Jakarta")
-        now = datetime.now(wib)
+        now = datetime.now(wib).date()
 
-        # kapan dianggap reset?
-        # Jam 00:00—00:01 WIB
-        if now.hour == 0 and now.minute == 0:
-            print("[STREAK] Menjalankan reset harian jam 00:00 WIB")
+        if self.last_reset_date != now:
+            print("[STREAK] Reset harian berjalan")
             await self.process_daily_reset()
+            self.last_reset_date = now
+
 
     async def process_daily_reset(self):
         """
