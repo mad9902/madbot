@@ -29,7 +29,7 @@ class AdminCog(commands.Cog):
 
         open("/tmp/deploy_madbot", "w").close()
 
-        await ctx.reply("🔧 Deploy signal sent. Rebuilding container...")
+        await ctx.reply("🛠️ Deploy signal sent. Bot shutting down for update...")
         await self.bot.close()
         sys.exit(0)
 
