@@ -71,6 +71,7 @@ class main_cog(commands.Cog):
                 "`poll <pertanyaan>`          - Buat polling ya/tidak\n"
                 "`ping`                       - Cek Ping Bot\n"
                 "`tts <teks>`                 - Ubah teks jadi text-to-speech\n"
+                "`tes`                        - Ubah teks jadi text-to-speech\n"
             ),
             inline=False
         )
