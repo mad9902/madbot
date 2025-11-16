@@ -20,7 +20,8 @@ from database import (
     clear_restore_flags,
     kill_streak_due_to_deadline,
     auto_process_gap,
-    ensure_restore_cycle
+    ensure_restore_cycle,
+    force_new_day
 
 )
 
@@ -190,20 +191,24 @@ class StreakCog(commands.Cog):
         self.daily_reset_check.start()
         self.last_reset_date = None
 
+    @tasks.loop(minutes=1)
+    async def daily_reset_check(self):
+        wib = pytz.timezone("Asia/Jakarta")
+        today = datetime.now(wib).date()
+
+        if self.last_reset_date != today:
+            print("[STREAK] Reset harian berjalan")
+            await self.process_daily_reset()
+            self.last_reset_date = today
+
+    @daily_reset_check.before_loop
+    async def before_daily_reset(self):
+        await self.bot.wait_until_ready()
+        wib = pytz.timezone("Asia/Jakarta")
+        self.last_reset_date = datetime.now(wib).date()
 
     def cog_unload(self):
         self.daily_reset_check.cancel()
-    
-    @tasks.loop(minutes=1)
-    async def daily_reset_check(self):
-        # timezone Jakarta
-        wib = pytz.timezone("Asia/Jakarta")
-        now = datetime.now(wib).date()
-
-        if self.last_reset_date != now:
-            print("[STREAK] Reset harian berjalan")
-            await self.process_daily_reset()
-            self.last_reset_date = now
 
 
     async def process_daily_reset(self):
@@ -230,15 +235,6 @@ class StreakCog(commands.Cog):
                 # kalau gap >= 3 → streak mati
                 if updated and updated["status"] == "BROKEN":
                     await self.send_streak_dead(guild, updated)
-
-
-    @daily_reset_check.before_loop
-    async def before_daily_reset(self):
-        await self.bot.wait_until_ready()
-
-        # Set initial date biar tidak langsung nge-reset saat start
-        wib = pytz.timezone("Asia/Jakarta")
-        self.last_reset_date = datetime.now(wib).date()
 
 
     async def send_warning_near_dead(self, guild, pair):
@@ -481,6 +477,10 @@ class StreakCog(commands.Cog):
 
         pair = get_streak_pair(guild_id, message.author.id, target.id)
 
+        # ====== AUTO-RESET SAAT REACT ======
+        wib = pytz.timezone("Asia/Jakarta")
+        today = datetime.now(wib).date()
+
         # ===== DEBUG ==========
         print("=== DEBUG REACT ===")
         print("Today WIB:", today)
@@ -491,10 +491,6 @@ class StreakCog(commands.Cog):
         # ===== END DEBUG ======
 
 
-        # ====== AUTO-RESET SAAT REACT ======
-        wib = pytz.timezone("Asia/Jakarta")
-        today = datetime.now(wib).date()
-
         last = pair.get("last_update_date")
         if isinstance(last, str):
             try:
@@ -503,15 +499,14 @@ class StreakCog(commands.Cog):
                 last = today
 
         # Jika last_update_date = kemarin → anggap day reset -> gap normal
+        # RESET DAY KALAU KEMARIN
         if last == (today - timedelta(days=1)):
-            print("AUTO-RESET TRIGGERED → Pindah hari")
-            before_pair = pair.copy()
-            pair = auto_process_gap(pair)
-            print("Pair before:", before_pair)
-            print("Pair after :", pair)
-        else:
-            print("AUTO-RESET NOT TRIGGERED")
-            print("Condition check:", last, "!=", today - timedelta(days=1))
+            from database import force_new_day
+            force_new_day(pair["id"])
+
+            # refresh pair dari DB biar clean
+            pair = get_streak_pair(guild_id, message.author.id, target.id)
+
 
 
         if not pair:
@@ -555,8 +550,9 @@ class StreakCog(commands.Cog):
                     await channel.send("💀 Terlambat restore → streak mati total.")
                     return
 
-            # Jalankan restore
-            # RESTORE MODE
+            wib = pytz.timezone("Asia/Jakarta")
+            today_wib = datetime.now(wib).date()
+
             result = apply_streak_update(
                 guild_id=guild_id,
                 user1_id=pair["user1_id"],
@@ -564,8 +560,10 @@ class StreakCog(commands.Cog):
                 channel_id=payload.channel_id,
                 message_id=payload.message_id,
                 author_id=member.id,
-                is_restore=True
+                is_restore=True,
+                today=today_wib,  # ← FIX TERPENTING
             )
+
 
             if not result["ok"]:
                 await channel.send("❌ Gagal restore streak.")
@@ -598,7 +596,9 @@ class StreakCog(commands.Cog):
         if pair["status"] != "ACTIVE":
             return
 
-        # NORMAL UPDATE
+        wib = pytz.timezone("Asia/Jakarta")
+        today_wib = datetime.now(wib).date()
+
         result = apply_streak_update(
             guild_id=guild_id,
             user1_id=pair["user1_id"],
@@ -607,7 +607,9 @@ class StreakCog(commands.Cog):
             message_id=payload.message_id,
             author_id=member.id,
             is_restore=False,
+            today=today_wib,   # ← PERBAIKAN TERPENTING
         )
+
 
         if not result["ok"]:
             return

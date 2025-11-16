@@ -1468,6 +1468,21 @@ def auto_process_gap(pair):
 
     return pair
 
+def force_new_day(pair_id):
+    db = connect_db()
+    cursor = db.cursor()
+    today = date.today()
+    cursor.execute("""
+        UPDATE streak_pairs
+        SET last_update_date = %s,
+            needs_restore = 0,
+            restore_deadline = NULL
+        WHERE id = %s
+    """, (today, pair_id))
+    db.commit()
+    cursor.close()
+    db.close()
+
 def ensure_restore_cycle(pair):
     """
     Pastikan bahwa restore_used_this_cycle selaras dengan bulan & tahun saat ini.
