@@ -29,6 +29,7 @@ from lastActive_cog import LastActive
 from commandstatus_cog import CommandStatusCog
 from logs_cog import LogCog
 from channelcontrol_cog import ChannelControl
+from admin_cog import AdminCog
 from confession_cog import ConfessionCog, ConfessionView, restore_reply_buttons
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
@@ -103,6 +104,8 @@ class MadBot(commands.Bot):
         await self.add_cog(CommandStatusCog(self))
         await self.add_cog(StreakCog(self))
         await self.add_cog(ChannelControl(self))
+        await self.add_cog(AdminCog(self))
+
 
 
         # Load cache semua guild
