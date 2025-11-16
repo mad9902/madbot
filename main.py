@@ -41,6 +41,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.presences = True
+intents.reactions = True
 
 # Prefix logic
 def get_prefix(bot, message):
