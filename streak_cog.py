@@ -382,6 +382,8 @@ class StreakCog(commands.Cog):
         # ★ mode needs_restore, bot tetap react tapi hanya memberi peringatan
         # ★ Jika butuh restore → cek apakah streak seharusnya sudah MATI
         if pair["needs_restore"] == 1:
+
+            # Cek delta lagi untuk memastikan (supaya tidak salah warning)
             last = pair.get("last_update_date")
             if isinstance(last, str):
                 last = datetime.strptime(last, "%Y-%m-%d").date()
@@ -389,17 +391,66 @@ class StreakCog(commands.Cog):
             today = date.today()
             delta = (today - last).days
 
-            # delta >=3 ⟶ harus mati TOTAL
+            # Jika delta >= 3 → ini bukan restore lagi, harus MATI
             if delta >= 3:
+                # ambil restore sebelum mati
                 pair_cycle = ensure_restore_cycle(pair)
                 used_before = pair_cycle.get("restore_used_this_cycle", 0)
                 left_before = f"{max(0, 5 - used_before)} / 5"
 
                 kill_streak_due_to_deadline(pair["id"])
                 dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+
                 await self.send_streak_dead(message.guild, dead, restore_left_override=left_before)
+
                 await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
                 return
+
+            # Cek deadline lewat
+            try:
+                deadline = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
+            except:
+                deadline = today
+
+            if today > deadline:
+                # ambil restore sebelum mati
+                pair_cycle = ensure_restore_cycle(pair)
+                used_before = pair_cycle.get("restore_used_this_cycle", 0)
+                left_before = f"{max(0, 5 - used_before)} / 5"
+
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+
+                await self.send_streak_dead(message.guild, dead, restore_left_override=left_before)
+
+                await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
+                return
+            
+            # 🔥 FIX: langsung mati jika kuota restore habis
+            pair_cycle = ensure_restore_cycle(pair)
+            if pair_cycle.get("restore_used_this_cycle", 0) >= 5:
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+                await self.send_streak_dead(message.guild, dead)
+                await message.channel.send("💀 Streak kalian mati karena kuota restore sudah habis (5x/bulan).")
+                return
+
+
+            # Kalau belum lewat deadline → kasih warning kuning
+            u1 = pair["user1_id"]
+            u2 = pair["user2_id"]
+
+            user_a = message.author.display_name
+            user_b = guild.get_member(u1).display_name if u1 != message.author.id else guild.get_member(u2).display_name
+
+            await message.add_reaction("⚠️")
+            await message.channel.send(
+                f"⚠️ Streak kalian **butuh restore**."
+                f"\nSalah satu dari kalian dapat mengetik:"
+                f"\n`mstreak restore @{user_a}` **atau** `mstreak restore @{user_b}`"
+                f"\nSebelum **{pair['restore_deadline']}**."
+            )
+            return
 
 
         if not pair:
