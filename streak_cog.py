@@ -970,12 +970,51 @@ class StreakCog(commands.Cog):
         used = pair_after.get("restore_used_this_cycle", 0) or 0
         left = max(0, 5 - used)
 
+        # === Kirim teks sederhana (opsional) ===
         await ctx.send(
-            f"{emoji} Streak {format_pair_mention(new_pair)} berhasil di-**RESTORE**\n"
-            f"Menjadi **{new_pair['current_streak']}** (gap: {result['delta_days']})\n"
-            f"♻️ Sisa restore bulan ini: **{left} / 5**"
+            f"{emoji} **RESTORE BERHASIL!** Streak {format_pair_mention(new_pair)}"
+            f"\nDari **{before if 'before' in result else new_pair['current_streak'] - 1}** ➜ **{new_pair['current_streak']}**"
+            f"\n(gap: {result['delta_days']})"
+            f"\n♻️ Sisa restore bulan ini: **{left} / 5**"
         )
 
+        # === Kirim EMBED + CARD seperti reaction-update ===
+        guild = ctx.guild
+        log_channel_id = get_streak_settings(guild.id).get("log_channel_id")
+        log_channel = guild.get_channel(log_channel_id) if log_channel_id else None
+
+        if log_channel:
+            author = ctx.author
+            partner_id = new_pair["user1_id"] if author.id == new_pair["user2_id"] else new_pair["user2_id"]
+            partner = guild.get_member(partner_id)
+
+            # avatar
+            pfp1 = author.display_avatar.with_size(512).with_format("png").url
+            pfp2 = partner.display_avatar.with_size(512).with_format("png").url
+
+            # emoji tier
+            emoji_id = get_emoji_for_streak(guild.id, new_pair["current_streak"])
+            emoji_url = None
+            if emoji_id:
+                e = self.bot.get_emoji(emoji_id)
+                if e and hasattr(e, "url"):
+                    emoji_url = e.url
+
+            # generate card
+            card = await make_streak_card(pfp1, pfp2, emoji_url, new_pair["current_streak"])
+            file = discord.File(card, filename="streak_restore.png")
+
+            # embed info
+            embed = discord.Embed(
+                title=f"{emoji} Restore Streak",
+                description=format_pair_mention(new_pair),
+                colour=discord.Colour.green()
+            )
+            embed.set_image(url="attachment://streak_restore.png")
+            embed.add_field(name="Gap Hari", value=str(result["delta_days"]), inline=True)
+            embed.add_field(name="Sisa Restore Bulan Ini", value=f"{left} / 5", inline=True)
+
+            await log_channel.send(file=file, embed=embed)
 
     # ----- mstreak top -----
 
