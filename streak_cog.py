@@ -959,6 +959,8 @@ class StreakCog(commands.Cog):
 
         if not result["ok"]:
             return await ctx.send(f"Gagal restore ({result['reason']}).")
+        
+        before = result["before"]
 
         # ★ CLEAR RESTORE FLAGS
         clear_restore_flags(pair["id"])
