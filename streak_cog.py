@@ -364,29 +364,41 @@ class StreakCog(commands.Cog):
             return
 
         # ★ mode needs_restore, bot tetap react tapi hanya memberi peringatan
+        # ★ Jika butuh restore → cek apakah streak seharusnya sudah MATI
         if pair["needs_restore"] == 1:
 
-            # 1) Cek apakah deadline sudah lewat → langsung mati
-            try:
-                ddl = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
-            except:
-                ddl = date.today()
+            # Cek delta lagi untuk memastikan (supaya tidak salah warning)
+            last = pair.get("last_update_date")
+            if isinstance(last, str):
+                last = datetime.strptime(last, "%Y-%m-%d").date()
 
             today = date.today()
+            delta = (today - last).days
 
-            if today > ddl:
-                # lewat deadline → kill
+            # Jika delta >= 3 → ini bukan restore lagi, harus MATI
+            if delta >= 3:
                 kill_streak_due_to_deadline(pair["id"])
                 dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
 
-                # kirim pesan mati
                 await self.send_streak_dead(message.guild, dead)
-                await message.channel.send(
-                    f"💀 Streak kalian sudah mati karena **terlambat restore**."
-                )
+                await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
                 return
 
-            # 2) Kalau belum lewat deadline → kirim warning restore
+            # Cek deadline lewat
+            try:
+                deadline = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
+            except:
+                deadline = today
+
+            if today > deadline:
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+
+                await self.send_streak_dead(message.guild, dead)
+                await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
+                return
+
+            # Kalau belum lewat deadline → kasih warning kuning
             u1 = pair["user1_id"]
             u2 = pair["user2_id"]
             author = message.author.id
@@ -399,6 +411,7 @@ class StreakCog(commands.Cog):
                 f"\nSebelum **{pair['restore_deadline']}**."
             )
             return
+
 
 
 
