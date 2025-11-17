@@ -527,7 +527,24 @@ class StreakCog(commands.Cog):
             return
 
         # RESTORE MODE
-        if pair.get("needs_restore", 0) == 1:
+        # ===== HARD OVERRIDE: restore terlambat =====
+        if pair.get("needs_restore", 0) == 1 and pair.get("restore_deadline"):
+            try:
+                deadline = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
+            except:
+                deadline = date.today()
+
+            today = date.today()
+
+            # Jika sudah LEWAT hari deadline → MATI OTOMATIS
+            if today > deadline:
+                kill_streak_due_to_deadline(pair["id"])
+                dead_pair = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+
+                await channel.send("💀 Terlambat restore, streak mati total.")
+                await self.send_streak_dead(guild, dead_pair)
+                return
+
             # Check deadline
             if pair.get("restore_deadline"):
                 dead = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()

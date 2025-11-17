@@ -1432,6 +1432,10 @@ def auto_process_gap(pair):
 
     # CASE B — Sudah dalam mode RESTORE
     if needs_restore == 1:
+        if deadline and today > deadline:
+            kill_streak_due_to_deadline(pair["id"])
+            return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
+
         if deadline:
             if isinstance(deadline, str):
                 deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
