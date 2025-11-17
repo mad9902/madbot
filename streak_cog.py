@@ -290,11 +290,16 @@ class StreakCog(commands.Cog):
             colour=discord.Colour.red()
         )
         used = pair.get("restore_used_this_cycle", 0) or 0
-        left = max(0, 5 - used)
+
+        # Jika mati karena kuota restore habis → paksa 0/5
+        if used >= 5:
+            left_display = "0 / 5"
+        else:
+            left_display = f"{max(0, 5 - used)} / 5"
 
         embed.add_field(
             name="♻️ Sisa Restore Bulan Ini",
-            value=f"{left} / 5",
+            value=left_display,
             inline=True
         )
 
