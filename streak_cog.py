@@ -345,6 +345,9 @@ class StreakCog(commands.Cog):
         # ★ AUTO GAP PROCESSING
         pair = auto_process_gap(pair)
 
+        # REFRESH pair dari DB supaya status up to date
+        pair = get_streak_pair(guild_id, message.author.id, target.id)
+
         # Jika baru masuk mode restore (delta = 1)
         # === Warning logic masuk mode restore ===
 
@@ -490,11 +493,78 @@ class StreakCog(commands.Cog):
         # only target can react
         if member.id != target.id:
             return
+        
 
         guild_id = guild.id
         pair = get_streak_pair(guild_id, message.author.id, target.id)
         if not pair:
             return
+        
+        # =====================================================
+        #  AUTO RESTORE VIA REACTION (⚠️ atau custom restore emoji)
+        # =====================================================
+
+        RESTORE_EMOJIS = ["⚠️", "warning", "restore"]
+
+        if pair.get("needs_restore", 0) == 1:
+            # Check apakah emoji restore
+            em = payload.emoji
+
+            is_restore_emoji = False
+            if em.name in RESTORE_EMOJIS:
+                is_restore_emoji = True
+            if hasattr(em, "id") and str(em.id) in RESTORE_EMOJIS:
+                is_restore_emoji = True
+
+            if is_restore_emoji:
+                today = date.today()
+
+                # Cek deadline restore
+                deadline = pair.get("restore_deadline")
+                if isinstance(deadline, str):
+                    try:
+                        deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
+                    except:
+                        deadline = today
+
+                if today > deadline:
+                    kill_streak_due_to_deadline(pair["id"])
+                    dead_pair = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
+                    await channel.send("💀 Terlambat restore → streak mati total.")
+                    await self.send_streak_dead(guild, dead_pair)
+                    return
+
+                # Jalankan restore
+                result = apply_streak_update(
+                    guild_id=guild.id,
+                    user1_id=pair["user1_id"],
+                    user2_id=pair["user2_id"],
+                    channel_id=payload.channel_id,
+                    message_id=payload.message_id,
+                    author_id=member.id,
+                    is_restore=True,
+                    today=today
+                )
+
+                if not result["ok"]:
+                    await channel.send("❌ Gagal restore streak.")
+                    return
+
+                clear_restore_flags(pair["id"])
+                new_pair = ensure_restore_cycle(result["pair"])
+
+                used = new_pair.get("restore_used_this_cycle", 0)
+                left = max(0, 5 - used)
+
+                emoji = get_display_emoji(self.bot, guild.id, new_pair["current_streak"])
+
+                await channel.send(
+                    f"{emoji} **RESTORE BERHASIL (via reaction)!**\n"
+                    f"Streak sekarang: **{new_pair['current_streak']}**\n"
+                    f"♻️ Sisa restore bulan ini: **{left} / 5**"
+                )
+                return
+
 
         # --- Validate emoji
         allowed = ["🔥"]
