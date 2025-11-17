@@ -404,18 +404,18 @@ class StreakCog(commands.Cog):
             # Kalau belum lewat deadline → kasih warning kuning
             u1 = pair["user1_id"]
             u2 = pair["user2_id"]
-            author = message.author.id
-            partner_id = u1 if author == u2 else u2
+
+            user_a = message.author.display_name
+            user_b = guild.get_member(u1).display_name if u1 != message.author.id else guild.get_member(u2).display_name
 
             await message.add_reaction("⚠️")
             await message.channel.send(
-                f"⚠️ {message.author.mention}, pasanganmu **butuh restore**."
-                f"\n<@{partner_id}> harus mengetik `mstreak restore @{message.author.display_name}`"
+                f"⚠️ Streak kalian **butuh restore**."
+                f"\nSalah satu dari kalian dapat mengetik:"
+                f"\n`mstreak restore @{user_a}` **atau** `mstreak restore @{user_b}`"
                 f"\nSebelum **{pair['restore_deadline']}**."
             )
             return
-
-
 
 
         if not pair:
