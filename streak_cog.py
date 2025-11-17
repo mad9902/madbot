@@ -347,22 +347,6 @@ class StreakCog(commands.Cog):
 
         # Jika baru masuk mode restore (delta = 1)
         # === Warning logic masuk mode restore ===
-        if pair and pair.get("needs_restore", 0) == 1:
-            last = pair.get("last_update_date")
-            today = date.today()
-
-            # parse tanggal string -> date
-            if isinstance(last, str):
-                try:
-                    last = datetime.strptime(last, "%Y-%m-%d").date()
-                except:
-                    last = today
-
-            delta = (today - last).days
-
-            if delta == 1:
-                await self.send_warning_near_dead(message.guild, pair)
-
 
         if not pair:
             await message.channel.send(
@@ -381,12 +365,31 @@ class StreakCog(commands.Cog):
 
         # ★ mode needs_restore, bot tetap react tapi hanya memberi peringatan
         if pair["needs_restore"] == 1:
-            # Tentukan siapa partner-nya
+
+            # 1) Cek apakah deadline sudah lewat → langsung mati
+            try:
+                ddl = datetime.strptime(pair["restore_deadline"], "%Y-%m-%d").date()
+            except:
+                ddl = date.today()
+
+            today = date.today()
+
+            if today > ddl:
+                # lewat deadline → kill
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+
+                # kirim pesan mati
+                await self.send_streak_dead(message.guild, dead)
+                await message.channel.send(
+                    f"💀 Streak kalian sudah mati karena **terlambat restore**."
+                )
+                return
+
+            # 2) Kalau belum lewat deadline → kirim warning restore
             u1 = pair["user1_id"]
             u2 = pair["user2_id"]
             author = message.author.id
-            
-            # partner_id = user yang bukan author
             partner_id = u1 if author == u2 else u2
 
             await message.add_reaction("⚠️")
@@ -396,6 +399,7 @@ class StreakCog(commands.Cog):
                 f"\nSebelum **{pair['restore_deadline']}**."
             )
             return
+
 
 
         if not pair:
