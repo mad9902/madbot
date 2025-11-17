@@ -634,7 +634,7 @@ class StreakCog(commands.Cog):
                 await channel.send(
                     f"{emoji} **RESTORE BERHASIL (via reaction)!**\n"
                     f"Streak sekarang: **{new_pair['current_streak']}**\n"
-                    f"♻️ Sisa restore bulan ini: **{left} / 5**"
+                    f"♻️ Sisa restore bulan ini: **{left} / 5** (reset)"
                 )
                 return
 
