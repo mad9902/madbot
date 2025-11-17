@@ -1394,18 +1394,18 @@ def kill_streak_due_to_deadline(pair_id):
 
 def auto_process_gap(pair):
     """
-    Evaluasi gap hari dan tentukan apakah perlu restore
-    atau apakah streak otomatis putus.
-    
-    LOGIC (tanpa jam):
-    - days_since = today - last_update_date
-    - 0  -> hari yang sama, aman
-    - 1  -> hari setelahnya, masih normal (belum bolong 1 hari)
-    - 2  -> dianggap bolong 1 hari -> masuk mode restore
-    - >=3:
-        - kalau sudah mode restore dan sudah lewat deadline -> BROKEN
-        - kalau belum mode restore -> langsung BROKEN
+    Evaluasi gap hari dan tentukan apakah perlu restore,
+    keluar dari restore mode, atau langsung BROKEN.
+
+    LOGIC:
+    - delta 0  → aman
+    - delta 1  → aman (belum bolong)
+    - delta 2  → bolong 1 hari → NEED RESTORE
+    - delta >=3:
+        - kalau sudah lewat deadline → BROKEN
+        - kalau belum restore → langsung BROKEN
     """
+
     if not pair:
         return pair
 
@@ -1413,59 +1413,75 @@ def auto_process_gap(pair):
 
     last = pair["last_update_date"]
     needs_restore = pair.get("needs_restore", 0)
-    deadline = pair.get("restore_deadline", None)
-
+    deadline = pair.get("restore_deadline")
     today = date.today()
 
     if last is None:
         return pair
 
-    # Convert string → date
+    # Convert last date
     if isinstance(last, str):
-        last = datetime.strptime(last, "%Y-%m-%d").date()
+        try:
+            last = datetime.strptime(last, "%Y-%m-%d").date()
+        except:
+            last = today
+
+    # Convert deadline
+    if isinstance(deadline, str):
+        try:
+            deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
+        except:
+            deadline = None
 
     delta = (today - last).days
 
-    # CASE A — Hari yang sama atau mundur → abaikan
+    # CASE A — sama / mundur
     if delta <= 0:
         return pair
 
-    # CASE B — Sudah dalam mode RESTORE
+    # =====================================================
+    # CASE B — SUDAH MODE RESTORE
+    # =====================================================
     if needs_restore == 1:
+
+        # 1️⃣ Kalau sudah LEWAT DEADLINE → auto BROKEN
         if deadline and today > deadline:
             kill_streak_due_to_deadline(pair["id"])
             return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
 
-        if deadline:
-            if isinstance(deadline, str):
-                deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
+        # 2️⃣ Kalau ternyata last update sudah kembali normal
+        # (hari ini ATAU kemarin), artinya streak sudah "on track" lagi → keluar restore mode
+        if last == today or last == (today - timedelta(days=1)):
+            clear_restore_flags(pair["id"])
+            pair["needs_restore"] = 0
+            pair["restore_deadline"] = None
+            return pair
 
-            # Kalau sudah LEWAT deadline → streak mati
-            # (deadline = hari restore, begitu masuk hari berikutnya → mati)
-            if today > deadline:
-                kill_streak_due_to_deadline(pair["id"])
-                return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
-
-        # Masih dalam masa restore, belum lewat deadline
-        pair = ensure_restore_cycle(pair)
+        # 3️⃣ Belum restore, belum lewat deadline → tetap butuh restore
         return pair
 
-    # CASE C — days_since == 1 → masih normal, belum bolong 1 hari
+    # =====================================================
+    # CASE C — DELTA 1 → NORMAL
+    # =====================================================
     if delta == 1:
         return pair
 
-    # CASE D — days_since == 2 → baru dianggap bolong 1 hari → masuk mode RESTORE
+    # =====================================================
+    # CASE D — DELTA 2 → BUTUH RESTORE
+    # =====================================================
     if delta == 2:
-        # hari ini = hari restore terakhir
-        deadline_date = today  # HARUS restore hari ini
-        mark_needs_restore(pair["id"], deadline_date.strftime("%Y-%m-%d"))
-        pair["needs_restore"] = 1
-        pair["restore_deadline"] = deadline_date.strftime("%Y-%m-%d")
+        deadline = today  # HARUS restore hari ini
 
-        pair = ensure_restore_cycle(pair)
+        mark_needs_restore(pair["id"], deadline.strftime("%Y-%m-%d"))
+
+        pair["needs_restore"] = 1
+        pair["restore_deadline"] = deadline.strftime("%Y-%m-%d")
+
         return pair
 
-    # CASE E — days_since >= 3 → sudah lewat 2 hari penuh -> langsung BROKEN
+    # =====================================================
+    # CASE E — DELTA >= 3 → AUTO BROKEN
+    # =====================================================
     if delta >= 3:
         kill_streak_due_to_deadline(pair["id"])
         return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
