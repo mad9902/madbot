@@ -547,8 +547,18 @@ class StreakCog(commands.Cog):
                 )
 
                 if not result["ok"]:
+                    # kalau kuota restore habis → langsung MATI
+                    if result.get("reason") == "restore_quota_reached":
+                        kill_streak_due_to_deadline(pair["id"])
+                        dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+                        await channel.send("💀 Streak kalian mati karena kuota restore sudah habis (5x/bulan).")
+                        await self.send_streak_dead(guild, dead)
+                        return
+
+                    # selain itu → gagal biasa
                     await channel.send("❌ Gagal restore streak.")
                     return
+
 
                 clear_restore_flags(pair["id"])
                 new_pair = ensure_restore_cycle(result["pair"])
@@ -652,8 +662,18 @@ class StreakCog(commands.Cog):
             )
 
             if not result["ok"]:
+                # kalau kuota restore habis → langsung MATI
+                if result.get("reason") == "restore_quota_reached":
+                    kill_streak_due_to_deadline(pair["id"])
+                    dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+                    await channel.send("💀 Streak kalian mati karena kuota restore sudah habis (5x/bulan).")
+                    await self.send_streak_dead(guild, dead)
+                    return
+
+                # selain itu → gagal biasa
                 await channel.send("❌ Gagal restore streak.")
                 return
+
 
             clear_restore_flags(pair["id"])
             new_pair = result["pair"]
@@ -958,7 +978,15 @@ class StreakCog(commands.Cog):
         )
 
         if not result["ok"]:
-            return await ctx.send(f"Gagal restore ({result['reason']}).")
+            if result.get("reason") == "restore_quota_reached":
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+                await ctx.send("💀 Streak kalian mati karena kuota restore sudah habis (5x/bulan).")
+                await self.send_streak_dead(ctx.guild, dead)
+                return
+
+            return await ctx.send(f"❌ Gagal restore ({result['reason']}).")
+
         
         before = result["before"]
 
