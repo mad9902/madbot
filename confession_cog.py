@@ -112,24 +112,25 @@ class SubmitImageConfessionButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
 
-        # TRY DM USER
+        # Try DM user
         try:
             dm = await interaction.user.create_dm()
             await dm.send(
-                "📸 Kirim **gambar + caption (opsional)** di sini.\n"
-                "Setelah kamu kirim, bot akan otomatis memposting sebagai confession anonim."
+                "📸 Kirim gambar / GIF / video (max 5MB) + caption (optional).\n"
+                "Setelah itu akan diposting sebagai confession anonim."
             )
         except:
             return await interaction.response.send_message(
-                "❌ Aku tidak bisa mengirim DM. Aktifkan DM dari server dulu.",
+                "❌ Tidak bisa kirim DM. Aktifkan DM terlebih dahulu.",
                 ephemeral=True
             )
 
         await interaction.response.send_message(
-            "📨 Cek DM! Kirim gambarnya lewat DM ya untuk tetap anonim.",
+            "📨 Cek DM-ku ya!",
             ephemeral=True
         )
 
+        # Wait for file
         def check(msg: discord.Message):
             return (
                 msg.author.id == interaction.user.id
@@ -140,115 +141,88 @@ class SubmitImageConfessionButton(discord.ui.Button):
         try:
             msg = await self.bot.wait_for("message", timeout=120.0, check=check)
         except asyncio.TimeoutError:
-            return await dm.send("⏱️ Waktu habis, confession dibatalkan.")
+            return await dm.send("⏱️ Waktu habis. Confession dibatalkan.")
 
-        # AMBIL ATTACHMENT & CAPTION
-        # ATTACHMENT VALIDATION
         attachment = msg.attachments[0]
-        file_size = attachment.size
 
-        if file_size > 5 * 1024 * 1024:  # 5 MB
-            return await dm.send("❌ File terlalu besar. Max **5 MB** ya.")
+        # File size validation
+        if attachment.size > 5 * 1024 * 1024:
+            return await dm.send("❌ File lebih dari 5MB.")
 
-        # Tipe file
         content_type = attachment.content_type or ""
-
         is_image = content_type.startswith("image/")
         is_video = content_type.startswith("video/")
 
         if not (is_image or is_video):
-            return await dm.send("❌ Format tidak didukung. Kirim **gambar, GIF, atau video** saja.")
+            return await dm.send("❌ Hanya gambar / GIF / video yang diterima.")
 
         caption = msg.content or " "
         confession_id = str(uuid.uuid4())[:8]
 
-        # DOWNLOAD FILE KE DISK SEMENTARA
-        temp_path = f"/tmp/confess_{uuid.uuid4().hex}"
-
+        # Download with real filename
+        orig_filename = attachment.filename
+        temp_path = f"/tmp/{uuid.uuid4().hex}_{orig_filename}"
         await attachment.save(temp_path)
 
-        # AMBIL CONFESSION CHANNEL
+        # Target channel
         db = connect_db()
         channel_id = get_channel_settings(db, interaction.guild_id, "confession")
         db.close()
-
         target_channel = interaction.guild.get_channel(int(channel_id))
 
-        # EMBED
+        # Prepare embed
         embed = discord.Embed(
             title=f"Anonymous Confession (#{confession_id})",
             description=f'"{caption}"',
             color=discord.Color.dark_gray()
         )
 
-        # SEND FILE
-        file = discord.File(temp_path)
+        # Prepare file
+        file = discord.File(temp_path, filename=orig_filename)
 
+        # If image, embed it
         if is_image:
-            embed.set_image(url=f"attachment://{attachment.filename}")
+            embed.set_image(url=f"attachment://{orig_filename}")
 
+        # Send
         sent = await target_channel.send(embed=embed, file=file)
 
-        # HAPUS FILE LOKAL
+        # Remove temp file
         try:
             import os
             os.remove(temp_path)
         except:
             pass
 
-        # CREATE THREAD
+        # Create thread
         thread = await sent.create_thread(name=f"Confession #{confession_id}")
 
-        # SIMPAN MAP
+        # Save mapping
         CONFESSION_THREAD_MAP[sent.id] = {
             "thread_id": thread.id,
             "channel_id": target_channel.id
         }
         save_confession_map()
 
-        # BUTTON VIEW
-        view = discord.ui.View(timeout=None)
-        view.add_i_
-
-
-        # CHANNEL TARGET
-        db = connect_db()
-        channel_id = get_channel_settings(db, interaction.guild_id, "confession")
-        db.close()
-
-        target_channel = interaction.guild.get_channel(int(channel_id))
-
-        # POST CONFESSION SECARA ANONIM
-        sent = await target_channel.send(embed=embed)
-
-        # THREAD
-        thread = await sent.create_thread(name=f"Confession #{confession_id}")
-
-        CONFESSION_THREAD_MAP[sent.id] = {
-            "thread_id": thread.id,
-            "channel_id": target_channel.id
-        }
-        save_confession_map()
-
-        # ADD BUTTONS
+        # Add buttons under confession
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
         view.add_item(SubmitImageConfessionButton(self.bot))
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
-        # THREAD REPLY BUTTON
+        # Thread reply buttons
         thread_view = discord.ui.View(timeout=None)
         thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await thread.send(
-            "Gunakan tombol di bawah untuk membalas confession ini secara anonim:",
+            "Balas confession ini secara anonim dengan tombol di bawah:",
             view=thread_view
         )
 
-        # SAVE
+        # Save to DB
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, caption)
 
-        await dm.send("✅ Confession gambar kamu sudah diposting secara anonim!")
+        await dm.send("✅ Confession kamu sudah berhasil diposting!")
 
 
 # ==============================
