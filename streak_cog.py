@@ -271,7 +271,7 @@ class StreakCog(commands.Cog):
         embed.set_footer(text="Jika tidak, besok streak mati total 💀")
         await log_channel.send(embed=embed)
 
-    async def send_streak_dead(self, guild, pair):
+    async def send_streak_dead(self, guild, pair, restore_left_override=None):
         settings = get_streak_settings(guild.id)
         if not settings or not settings.get("log_channel_id"):
             return
@@ -291,11 +291,13 @@ class StreakCog(commands.Cog):
         )
         used = pair.get("restore_used_this_cycle", 0) or 0
 
-        # Jika mati karena kuota restore habis → paksa 0/5
-        if used >= 5:
-            left_display = "0 / 5"
+        if restore_left_override is not None:
+            # override dari kondisi sebelum mati
+            left_display = restore_left_override
         else:
+            # fallback normal (setelah broken)
             left_display = f"{max(0, 5 - used)} / 5"
+
 
         embed.add_field(
             name="♻️ Sisa Restore Bulan Ini",
@@ -384,10 +386,16 @@ class StreakCog(commands.Cog):
 
             # Jika delta >= 3 → ini bukan restore lagi, harus MATI
             if delta >= 3:
+                # ambil restore sebelum mati
+                pair_cycle = ensure_restore_cycle(pair)
+                used_before = pair_cycle.get("restore_used_this_cycle", 0)
+                left_before = f"{max(0, 5 - used_before)} / 5"
+
                 kill_streak_due_to_deadline(pair["id"])
                 dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
 
-                await self.send_streak_dead(message.guild, dead)
+                await self.send_streak_dead(message.guild, dead, restore_left_override=left_before)
+
                 await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
                 return
 
@@ -398,10 +406,16 @@ class StreakCog(commands.Cog):
                 deadline = today
 
             if today > deadline:
+                # ambil restore sebelum mati
+                pair_cycle = ensure_restore_cycle(pair)
+                used_before = pair_cycle.get("restore_used_this_cycle", 0)
+                left_before = f"{max(0, 5 - used_before)} / 5"
+
                 kill_streak_due_to_deadline(pair["id"])
                 dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
 
-                await self.send_streak_dead(message.guild, dead)
+                await self.send_streak_dead(message.guild, dead, restore_left_override=left_before)
+
                 await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
                 return
             
