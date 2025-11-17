@@ -289,7 +289,6 @@ class StreakCog(commands.Cog):
             ),
             colour=discord.Colour.red()
         )
-        pair = ensure_restore_cycle(pair)
         used = pair.get("restore_used_this_cycle", 0) or 0
         left = max(0, 5 - used)
 
@@ -400,6 +399,16 @@ class StreakCog(commands.Cog):
                 await self.send_streak_dead(message.guild, dead)
                 await message.channel.send("💀 Streak kalian sudah mati karena **terlambat restore**.")
                 return
+            
+            # 🔥 FIX: langsung mati jika kuota restore habis
+            pair_cycle = ensure_restore_cycle(pair)
+            if pair_cycle.get("restore_used_this_cycle", 0) >= 5:
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild_id, pair["user1_id"], pair["user2_id"])
+                await self.send_streak_dead(message.guild, dead)
+                await message.channel.send("💀 Streak kalian mati karena kuota restore sudah habis (5x/bulan).")
+                return
+
 
             # Kalau belum lewat deadline → kasih warning kuning
             u1 = pair["user1_id"]
@@ -507,6 +516,15 @@ class StreakCog(commands.Cog):
         RESTORE_EMOJIS = ["⚠️", "warning", "restore"]
 
         if pair.get("needs_restore", 0) == 1:
+            # 🔥 FIX: kuota restore habis = langsung mati
+            pair_cycle = ensure_restore_cycle(pair)
+            if pair_cycle.get("restore_used_this_cycle", 0) >= 5:
+                kill_streak_due_to_deadline(pair["id"])
+                dead = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
+                await channel.send("💀 Streak kalian mati karena kuota restore sudah habis (5x/bulan).")
+                await self.send_streak_dead(guild, dead)
+                return
+
             # Check apakah emoji restore
             em = payload.emoji
 
