@@ -217,12 +217,12 @@ class SubmitImageConfessionButton(discord.ui.Button):
         await sent.edit(view=view)
 
         # Thread reply buttons
-        thread_view = discord.ui.View(timeout=None)
-        thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+        thread_view = ThreadReplyView(self.bot, sent.id)
         await thread.send(
             "Balas confession ini secara anonim dengan tombol di bawah:",
             view=thread_view
         )
+
 
         # Save to DB
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, caption)
@@ -269,15 +269,12 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 }
                 save_confession_map()
 
-                view = discord.ui.View(timeout=None)
-                view.add_item(SubmitConfessionButton(self.bot))
-                view.add_item(SubmitImageConfessionButton(self.bot))
-                view.add_item(ReplyToConfessionButton(self.bot, sent.id))
-
+                view = ThreadReplyView(self.bot, sent.id)
                 await sent.edit(view=view)
 
                 await interaction.response.send_message("✅ Balasan kamu telah dikirim secara anonim!", ephemeral=True)
                 return
+
 
             # ---------- Not allowed in thread ----------
             if isinstance(interaction.channel, discord.Thread):
@@ -390,6 +387,10 @@ class ConfessionView(discord.ui.View):
         self.add_item(SubmitConfessionButton(bot))
         self.add_item(SubmitImageConfessionButton(bot))
 
+class ThreadReplyView(discord.ui.View):
+    def __init__(self, bot: commands.Bot, message_id: int):
+        super().__init__(timeout=None)
+        self.add_item(ReplyToConfessionButton(bot, message_id))
 
 # ==============================
 # COG
