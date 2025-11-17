@@ -676,6 +676,8 @@ class StreakCog(commands.Cog):
         if pair["status"] != "ACTIVE":
             return
 
+        before = result["before"]
+        
         result = apply_streak_update(
             guild_id=guild_id,
             user1_id=pair["user1_id"],
