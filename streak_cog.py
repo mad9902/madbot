@@ -296,24 +296,16 @@ class StreakCog(commands.Cog):
             colour=discord.Colour.red()
         )
 
-        # =============================
-        # 🔥 LOGIKA BARU DI SINI
-        # =============================
+        # --- Ambil restore sebelum mati ---
+        # (used_after mati = 0, jadi harus override manual biar benar)
+        used = pair.get("restore_used_this_cycle", 0) or 0
 
         if restore_left_override is not None:
-            # kasus: mati karena GAP, override dikirim dari luar
+            # Jika kamu kirim override → langsung pakai angka ini
             left_display = restore_left_override
         else:
-            # kasus: mati karena RESTORE HABIS
-            # restore_used_this_cycle = 5 (atau lebih)
-            used = pair.get("restore_used_this_cycle", 0) or 0
-
-            if used >= 5:
-                # mati karena quota habis → TAMPILKAN 0 / 5
-                left_display = "0 / 5"
-            else:
-                # fallback lain (jarang dipakai)
-                left_display = f"{max(0, 5 - used)} / 5"
+            # Fallback (dipakai kalau mati karena gap ≥ 3, bukan restore habis)
+            left_display = f"{max(0, 5 - used)} / 5"
 
         embed.add_field(
             name="♻️ Sisa Restore Bulan Ini",
