@@ -3,6 +3,7 @@ from discord.ext import commands
 import uuid
 import asyncio
 import json
+import os
 from database import (
     save_confession,
     connect_db,
@@ -161,7 +162,11 @@ class SubmitImageConfessionButton(discord.ui.Button):
 
         # Download with real filename
         orig_filename = attachment.filename
-        temp_path = f"/tmp/{uuid.uuid4().hex}_{orig_filename}"
+        tmp_dir = "/tmp" if os.name != "nt" else "temp"
+
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        temp_path = os.path.join(tmp_dir, f"{uuid.uuid4().hex}_{orig_filename}")
         await attachment.save(temp_path)
 
         # Target channel
