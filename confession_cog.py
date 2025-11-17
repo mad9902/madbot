@@ -194,10 +194,10 @@ class SubmitImageConfessionButton(discord.ui.Button):
 
         # Remove temp file
         try:
-            import os
             os.remove(temp_path)
         except:
             pass
+
 
         # Create thread
         thread = await sent.create_thread(name=f"Confession #{confession_id}")
