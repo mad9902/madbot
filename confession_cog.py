@@ -58,6 +58,7 @@ def cleanup_confession_map():
 
 
 async def restore_reply_buttons(bot: commands.Bot):
+
     for message_id, data in CONFESSION_THREAD_MAP.items():
         try:
             if (
@@ -86,6 +87,34 @@ async def restore_reply_buttons(bot: commands.Bot):
                 view.add_item(ReplyToConfessionButton(bot, message_id))
 
                 await parent_message.edit(view=view)
+
+                # ===========================
+                #  RESTORE BUTTONS INSIDE THREAD
+                # ===========================
+                if thread_id:
+                    try:
+                        thread = await bot.fetch_channel(thread_id)
+
+                        # Loop semua pesan di thread
+                        async for msg in thread.history(limit=None):
+                            # Cuma restore pesan yang dikirim bot
+                            if msg.author.id != bot.user.id:
+                                continue
+
+                            # Re-attach reply button
+                            view = ThreadReplyView(bot, msg.id)
+                            await msg.edit(view=view)
+
+                            CONFESSION_THREAD_MAP[msg.id] = {
+                                "thread_id": thread.id,
+                                "channel_id": channel_id,
+                                "is_parent": False
+                            }
+                        save_confession_map()
+
+                    except Exception as e:
+                        print(f"[Restore] Thread restore error for thread {thread_id}: {e}")
+
 
 
             except discord.NotFound:
@@ -258,7 +287,11 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 # === THREAD BELUM ADA → BUAT DI SINI ===
                 if not data or data.get("thread_id") is None:
                     # Ambil parent_channel dari mapping agar tidak salah thread
-                    parent_channel_id = data["channel_id"] if data else interaction.channel.id
+                    if not data or "channel_id" not in data:
+                        raise Exception("Mapping corrupt — missing channel_id")
+
+                    parent_channel_id = data["channel_id"]
+
                     parent_channel = interaction.guild.get_channel(int(parent_channel_id))
 
                     if not parent_channel:
@@ -289,7 +322,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 sent = await thread.send(embed=embed)
 
                 # Tambahkan tombol Reply di tiap balasan
-                view = ThreadReplyView(self.bot, self.parent_message_id)
+                view = ThreadReplyView(self.bot, sent.id)
                 await sent.edit(view=view)
 
                 await interaction.response.send_message(
@@ -456,6 +489,5 @@ async def setup(bot):
     await bot.add_cog(ConfessionCog(bot))
     bot.add_view(ConfessionView(bot))  # persist view buttons
     bot.add_dynamic_items("confess_reply_", lambda custom_id: ReplyToConfessionButton.from_custom_id(bot, custom_id))
-    bot.add_view(ThreadReplyView(bot, 0))  # dummy
     await restore_reply_buttons(bot)   # restore old messages
     cleanup_confession_map()
