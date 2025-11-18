@@ -407,8 +407,9 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
             save_confession_map()
 
             view = discord.ui.View(timeout=None)
-            view.add_item(ReplyToConfessionButton(self.bot if inside modal else bot, sent.id or msg.id))
+            view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await sent.edit(view=view)
+
 
 
             return await interaction.followup.send(
