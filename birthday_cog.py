@@ -92,8 +92,11 @@ async def generate_birthday_image(display_name: str, template_url=None, output_p
     original_url = template_url  # simpan yang asli untuk deteksi custom
 
     # ========== Fix extension .jpeg → .jpg (Imgur lebih suka .jpg) ==========
-    if template_url and template_url.endswith(".jpeg"):
-        template_url = template_url.replace(".jpeg", ".jpg")
+    # Convert .jpeg -> .jpg ONLY for Imgur
+    if template_url:
+        lower = template_url.lower()
+        if ("imgur.com" in lower or "i.imgur.com" in lower) and lower.endswith(".jpeg"):
+            template_url = template_url[:-5] + ".jpg"
 
     # ==========================================
     # DOWNLOAD CUSTOM TEMPLATE
