@@ -30,7 +30,9 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
     import os
 
     # ============ Gambar Base ============
-    base = Image.open("media/ultahkos.png").convert("RGBA")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    img_path = os.path.join(BASE_DIR, "..", "media", "ultahkos.png")
+    base = Image.open(img_path).convert("RGBA")
 
     # Resize agar tidak terlalu besar (fix teks terlihat kecil)
     base = base.resize((1536, 1024), Image.LANCZOS)
@@ -44,7 +46,14 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
         display_name = display_name[:5]
 
     # ============ Load Font ============
-    font_path = "assets\Inter.ttf"
+    font_path = os.path.join(BASE_DIR, "..", "assets", "Inter.ttf")
+
+    if os.path.isfile(font_path):
+        font = ImageFont.truetype(font_path, 180)
+    else:
+        print("⚠️ Font tidak ditemukan:", font_path)
+        font = ImageFont.load_default()
+
 
     if os.path.isfile(font_path):
         font = ImageFont.truetype(font_path, 180)
