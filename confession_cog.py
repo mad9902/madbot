@@ -290,7 +290,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 sent = await thread.send(embed=embed)
 
                 # Tambahkan tombol Reply di tiap balasan
-                view = ThreadReplyView(self.bot, sent.id)
+                view = ThreadReplyView(self.bot, self.parent_message_id)
                 await sent.edit(view=view)
 
                 await interaction.response.send_message(
