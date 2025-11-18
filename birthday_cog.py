@@ -25,65 +25,114 @@ JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 # ================================================================
 #  PERSONALIZED BIRTHDAY IMAGE GENERATOR
 # ================================================================
+# def generate_birthday_image(display_name: str, output_path="media/birthday_render.png"):
+#     from PIL import Image, ImageDraw, ImageFont
+#     import os
+
+#     # ============ Gambar Base ============
+#     BASE_DIR = os.getcwd()
+#     img_path = os.path.join(BASE_DIR, "..", "media", "ultahkos.png")
+#     base = Image.open(img_path).convert("RGBA")
+
+#     # Resize agar tidak terlalu besar (fix teks terlihat kecil)
+#     base = base.resize((1536, 1024), Image.LANCZOS)
+#     W, H = base.size
+
+#     draw = ImageDraw.Draw(base)
+
+#     # ============ Batasi nama max 10 karakter ============
+#     display_name = display_name.strip()
+#     if len(display_name) > 5:
+#         display_name = display_name[:5]
+
+#     # ============ Load Font ============
+#     font_path = os.path.join(BASE_DIR, "..", "assets", "Inter.ttf")
+
+#     if os.path.isfile(font_path):
+#         font = ImageFont.truetype(font_path, 180)
+#     else:
+#         print("⚠️ Font tidak ditemukan:", font_path)
+#         font = ImageFont.load_default()
+
+
+#     if os.path.isfile(font_path):
+#         font = ImageFont.truetype(font_path, 180)
+#     else:
+#         print("⚠️ Font tidak ditemukan, menggunakan default.")
+#         font = ImageFont.truetype("arial.ttf", 180)
+
+#     text = display_name
+
+#     # Hitung ukuran teks
+#     bbox = draw.textbbox((0, 0), text, font=font)
+#     text_w = bbox[2] - bbox[0]
+
+#     # ============ POSISI PERSIS DI BAWAH 'Selamat Ulang Tahun' ============
+#     # (Dari gambar kamu, area tulisan Selamat Ulang Tahun ada di sekitar 40%–50%)
+#     pos_x = (W - text_w) // 2
+#     pos_y = int(H * 0.50)   # tweak halus → pas banget di bawah tulisan besar
+
+#     # ============ Teks dengan Outline ============
+#     draw.text(
+#         (pos_x, pos_y),
+#         text,
+#         font=font,
+#         fill=(250, 198, 62),   # warna #fac63e
+#         stroke_width=3,
+#         stroke_fill="black"
+#     )
+
+#     base.save(output_path)
+#     return output_path
+
 def generate_birthday_image(display_name: str, output_path="media/birthday_render.png"):
     from PIL import Image, ImageDraw, ImageFont
     import os
 
-    # ============ Gambar Base ============
-    BASE_DIR = os.getcwd()
-    img_path = os.path.join(BASE_DIR, "..", "media", "ultahkos.png")
-    base = Image.open(img_path).convert("RGBA")
+    BASE_DIR = os.getcwd()   # /app di dalam container!
 
-    # Resize agar tidak terlalu besar (fix teks terlihat kecil)
+    # path absolut
+    img_path = os.path.join(BASE_DIR, "media", "ultahkos.png")
+    font_path = os.path.join(BASE_DIR, "assets", "Inter.ttf")
+    output_path = os.path.join(BASE_DIR, output_path)
+
+    # load image
+    base = Image.open(img_path).convert("RGBA")
     base = base.resize((1536, 1024), Image.LANCZOS)
     W, H = base.size
 
     draw = ImageDraw.Draw(base)
 
-    # ============ Batasi nama max 10 karakter ============
-    display_name = display_name.strip()
-    if len(display_name) > 5:
-        display_name = display_name[:5]
+    # display name max 5 chars
+    display_name = display_name.strip()[:5]
 
-    # ============ Load Font ============
-    font_path = os.path.join(BASE_DIR, "..", "assets", "Inter.ttf")
-
+    # load font
     if os.path.isfile(font_path):
         font = ImageFont.truetype(font_path, 180)
     else:
         print("⚠️ Font tidak ditemukan:", font_path)
         font = ImageFont.load_default()
 
-
-    if os.path.isfile(font_path):
-        font = ImageFont.truetype(font_path, 180)
-    else:
-        print("⚠️ Font tidak ditemukan, menggunakan default.")
-        font = ImageFont.truetype("arial.ttf", 180)
-
     text = display_name
 
-    # Hitung ukuran teks
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
 
-    # ============ POSISI PERSIS DI BAWAH 'Selamat Ulang Tahun' ============
-    # (Dari gambar kamu, area tulisan Selamat Ulang Tahun ada di sekitar 40%–50%)
     pos_x = (W - text_w) // 2
-    pos_y = int(H * 0.50)   # tweak halus → pas banget di bawah tulisan besar
+    pos_y = int(H * 0.50)
 
-    # ============ Teks dengan Outline ============
     draw.text(
         (pos_x, pos_y),
         text,
         font=font,
-        fill=(250, 198, 62),   # warna #fac63e
+        fill=(250, 198, 62),
         stroke_width=3,
         stroke_fill="black"
     )
 
     base.save(output_path)
     return output_path
+
 
 # ================================================================
 # VIEW PAGING
