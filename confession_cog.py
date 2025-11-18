@@ -3,6 +3,7 @@ from discord.ext import commands
 import uuid
 import asyncio
 import json
+import aiohttp
 import os
 from database import (
     save_confession,
@@ -199,7 +200,14 @@ class SubmitImageConfessionButton(discord.ui.Button):
         os.makedirs(tmp_dir, exist_ok=True)
 
         temp_path = os.path.join(tmp_dir, f"{uuid.uuid4().hex}_{att.filename}")
-        await att.save(temp_path)
+
+        # Download RAW BYTES — anti-corrupt
+        async with aiohttp.ClientSession() as session:
+            async with session.get(att.url) as resp:
+                if resp.status != 200:
+                    return await dm.send("❌ Gagal download file.")
+                with open(temp_path, "wb") as f:
+                    f.write(await resp.read())
 
         # GET TARGET CHANNEL
         db = connect_db()
