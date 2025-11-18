@@ -279,22 +279,20 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
 
         try:
             # ============================================================
-            # REPLY MODE (parent_message_id != None)
+            # REPLY MODE
             # ============================================================
             if self.parent_message_id:
 
-                # Pesan yang ditekan user — WAJIB jadi reference
-                pressed_message = interaction.message  
-
-                # Ambil mapping parent
+                pressed_message = interaction.message
                 data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
+
                 if not data:
                     return await interaction.response.send_message(
                         "❌ Data mapping hilang atau rusak.",
                         ephemeral=True
                     )
 
-                # ========== THREAD BELUM ADA → BUAT ==========
+                # FETCH / CREATE THREAD
                 if data.get("thread_id") is None:
                     parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
                     parent_msg = await parent_channel.fetch_message(int(self.parent_message_id))
@@ -303,34 +301,33 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                         name=f"Confession Thread #{self.parent_message_id}"
                     )
 
-                    # Update mapping
                     CONFESSION_THREAD_MAP[self.parent_message_id]["thread_id"] = thread.id
                     save_confession_map()
+
+                    # BALASAN PERTAMA → TIDAK BOLEH ADA reference !!!
+                    sent = await thread.send(embed=embed)
 
                 else:
                     # Thread sudah ada → fetch
                     thread = await self.bot.fetch_channel(int(data["thread_id"]))
 
-                # =======================================
-                # REPLYING BEHAVIOR:
-                # - Kalau tombol ditekan di DALAM thread → reply ke pesan itu
-                # - Kalau tombol ditekan di LUAR thread → reply TETAP ke parent_msg
-                # =======================================
-                if isinstance(pressed_message.channel, discord.Thread):
-                    reference_target = pressed_message
-                else:
-                    # tombol dipencet dari parent → reference ke parent confession
-                    parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
-                    reference_target = await parent_channel.fetch_message(self.parent_message_id)
+                    # PILIH TARGET REFERENCE:
+                    if isinstance(pressed_message.channel, discord.Thread):
+                        # reply di dalam thread → valid
+                        reference_target = pressed_message
+                    else:
+                        # reply dari luar → reference ke parent
+                        parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
+                        reference_target = await parent_channel.fetch_message(self.parent_message_id)
 
-                # ========== KIRIM PESAN (application reply) ==========
-                sent = await thread.send(
-                    embed=embed,
-                    reference=reference_target,
-                    mention_author=False
-                )
+                    # KIRIM PESAN DENGAN APPLICATION REPLY
+                    sent = await thread.send(
+                        embed=embed,
+                        reference=reference_target,
+                        mention_author=False
+                    )
 
-                # Simpan mapping pesan baru
+                # SAVE MAPPING
                 CONFESSION_THREAD_MAP[sent.id] = {
                     "thread_id": thread.id,
                     "channel_id": data["channel_id"],
@@ -338,16 +335,13 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 }
                 save_confession_map()
 
-                # Tambahkan tombol Reply
+                # ADD REPLY BUTTON
                 await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
-                # Balas modal
-                await interaction.response.send_message(
-                    "✅ Balasan kamu sudah dikirim secara anonim!",
+                return await interaction.response.send_message(
+                    "✅ Balasan kamu sudah dikirim!",
                     ephemeral=True
                 )
-                return
-
 
             # ============================================================
             # CONFESSION BARU (bukan reply)
