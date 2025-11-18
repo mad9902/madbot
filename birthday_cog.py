@@ -30,7 +30,7 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
 
     draw = ImageDraw.Draw(base)
 
-    # FONT
+    # load font
     try:
         font = ImageFont.truetype("media/fonts/Montserrat-Bold.ttf", 90)
     except:
@@ -42,10 +42,12 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
     # wrap nama
     wrapped = textwrap.fill(display_name, width=20)
 
-    # hitung ukuran
-    w, h = draw.textsize(wrapped, font=font)
+    # gunakan textbbox → pengganti textsize
+    bbox = draw.textbbox((0, 0), wrapped, font=font)
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
 
-    # center
+    # center pos
     x = (W - w) / 2
 
     # warna emas
@@ -57,6 +59,7 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
         for oy in range(-outline_range, outline_range + 1):
             draw.text((x + ox, text_y + oy), wrapped, font=font, fill="black")
 
+    # teks utama
     draw.text((x, text_y), wrapped, font=font, fill=color)
 
     base.save(output_path)
