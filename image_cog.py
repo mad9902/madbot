@@ -55,47 +55,37 @@ class image_cog(commands.Cog):
             except Exception as e:
                 print(f'Gagal hapus {file_path}. Alasan: {e}')
 
-    async def upload_to_imgur(self, image_path):
-        headers = {"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"}
-        url = "https://api.imgur.com/3/image"
-
-        # baca file sebagai bytes untuk upload multipart/form-data
-        with open(image_path, 'rb') as img:
-            img_bytes = img.read()
-
-        # untuk aiohttp harus dikirim dalam data sebagai dict dengan key 'image'
-        data = aiohttp.FormData()
-        data.add_field('image', img_bytes)
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, data=data) as resp:
-                if resp.status == 200:
-                    json_resp = await resp.json()
-                    image_id = json_resp['data']['id']
-                    image_type = json_resp['data']['type'].split('/')[-1]
-                    return f"https://i.imgur.com/{image_id}.{image_type}"
-                else:
-                    print(f"Imgur upload gagal, status: {resp.status}")
-                    return None
-
     @commands.command(name="upload", help="Upload gambar dari attachment atau reply ke Imgur")
     async def upload(self, ctx):
+        # Ambil attachment / reply
         image = await extract_image_attachment(ctx)
 
         if image is None:
-            await ctx.send("❌ Tidak ada gambar yang bisa diupload. Kirim gambar atau reply ke gambar.")
+            await ctx.send("❌ Tidak ada gambar. Kirim gambar atau reply gambar.")
             return
 
-        filename = os.path.join(self.download_folder, image.filename)
-        # await image.save(fp=filename) 
+        # Buat folder downloads kalau belum ada
+        os.makedirs(self.download_folder, exist_ok=True)
 
+        # Path file local
+        filename = os.path.join(self.download_folder, image.filename)
+
+        # Simpan file beneran
+        try:
+            await image.save(fp=filename)
+        except Exception as e:
+            return await ctx.send(f"❌ Gagal menyimpan file: {e}")
+
+        # Upload ke Imgur
         link = await self.upload_to_imgur(filename)
 
+        # Hapus file sementara
         try:
             os.remove(filename)
         except Exception as e:
             print(f"Gagal hapus file sementara: {e}")
 
+        # Balikin hasil
         if link:
             await ctx.send(f"✅ Gambar berhasil diupload ke Imgur:\n{link}")
         else:
