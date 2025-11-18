@@ -31,33 +31,30 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
 
     draw = ImageDraw.Draw(base)
 
-    # font
+    # ==== FONT LEBIH BESAR ====
     try:
-        font = ImageFont.truetype("media/fonts/Montserrat-Bold.ttf", 90)
-    except Exception:
+        font = ImageFont.truetype("media/fonts/Montserrat-Bold.ttf", 140)
+    except:
         font = ImageFont.load_default()
 
-    # posisi teks kira2 di bawah tulisan "Selamat Ulang Tahun"
-    text_y = int(H * 0.58)
+    # ==== POSISI NAMA (LEBIH KE ATAS) ====
+    text_y = int(H * 0.63)   # sebelumnya 0.58 → sekarang turun sedikit
 
-    # bungkus nama kalau kepanjangan
-    wrapped = textwrap.fill(display_name, width=18)
+    # wrap kalau nama panjang
+    wrapped = textwrap.fill(display_name, width=20)
 
-    # ukur teks (Pillow baru pakai textbbox, bukan textsize)
-    try:
-        bbox = draw.textbbox((0, 0), wrapped, font=font)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-    except Exception:
-        # fallback kalau versi pillow beda
-        w, h = font.getsize(wrapped)
+    # ukur teks
+    bbox = draw.textbbox((0, 0), wrapped, font=font)
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
 
     x = (W - w) / 2
 
-    color = (255, 215, 0)  # emas
+    # warna emas
+    color = (255, 215, 0)
 
-    # outline biar kebaca
-    outline_range = 3
+    # ==== OUTLINE LEBIH TEBAL ====
+    outline_range = 6
     for ox in range(-outline_range, outline_range + 1):
         for oy in range(-outline_range, outline_range + 1):
             draw.text((x + ox, text_y + oy), wrapped, font=font, fill="black")
