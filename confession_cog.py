@@ -354,17 +354,17 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
                 save_confession_map()
 
-                try:
-                    reference_target = await parent_channel.fetch_message(parent_id)
-                except:
-                    reference_target = None
-
-                sent = await thread.send(
-                    embed=embed,
-                    reference=reference_target,
-                    mention_author=False
+                # ❗ Reply pertama TIDAK BOLEH pakai reference
+                sent = await thread.send(embed=embed)
+            if parent_data.get("thread_id") is None:
+                thread = await parent_msg.create_thread(
+                    name=f"Confession #{parent_confess_id}"
                 )
+                CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
+                save_confession_map()
 
+                # ❗ Reply pertama TIDAK BOLEH pakai reference
+                sent = await thread.send(embed=embed)
 
             else:
                 # Thread sudah ada
