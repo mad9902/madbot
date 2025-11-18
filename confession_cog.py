@@ -337,22 +337,19 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                     ephemeral=True
                 )
 
-            # Ambil isi parent asli untuk breadcrumb
-            parent_embed = parent_msg.embeds[0] if parent_msg.embeds else None
-            parent_desc = parent_embed.description or ""
+            # ============================
+            # BUILD JUMP LINK
+            # ============================
+            guild_id = interaction.guild.id
+            channel_id = parent_data["channel_id"] if parent_data.get("is_parent", False) \
+                        else parent_data["thread_id"]
+            msg_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{parent_id}"
 
-            import re
-            cleaned = re.findall(r'"(.*?)"', parent_desc)
-            parent_content = cleaned[-1] if cleaned else parent_desc.strip('"')
-
-            parent_confess_id = parent_data.get("confession_id", "?")
-
-            # Buat breadcrumb
-            breadcrumb = (
-                f"**🧵 Reply to: #{parent_confess_id}**\n"
-                f"⤷ *\"{parent_content}\"*\n\n"
+            embed.description = (
+                f"🔗 **[Jump to parent]({msg_link})**\n\n"
+                f'"{content}"'
             )
-            embed.description = breadcrumb + f'"{content}"'
+
 
             # ===================================================
             # Thread handling
