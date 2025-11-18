@@ -278,25 +278,35 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         )
 
         try:
-            # ---------- Reply IN_THREAD ----------
+            # ============================================================
+            # REPLY MODE (parent_message_id != None)
+            # ============================================================
             if self.parent_message_id:
-                # Ambil data mapping parent
+
+                # Pesan yang ditekan user (WAJIB buat reference)
+                pressed_message = None
+                try:
+                    pressed_message = interaction.message  # pesan yang ada tombolnya
+                except:
+                    pressed_message = None
+
+                # Ambil mapping dari pesan yang direply
                 data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
-                thread = None
 
-                # === THREAD BELUM ADA → BUAT DI SINI ===
-                if not data or data.get("thread_id") is None:
-                    # Ambil parent_channel dari mapping agar tidak salah thread
-                    if not data or "channel_id" not in data:
-                        raise Exception("Mapping corrupt — missing channel_id")
+                if not data:
+                    return await interaction.response.send_message(
+                        "❌ Data mapping hilang atau rusak.",
+                        ephemeral=True
+                    )
 
-                    parent_channel_id = data["channel_id"]
-
-                    parent_channel = interaction.guild.get_channel(int(parent_channel_id))
-
+                # Thread belum ada → buat dulu
+                if data.get("thread_id") is None:
+                    parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
                     if not parent_channel:
-                        raise Exception("Parent confession channel tidak ditemukan.")
-
+                        return await interaction.response.send_message(
+                            "❌ Parent confession channel tidak ditemukan.",
+                            ephemeral=True
+                        )
 
                     parent_msg = await parent_channel.fetch_message(int(self.parent_message_id))
 
@@ -304,35 +314,34 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                         name=f"Confession Thread #{self.parent_message_id}"
                     )
 
-
-                    # Simpan mapping untuk reply berikutnya
-                    CONFESSION_THREAD_MAP[self.parent_message_id] = {
-                        "thread_id": thread.id,
-                        "channel_id": parent_channel.id,
-                        "is_parent": True
-                    }
+                    # update mapping
+                    CONFESSION_THREAD_MAP[self.parent_message_id]["thread_id"] = thread.id
                     save_confession_map()
 
                 else:
-                    # Thread sudah ada → pakai yang lama
-                    thread_id = data["thread_id"]
-                    thread = await self.bot.fetch_channel(thread_id)
+                    # thread sudah ada → fetch
+                    thread = await self.bot.fetch_channel(int(data["thread_id"]))
 
-                # Kirim reply dalam thread
-                sent = await thread.send(embed=embed)
+                # ======================================================
+                # Kirim BALASAN di dalam thread + application reply
+                # ======================================================
+                sent = await thread.send(
+                    embed=embed,
+                    reference=pressed_message or await thread.fetch_message(self.parent_message_id),
+                    mention_author=False
+                )
 
-                # Mapping baru untuk pesan reply ini
+                # Simpan mapping untuk balasan baru
                 CONFESSION_THREAD_MAP[sent.id] = {
                     "thread_id": thread.id,
-                    "channel_id": data["channel_id"],  # parent text channel
+                    "channel_id": data["channel_id"],
                     "is_parent": False
                 }
                 save_confession_map()
 
-                # Tambahkan tombol Reply di tiap balasan
+                # Tambahkan tombol reply di balasan
                 view = ThreadReplyView(self.bot, sent.id)
                 await sent.edit(view=view)
-
 
                 await interaction.response.send_message(
                     "✅ Balasan kamu sudah dikirim secara anonim!",
@@ -340,10 +349,9 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 )
                 return
 
-
-            # -------------------------------------------
-            # CONFESSION BARU (bukan reply) MULAI DI SINI
-            # -------------------------------------------
+            # ============================================================
+            # CONFESSION BARU (bukan reply)
+            # ============================================================
             db = connect_db()
             channel_id = get_channel_settings(db, interaction.guild_id, "confession")
             db.close()
@@ -355,7 +363,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
 
             sent = await target_channel.send(embed=embed)
 
-            # Tidak membuat thread sekarang
+            # Simpan mapping
             CONFESSION_THREAD_MAP[sent.id] = {
                 "thread_id": None,
                 "channel_id": target_channel.id,
@@ -363,14 +371,14 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             }
             save_confession_map()
 
-            # Add buttons
+            # Tombol
             view = discord.ui.View(timeout=None)
             view.add_item(SubmitConfessionButton(self.bot))
             view.add_item(SubmitImageConfessionButton(self.bot))
             view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await sent.edit(view=view)
 
-            # Save DB
+            # Simpan DB
             save_confession(
                 self.bot.db,
                 interaction.guild_id,
@@ -379,7 +387,10 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 content
             )
 
-            await interaction.response.send_message("✅ Confession kamu telah dikirim!", ephemeral=True)
+            await interaction.response.send_message(
+                "✅ Confession kamu telah dikirim!",
+                ephemeral=True
+            )
 
         except Exception as e:
             print("❌ Error saat mengirim confession:", e)
@@ -388,7 +399,6 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                     "❌ Gagal mengirim confession. Coba lagi.",
                     ephemeral=True
                 )
-
 
 # ==============================
 # BUTTONS
