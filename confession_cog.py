@@ -95,7 +95,6 @@ async def restore_reply_buttons(bot: commands.Bot):
                     try:
                         thread = await bot.fetch_channel(thread_id)
 
-                        # Loop semua pesan di thread
                         async for msg in thread.history(limit=None):
                             if msg.author.id != bot.user.id:
                                 continue
@@ -103,10 +102,9 @@ async def restore_reply_buttons(bot: commands.Bot):
                             view = ThreadReplyView(bot, msg.id)
                             await msg.edit(view=view)
 
-                            # FIX: simpan mapping yang BENAR
                             CONFESSION_THREAD_MAP[msg.id] = {
                                 "thread_id": thread.id,
-                                "channel_id": parent_channel.id,   # parent text channel
+                                "channel_id": parent_channel.id,
                                 "is_parent": False
                             }
 
@@ -114,8 +112,6 @@ async def restore_reply_buttons(bot: commands.Bot):
 
                     except Exception as e:
                         print(f"[Restore] Thread restore error for thread {thread_id}: {e}")
-
-
 
             except discord.NotFound:
                 print(f"[Restore] Pesan {message_id} hilang.")
@@ -141,7 +137,6 @@ class SubmitImageConfessionButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
 
-        # Try DM user
         try:
             dm = await interaction.user.create_dm()
             await dm.send(
@@ -159,7 +154,6 @@ class SubmitImageConfessionButton(discord.ui.Button):
             ephemeral=True
         )
 
-        # Wait for file
         def check(msg: discord.Message):
             return (
                 msg.author.id == interaction.user.id
@@ -174,7 +168,6 @@ class SubmitImageConfessionButton(discord.ui.Button):
 
         attachment = msg.attachments[0]
 
-        # File size validation
         if attachment.size > 5 * 1024 * 1024:
             return await dm.send("❌ File lebih dari 5MB.")
 
@@ -188,7 +181,6 @@ class SubmitImageConfessionButton(discord.ui.Button):
         caption = msg.content or " "
         confession_id = str(uuid.uuid4())[:8]
 
-        # Download with real filename
         orig_filename = attachment.filename
         tmp_dir = "/tmp" if os.name != "nt" else "temp"
 
@@ -197,56 +189,45 @@ class SubmitImageConfessionButton(discord.ui.Button):
         temp_path = os.path.join(tmp_dir, f"{uuid.uuid4().hex}_{orig_filename}")
         await attachment.save(temp_path)
 
-        # Target channel
         db = connect_db()
         channel_id = get_channel_settings(db, interaction.guild_id, "confession")
         db.close()
         target_channel = interaction.guild.get_channel(int(channel_id))
 
-        # Prepare embed
         embed = discord.Embed(
             title=f"Anonymous Confession (#{confession_id})",
             description=f'"{caption}"',
             color=discord.Color.dark_gray()
         )
 
-        # Prepare file
-        file = discord.File(temp_path, filename=orig_filename)
-
-        # If image, embed it
         if is_image:
             embed.set_image(url=f"attachment://{orig_filename}")
 
-        # Send
+        file = discord.File(temp_path, filename=orig_filename)
         sent = await target_channel.send(embed=embed, file=file)
 
-        # Remove temp file
         try:
             os.remove(temp_path)
         except:
             pass
 
-
-        # Tidak membuat thread sekarang
         CONFESSION_THREAD_MAP[sent.id] = {
             "thread_id": None,
             "channel_id": target_channel.id,
-            "is_parent": True
+            "is_parent": True,
+            "confession_id": confession_id    # PATCH A1
         }
         save_confession_map()
 
-        # Add buttons under confession
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
         view.add_item(SubmitImageConfessionButton(self.bot))
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
-        # Save to DB
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, caption)
 
         await dm.send("✅ Confession kamu sudah berhasil diposting!")
-
 
 # ==============================
 # MODAL — TEXT CONFESSION
@@ -271,71 +252,125 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         confession_id = str(uuid.uuid4())[:8]
         content = self.confession_input.value
 
+        # ============================
+        # 1) Buat embed SEKALI
+        # ============================
         embed = discord.Embed(
             title="Balasan Anonim" if self.parent_message_id else f"Anonymous Confession (#{confession_id})",
             description=f'"{content}"',
             color=discord.Color.dark_gray()
         )
 
+        # ============================
+        # 2) SMART REPLY BREADCRUMB
+        # ============================
+        if self.parent_message_id:
+            try:
+                parent_data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
+                if not parent_data:
+                    raise Exception("Mapping parent hilang")
+
+                # ambil pesan parent
+                if isinstance(interaction.channel, discord.Thread):
+                    parent_msg = await interaction.channel.fetch_message(self.parent_message_id)
+                else:
+                    parent_ch = interaction.guild.get_channel(int(parent_data["channel_id"]))
+                    parent_msg = await parent_ch.fetch_message(self.parent_message_id)
+
+                # confession id parent
+                parent_cid = parent_data.get("confession_id", "unknown")
+
+                # ambil isi embed parent
+                parent_embed = parent_msg.embeds[0] if parent_msg.embeds else None
+                parent_desc = parent_embed.description if parent_embed and parent_embed.description else "(no content)"
+                parent_content = parent_desc.strip('"')
+
+                # build breadcrumb
+                breadcrumb = (
+                    f"**🧵 Reply to: #{parent_cid}**\n"
+                    f"⤷ *\"{parent_content}\"*\n\n"
+                )
+
+                # prepend ke embed sekarang
+                embed.description = breadcrumb + embed.description
+
+            except Exception as e:
+                print("Breadcrumb error:", e)
+
+        # ============================
+        # TRY MAIN LOGIC
+        # ============================
         try:
-            # ============================================================
+
+            # ================================================================
             # REPLY MODE
-            # ============================================================
+            # ================================================================
             if self.parent_message_id:
 
-                pressed_message = interaction.message
                 data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
-
                 if not data:
                     return await interaction.response.send_message(
                         "❌ Data mapping hilang atau rusak.",
                         ephemeral=True
                     )
 
-                # FETCH / CREATE THREAD
+                parent_confession_id = data.get("confession_id", "unknown")
+
+                # ============================================================
+                # THREAD BELUM ADA → BUAT
+                # ============================================================
                 if data.get("thread_id") is None:
                     parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
                     parent_msg = await parent_channel.fetch_message(int(self.parent_message_id))
 
+                    # buat thread baru
                     thread = await parent_msg.create_thread(
-                        name=f"Confession Thread #{self.parent_message_id}"
+                        name=f"Confession #{parent_confession_id}"
                     )
 
+                    # simpan id thread
                     CONFESSION_THREAD_MAP[self.parent_message_id]["thread_id"] = thread.id
                     save_confession_map()
 
-                    # BALASAN PERTAMA → TIDAK BOLEH ADA reference !!!
+                    # balasan pertama dalam thread → TIDAK pakai reference
                     sent = await thread.send(embed=embed)
 
+                # ============================================================
+                # THREAD SUDAH ADA → GUNAKAN
+                # ============================================================
                 else:
-                    # Thread sudah ada → fetch
                     thread = await self.bot.fetch_channel(int(data["thread_id"]))
 
-                    # PILIH TARGET REFERENCE:
-                    if isinstance(pressed_message.channel, discord.Thread):
-                        # reply di dalam thread → valid
-                        reference_target = pressed_message
-                    else:
-                        # reply dari luar → reference ke parent
-                        parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
-                        reference_target = await parent_channel.fetch_message(self.parent_message_id)
+                    # reference logic aman
+                    try:
+                        if isinstance(interaction.channel, discord.Thread):
+                            # reply di dalam thread
+                            reference_target = await interaction.channel.fetch_message(self.parent_message_id)
+                        else:
+                            # reply dari luar thread
+                            parent_channel = interaction.guild.get_channel(int(data["channel_id"]))
+                            reference_target = await parent_channel.fetch_message(self.parent_message_id)
+                    except:
+                        reference_target = None
 
-                    # KIRIM PESAN DENGAN APPLICATION REPLY
                     sent = await thread.send(
                         embed=embed,
                         reference=reference_target,
                         mention_author=False
                     )
 
-                # SAVE MAPPING
+                # ============================================================
+                # SIMPAN MAPPING REPLY
+                # ============================================================
                 CONFESSION_THREAD_MAP[sent.id] = {
                     "thread_id": thread.id,
                     "channel_id": data["channel_id"],
-                    "is_parent": False
+                    "is_parent": False,
+                    "confession_id": data.get("confession_id")   # FIX FINAL
                 }
                 save_confession_map()
 
-                # ADD REPLY BUTTON
+                # add tombol reply
                 await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
                 return await interaction.response.send_message(
@@ -343,9 +378,9 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                     ephemeral=True
                 )
 
-            # ============================================================
-            # CONFESSION BARU (bukan reply)
-            # ============================================================
+            # ================================================================
+            # CONFESSION BARU
+            # ================================================================
             db = connect_db()
             channel_id = get_channel_settings(db, interaction.guild_id, "confession")
             db.close()
@@ -357,22 +392,20 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
 
             sent = await target_channel.send(embed=embed)
 
-            # Simpan mapping
             CONFESSION_THREAD_MAP[sent.id] = {
                 "thread_id": None,
                 "channel_id": target_channel.id,
-                "is_parent": True
+                "is_parent": True,
+                "confession_id": confession_id
             }
             save_confession_map()
 
-            # Tombol
             view = discord.ui.View(timeout=None)
             view.add_item(SubmitConfessionButton(self.bot))
             view.add_item(SubmitImageConfessionButton(self.bot))
             view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await sent.edit(view=view)
 
-            # Simpan DB
             save_confession(
                 self.bot.db,
                 interaction.guild_id,
@@ -386,6 +419,9 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 ephemeral=True
             )
 
+        # ============================
+        # ERROR HANDLER
+        # ============================
         except Exception as e:
             print("❌ Error saat mengirim confession:", e)
             if not interaction.response.is_done():
@@ -428,14 +464,10 @@ class ReplyToConfessionButton(discord.ui.Button):
 
     @classmethod
     def from_custom_id(cls, bot, custom_id: str):
-        # custom_id example: confess_reply_12345678901234
         message_id = int(custom_id.split("_")[-1])
         return cls(bot, message_id)
 
-
     async def callback(self, interaction: discord.Interaction):
-     # Tombol Reply TIDAK MEMBUAT THREAD
-        # Hanya buka modal dan kasih parent_message_id
         await interaction.response.send_modal(
             ConfessionModal(
                 self.bot,
@@ -444,8 +476,9 @@ class ReplyToConfessionButton(discord.ui.Button):
             )
         )
 
+
 # ==============================
-# VIEW
+# VIEWS
 # ==============================
 
 class ConfessionView(discord.ui.View):
@@ -454,10 +487,12 @@ class ConfessionView(discord.ui.View):
         self.add_item(SubmitConfessionButton(bot))
         self.add_item(SubmitImageConfessionButton(bot))
 
+
 class ThreadReplyView(discord.ui.View):
     def __init__(self, bot: commands.Bot, message_id: int):
         super().__init__(timeout=None)
         self.add_item(ReplyToConfessionButton(bot, message_id))
+
 
 # ==============================
 # COG
@@ -500,7 +535,15 @@ class ConfessionCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(ConfessionCog(bot))
-    bot.add_view(ConfessionView(bot))  # persist view buttons
+
+    # Persist view utama
+    bot.add_view(ConfessionView(bot))
+
+    # Dynamic reply button restore
     bot.add_dynamic_items("confess_reply_", lambda custom_id: ReplyToConfessionButton.from_custom_id(bot, custom_id))
-    await restore_reply_buttons(bot)   # restore old messages
+
+    # Restore semua tombol dari file
+    await restore_reply_buttons(bot)
+
+    # Cleanup mapping invalid
     cleanup_confession_map()
