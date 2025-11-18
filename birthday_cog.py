@@ -26,41 +26,52 @@ JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 #  PERSONALIZED BIRTHDAY IMAGE GENERATOR
 # ================================================================
 def generate_birthday_image(display_name: str, output_path="media/birthday_render.png"):
+    from PIL import Image, ImageDraw, ImageFont
+    import os
+
+    # ============ Gambar Base ============
     base = Image.open("media/ultahkos.png").convert("RGBA")
+
+    # Resize agar tidak terlalu besar (fix teks terlihat kecil)
+    base = base.resize((1536, 1024), Image.LANCZOS)
     W, H = base.size
 
     draw = ImageDraw.Draw(base)
 
-    # ==== FONT LEBIH BESAR ====
-    try:
-        font = ImageFont.truetype("media/fonts/Montserrat-Bold.ttf", 140)
-    except:
-        font = ImageFont.load_default()
+    # ============ Batasi nama max 10 karakter ============
+    display_name = display_name.strip()
+    if len(display_name) > 5:
+        display_name = display_name[:5]
 
-    # ==== POSISI NAMA (LEBIH KE ATAS) ====
-    text_y = int(H * 0.63)   # sebelumnya 0.58 → sekarang turun sedikit
+    # ============ Load Font ============
+    font_path = "assets\Inter.ttf"
 
-    # wrap kalau nama panjang
-    wrapped = textwrap.fill(display_name, width=20)
+    if os.path.isfile(font_path):
+        font = ImageFont.truetype(font_path, 180)
+    else:
+        print("⚠️ Font tidak ditemukan, menggunakan default.")
+        font = ImageFont.truetype("arial.ttf", 180)
 
-    # ukur teks
-    bbox = draw.textbbox((0, 0), wrapped, font=font)
-    w = bbox[2] - bbox[0]
-    h = bbox[3] - bbox[1]
+    text = display_name
 
-    x = (W - w) / 2
+    # Hitung ukuran teks
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = bbox[2] - bbox[0]
 
-    # warna emas
-    color = (255, 215, 0)
+    # ============ POSISI PERSIS DI BAWAH 'Selamat Ulang Tahun' ============
+    # (Dari gambar kamu, area tulisan Selamat Ulang Tahun ada di sekitar 40%–50%)
+    pos_x = (W - text_w) // 2
+    pos_y = int(H * 0.50)   # tweak halus → pas banget di bawah tulisan besar
 
-    # ==== OUTLINE LEBIH TEBAL ====
-    outline_range = 6
-    for ox in range(-outline_range, outline_range + 1):
-        for oy in range(-outline_range, outline_range + 1):
-            draw.text((x + ox, text_y + oy), wrapped, font=font, fill="black")
-
-    # teks utama
-    draw.text((x, text_y), wrapped, font=font, fill=color)
+    # ============ Teks dengan Outline ============
+    draw.text(
+        (pos_x, pos_y),
+        text,
+        font=font,
+        fill=(250, 198, 62),   # warna #fac63e
+        stroke_width=3,
+        stroke_fill="black"
+    )
 
     base.save(output_path)
     return output_path
@@ -145,14 +156,16 @@ class Birthday(commands.Cog):
             if member:
                 display_name = member.display_name
 
-            # GENERATE GAMBAR PERSONAL
+            # GENERATE GAMBAR
             img_path = generate_birthday_image(display_name)
-            file = discord.File(img_path, filename="birthday.png")
+            unique = f"birthday_{int(datetime.now().timestamp())}.png"
+            file = discord.File(img_path, filename=unique)
+            content = f"🎉 Selamat ulang tahun {member.mention}!! 🎂"
 
-            # EMBED
+            # EMBED (dengan mention)
             embed = discord.Embed(
                 title="🎉 Selamat Ulang Tahun! 🎂",
-                description=f"**{display_name}**",
+                description=f"{member.mention if member else f'**{display_name}**'}",
                 color=discord.Color.gold()
             )
 
@@ -165,11 +178,24 @@ class Birthday(commands.Cog):
             if member and member.avatar:
                 embed.set_thumbnail(url=member.avatar.url)
 
-            embed.set_image(url="attachment://birthday.png")
+            embed.set_image(url=f"attachment://{unique}")
             embed.set_footer(text=f"Dirayakan oleh {guild.name}")
             embed.timestamp = datetime.utcnow()
 
-            await channel.send(file=file, embed=embed)
+            await channel.send(
+                content=content,
+                file=file,
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions(
+                    users=True,
+                    roles=False,
+                    everyone=True,
+                    replied_user=True
+                )
+            )
+
+
+
 
     @birthday_loop.before_loop
     async def before_loop(self):
@@ -347,7 +373,7 @@ class Birthday(commands.Cog):
     @commands.command(name="testbirthday")
     async def test_birthday(self, ctx):
         """Debug: kirim ucapan ulang tahun untuk pengguna dengan tanggal terdekat."""
-        
+
         db = connect_db()
         rows = get_all_birthdays(db, ctx.guild.id)
         db.close()
@@ -359,29 +385,49 @@ class Birthday(commands.Cog):
         closest = None
         min_diff = 999
 
+        # Cari ulang tahun terdekat
         for user_id, birthdate, display_name, wish in rows:
             bday = birthdate.replace(year=today.year)
             if bday < today:
                 bday = bday.replace(year=today.year + 1)
+
             diff = (bday - today).days
             if diff < min_diff:
                 min_diff = diff
-                closest = (user_id, display_name, wish)
+                closest = (user_id, birthdate, display_name, wish)
 
-        user_id, display_name, wish = closest
+        user_id, birthdate, display_name, wish = closest
         guild = ctx.guild
         member = guild.get_member(user_id)
 
+        # pakai display_name user asli kalau ada
         if member:
             display_name = member.display_name
 
-        # generate gambar debug
-        img_path = generate_birthday_image(display_name)
-        file = discord.File(img_path, filename="birthday.png")
+        # =============================
+        # AMBIL CHANNEL ULTAH
+        # =============================
+        db = connect_db()
+        ch_id = get_channel_settings(db, guild.id, "birthday")
+        db.close()
 
+        channel = guild.get_channel(int(ch_id)) if ch_id else ctx.channel
+        # fallback: kalau channel ulang tahun belum diset → kirim ke channel tempat command dipakai
+
+        # =============================
+        # GENERATE GAMBAR
+        # =============================
+        img_path = generate_birthday_image(display_name)
+        unique = f"birthday_{int(datetime.now().timestamp())}.png"
+        file = discord.File(img_path, filename=unique)
+        content = f"🎉 Selamat ulang tahun {member.mention}!! 🎂"
+
+        # =============================
+        # BIKIN EMBED KEKINIAN
+        # =============================
         embed = discord.Embed(
             title="🎉 Selamat Ulang Tahun! 🎂",
-            description=f"**{display_name}**",
+            description=f"{member.mention if member else f'**{display_name}**'}",
             color=discord.Color.gold()
         )
 
@@ -394,16 +440,44 @@ class Birthday(commands.Cog):
         if member and member.avatar:
             embed.set_thumbnail(url=member.avatar.url)
 
-        embed.set_image(url="attachment://birthday.png")
+        embed.set_image(url=f"attachment://{unique}")
         embed.set_footer(text=f"Dirayakan oleh {guild.name}")
         embed.timestamp = datetime.utcnow()
 
+        # =============================
+        # KIRIM
+        # =============================
         await ctx.send("🔧 **DEBUG:** Mengirim simulasi ucapan ulang tahun…")
-        await ctx.send(file=file, embed=embed)
+        await channel.send(
+            content=content,
+            file=file,
+            embed=embed,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,
+                roles=False,
+                everyone=True,
+                replied_user=True
+            )
+        )
+
+
+
 
     # =========================================================
     # COMMAND: Check Time
     # =========================================================
+
+    @commands.command(name="setbirthdaych")
+    async def set_birthday_channel(self, ctx, channel: discord.TextChannel):
+        if ctx.author.id not in [ctx.guild.owner_id, 416234104317804544]:
+            return await ctx.send("❌ Kamu tidak punya izin.")
+
+        db = connect_db()
+        set_channel_settings(db, ctx.guild.id, "birthday", channel.id)
+        db.close()
+
+        await ctx.send(f"✅ Channel ulang tahun diset ke {channel.mention}")
+
     @commands.command(name="testclock")
     async def test_clock(self, ctx):
         now = datetime.now(JAKARTA_TZ)
