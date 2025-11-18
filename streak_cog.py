@@ -190,16 +190,24 @@ class StreakCog(commands.Cog):
         self.bot = bot
         self.daily_reset_check.start()
         self.last_reset_date = None
+        self.sent_warnings = {}   # key: pair_id -> date
+        self.sent_deaths = {}     # key: pair_id -> date
 
     @tasks.loop(minutes=1)
     async def daily_reset_check(self):
         wib = pytz.timezone("Asia/Jakarta")
-        today = datetime.now(wib).date()
+        now = datetime.now(wib)
+        today = now.date()
 
+        # ============================
+        #  RESET HARIAN JAM 00:00 WIB
+        # ============================
         if self.last_reset_date != today:
-            print("[STREAK] Reset harian berjalan")
+            print("[STREAK] Reset harian berjalan (jam 00:00)")
             await self.process_daily_reset()
             self.last_reset_date = today
+
+
 
     @daily_reset_check.before_loop
     async def before_daily_reset(self):
@@ -213,28 +221,119 @@ class StreakCog(commands.Cog):
 
     async def process_daily_reset(self):
         """
-        Di sini kamu cek semua pasangan ACTIVE, lalu hitung gap,
-        lalu update needs_restore / BROKEN sesuai aturan kamu.
+        Auto check jam 00:00 WIB:
+        - Hitung delta hari masing-masing pasangan
+        - Jika butuh restore → kirim WARNING
+        - Jika deadline restore lewat → auto BROKEN + kirim embed kematian
+        - Jika delta >= 3 → auto BROKEN + kirim embed kematian
+        - Jika kuota restore habis → auto BROKEN + kirim embed kematian
         """
-        guilds = self.bot.guilds
-        for guild in guilds:
+
+        wib = pytz.timezone("Asia/Jakarta")
+        today = datetime.now(wib).date()
+
+        for guild in self.bot.guilds:
             settings = get_streak_settings(guild.id)
             if not settings:
                 continue
 
+            log_channel_id = settings.get("log_channel_id")
+            log_channel = guild.get_channel(log_channel_id) if log_channel_id else None
+
             rows = get_active_streaks(guild.id, limit=5000, offset=0)
+            if not rows:
+                continue
 
             for pair in rows:
-                # panggil auto gap
-                updated = auto_process_gap(pair)
+                pair = ensure_restore_cycle(pair)
+                last = pair["last_update_date"]
 
-                # kalau masuk mode restore → kirim warning
-                if updated and updated.get("needs_restore") == 1:
+                # kalau NULL (belum pernah nyala), jangan dihitung delta
+                if last is None:
+                    # skip pasangan ini, karena belum pernah punya streak harian
+                    continue
+
+                # Convert last date
+                if isinstance(last, str):
+                    try:
+                        last = datetime.strptime(last, "%Y-%m-%d").date()
+                    except:
+                        last = today
+
+
+                delta = (today - last).days
+                deadline = pair.get("restore_deadline")
+
+                # Convert deadline
+                if isinstance(deadline, str):
+                    try:
+                        deadline = datetime.strptime(deadline, "%Y-%m-%d").date()
+                    except:
+                        deadline = None
+
+                # -------------------------------
+                # CASE A — NEED RESTORE (delta 2)
+                # -------------------------------
+                if delta == 2:
+
+                    # ⚠️ CEK KUOTA RESTORE HABIS → LANGSUNG MATI
+                    if pair.get("restore_used_this_cycle", 0) >= 5:
+                        kill_streak_due_to_deadline(pair["id"])
+                        dead = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
+                        if log_channel:
+                            await self.send_streak_dead(
+                                guild,
+                                dead,
+                                restore_left_override="0 / 5"
+                            )
+                        continue
+
+                    # ⚠️ Jika kuota ada → baru peringatan
+                    mark_needs_restore(pair["id"], today)
+                    updated = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
                     await self.send_warning_near_dead(guild, updated)
+                    continue
 
-                # kalau gap >= 3 → streak mati
-                if updated and updated["status"] == "BROKEN":
-                    await self.send_streak_dead(guild, updated)
+                # -------------------------------
+                # CASE B — TERLAMBAT RESTORE
+                # -------------------------------
+                if pair["needs_restore"] == 1 and deadline:
+                    if today > deadline:
+                        kill_streak_due_to_deadline(pair["id"])
+                        dead = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
+
+                        if log_channel:
+                            await self.send_streak_dead(guild, dead)
+
+                        continue
+
+                # -------------------------------
+                # CASE C — DELTA >= 3 → auto mati
+                # -------------------------------
+                if delta >= 3:
+                    kill_streak_due_to_deadline(pair["id"])
+                    dead = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
+
+                    if log_channel:
+                        await self.send_streak_dead(guild, dead)
+
+                    continue
+
+                # -------------------------------
+                # CASE D — KUOTA RESTORE HABIS
+                # -------------------------------
+                if pair.get("restore_used_this_cycle", 0) >= 5 and pair.get("needs_restore", 0) == 1:
+                    kill_streak_due_to_deadline(pair["id"])
+                    dead = get_streak_pair(guild.id, pair["user1_id"], pair["user2_id"])
+
+                    if log_channel:
+                        await self.send_streak_dead(
+                            guild, 
+                            dead, 
+                            restore_left_override="0 / 5"
+                        )
+
+                    continue
 
 
     async def send_warning_near_dead(self, guild, pair):
@@ -269,7 +368,21 @@ class StreakCog(commands.Cog):
         )
 
         embed.set_footer(text="Jika tidak, besok streak mati total 💀")
+        # Prevent spam — hanya kirim 1x per hari
+        today = date.today()
+
+        # pair_id sebagai key
+        pair_id = pair["id"]
+
+        last_sent = getattr(self, "sent_warnings", {}).get(pair_id)
+        if last_sent == today:
+            return  # sudah kirim hari ini, jangan spam
+
+        # simpan state
+        self.sent_warnings[pair_id] = today
+
         await log_channel.send(embed=embed)
+
 
     async def send_streak_dead(self, guild, pair, restore_left_override=None):
         """
@@ -308,10 +421,21 @@ class StreakCog(commands.Cog):
             left_display = f"{max(0, 5 - used)} / 5"
 
         embed.add_field(
-            name="♻️ Sisa Restore Bulan Ini",
+            name="♻️ Sisa Restore Bulan Ini (reset)",
             value=left_display,
             inline=True
         )
+
+        today = date.today()
+
+        pair_id = pair["id"]
+
+        last_dead = getattr(self, "sent_deaths", {}).get(pair_id)
+        if last_dead == today:
+            return  # sudah kirim embed mati hari ini
+
+        # simpan state
+        self.sent_deaths[pair_id] = today
 
         await log_channel.send(embed=embed)
 

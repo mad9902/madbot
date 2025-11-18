@@ -1476,8 +1476,13 @@ def auto_process_gap(pair):
     # CASE D — DELTA 2 → BUTUH RESTORE
     # =====================================================
     if delta == 2:
-        deadline = today  # HARUS restore hari ini
+        # CEK KUOTA RESTORE HABIS → LANGSUNG MATI
+        if pair.get("restore_used_this_cycle", 0) >= 5:
+            kill_streak_due_to_deadline(pair["id"])
+            return get_streak_pair(pair["guild_id"], pair["user1_id"], pair["user2_id"])
 
+        # Selain itu → mode need restore
+        deadline = today
         mark_needs_restore(pair["id"], deadline.strftime("%Y-%m-%d"))
 
         pair["needs_restore"] = 1
