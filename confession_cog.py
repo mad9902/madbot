@@ -314,11 +314,24 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                     ephemeral=True
                 )
 
-            parent_channel = interaction.guild.get_channel(parent_data["channel_id"])
+            # Tentukan parent_msg di channel yang BENAR
+            parent_msg = None
 
-            try:
-                parent_msg = await parent_channel.fetch_message(parent_id)
-            except:
+            # 1. Jika parent adalah pesan utama → ambil dari channel utama
+            if parent_data.get("is_parent", False):
+                try:
+                    parent_msg = await interaction.guild.get_channel(parent_data["channel_id"]).fetch_message(parent_id)
+                except:
+                    parent_msg = None
+
+            # 2. Jika parent adalah balasan → ambil dari thread tempat dia berada
+            else:
+                try:
+                    parent_msg = await interaction.guild.get_channel(parent_data["thread_id"]).fetch_message(parent_id)
+                except:
+                    parent_msg = None
+
+            if parent_msg is None:
                 return await interaction.response.send_message(
                     "❌ Parent message hilang.",
                     ephemeral=True
