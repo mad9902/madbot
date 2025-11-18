@@ -290,12 +290,9 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
             if raw:
                 # Jika ini reply ke reply → ambil parent direct-nya
-                if not raw.get("is_parent", False):
-                    parent_id = raw.get("parent_id")
-                else:
-                    parent_id = self.parent_message_id
-
+                parent_id = self.parent_message_id
                 parent_data = CONFESSION_THREAD_MAP.get(parent_id)
+
 
         # ===================================================
         # Base embed
@@ -357,23 +354,35 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
                 save_confession_map()
 
-                sent = await thread.send(embed=embed)
-
-            else:
-                # Thread sudah ada
-                thread = await self.bot.fetch_channel(parent_data["thread_id"])
-
-                reference_target = None
                 try:
-                    reference_target = await thread.fetch_message(parent_id)
+                    reference_target = await parent_channel.fetch_message(parent_id)
                 except:
-                    pass
+                    reference_target = None
 
                 sent = await thread.send(
                     embed=embed,
                     reference=reference_target,
                     mention_author=False
                 )
+
+
+            else:
+                # Thread sudah ada
+                thread = await self.bot.fetch_channel(parent_data["thread_id"])
+
+                # Parent message SELALU ada di parent_channel, bukan di thread
+                try:
+                    reference_target = await parent_channel.fetch_message(parent_id)
+                except:
+                    reference_target = None
+
+                # Kirim ke thread, tapi reference menuju parent di channel utama (VALID)
+                sent = await thread.send(
+                    embed=embed,
+                    reference=reference_target,
+                    mention_author=False
+                )
+
 
             # SAVE mapping reply
             CONFESSION_THREAD_MAP[sent.id] = {
