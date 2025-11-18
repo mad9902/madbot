@@ -199,12 +199,9 @@ class SubmitImageConfessionButton(discord.ui.Button):
             pass
 
 
-        # Create thread
-        thread = await sent.create_thread(name=f"Confession #{confession_id}")
-
-        # Save mapping
+        # Tidak membuat thread sekarang
         CONFESSION_THREAD_MAP[sent.id] = {
-            "thread_id": thread.id,
+            "thread_id": None,
             "channel_id": target_channel.id,
             "is_parent": True
         }
@@ -216,14 +213,6 @@ class SubmitImageConfessionButton(discord.ui.Button):
         view.add_item(SubmitImageConfessionButton(self.bot))
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
-
-        # Thread reply buttons
-        thread_view = ThreadReplyView(self.bot, sent.id)
-        await thread.send(
-            "Balas confession ini secara anonim dengan tombol di bawah:",
-            view=thread_view
-        )
-
 
         # Save to DB
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, caption)
@@ -302,7 +291,6 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             # CONFESSION BARU (bukan reply) MULAI DI SINI
             # -------------------------------------------
             db = connect_db()
-
             channel_id = get_channel_settings(db, interaction.guild_id, "confession")
             db.close()
 
@@ -312,10 +300,10 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             )
 
             sent = await target_channel.send(embed=embed)
-            thread = await sent.create_thread(name=f"Confession #{confession_id}")
 
+            # Tidak membuat thread sekarang
             CONFESSION_THREAD_MAP[sent.id] = {
-                "thread_id": thread.id,
+                "thread_id": None,
                 "channel_id": target_channel.id,
                 "is_parent": True
             }
@@ -328,16 +316,14 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             view.add_item(ReplyToConfessionButton(self.bot, sent.id))
             await sent.edit(view=view)
 
-            # Thread buttons
-            thread_view = discord.ui.View(timeout=None)
-            thread_view.add_item(ReplyToConfessionButton(self.bot, sent.id))
-            await thread.send(
-                "Gunakan tombol di bawah ini untuk membalas confession ini secara anonim:",
-                view=thread_view
-            )
-
             # Save DB
-            save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, content)
+            save_confession(
+                self.bot.db,
+                interaction.guild_id,
+                interaction.user.id,
+                confession_id,
+                content
+            )
 
             await interaction.response.send_message("✅ Confession kamu telah dikirim!", ephemeral=True)
 
@@ -384,14 +370,43 @@ class ReplyToConfessionButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         data = CONFESSION_THREAD_MAP.get(self.message_id)
-        if not data:
-            return await interaction.response.send_message("❌ Thread tidak ditemukan.", ephemeral=True)
 
+        # === Jika BELUM ADA thread (thread_id masih None), BUAT BARU SEKARANG ===
+        if not data or data.get("thread_id") is None:
+            parent_message = await interaction.channel.fetch_message(self.message_id)
+            thread = await parent_message.create_thread(name=f"Confession Thread")
+
+            CONFESSION_THREAD_MAP[self.message_id] = {
+                "thread_id": thread.id,
+                "channel_id": interaction.channel.id,
+                "is_parent": True
+            }
+            save_confession_map()
+
+            return await interaction.response.send_modal(
+                ConfessionModal(
+                    self.bot,
+                    reply_thread=thread,
+                    parent_message_id=self.message_id
+                )
+            )
+
+        # === Jika thread SUDAH ADA, langsung pakai ===
         thread_id = data["thread_id"]
         thread = await self.bot.fetch_channel(thread_id)
 
-        if not isinstance(thread, discord.Thread):
-            return await interaction.response.send_message("❌ Thread sudah tidak ada.", ephemeral=True)
+        await interaction.response.send_modal(
+            ConfessionModal(
+                self.bot,
+                reply_thread=thread,
+                parent_message_id=self.message_id
+            )
+        )
+
+
+        # === Jika thread sudah ada, langsung pakai ===
+        thread_id = data["thread_id"]
+        thread = await self.bot.fetch_channel(thread_id)
 
         await interaction.response.send_modal(
             ConfessionModal(
