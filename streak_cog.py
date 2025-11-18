@@ -459,6 +459,7 @@ class StreakCog(commands.Cog):
                 f"⚠️ Streak kalian **butuh restore**."
                 f"\nSalah satu dari kalian dapat mengetik:"
                 f"\n`mstreak restore @{user_a}` **atau** `mstreak restore @{user_b}`"
+                f"\nAtau cukup react ⚠️ pada pesan `api @user` tadi."
                 f"\nSebelum **{pair['restore_deadline']}**."
             )
             return
