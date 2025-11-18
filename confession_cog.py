@@ -82,12 +82,11 @@ async def restore_reply_buttons(bot: commands.Bot):
                 parent_message = await parent_channel.fetch_message(int(message_id))
 
                 # Create view
-                view = discord.ui.View(timeout=None)
-                view.add_item(SubmitConfessionButton(bot))
-                view.add_item(SubmitImageConfessionButton(bot))
-                view.add_item(ReplyToConfessionButton(bot, int(message_id)))
+                view = ConfessionView(bot)
+                view.add_item(ReplyToConfessionButton(bot, message_id))
 
                 await parent_message.edit(view=view)
+
 
             except discord.NotFound:
                 print(f"[Restore] Pesan {message_id} hilang.")
@@ -381,6 +380,13 @@ class ReplyToConfessionButton(discord.ui.Button):
         self.bot = bot
         self.message_id = message_id
 
+    @classmethod
+    def from_custom_id(cls, bot, custom_id: str):
+        # custom_id example: confess_reply_12345678901234
+        message_id = int(custom_id.split("_")[-1])
+        return cls(bot, message_id)
+
+
     async def callback(self, interaction: discord.Interaction):
      # Tombol Reply TIDAK MEMBUAT THREAD
         # Hanya buka modal dan kasih parent_message_id
@@ -449,5 +455,7 @@ class ConfessionCog(commands.Cog):
 async def setup(bot):
     await bot.add_cog(ConfessionCog(bot))
     bot.add_view(ConfessionView(bot))  # persist view buttons
+    bot.add_dynamic_items("confess_reply_", lambda custom_id: ReplyToConfessionButton.from_custom_id(bot, custom_id))
+    bot.add_view(ThreadReplyView(bot, 0))  # dummy
     await restore_reply_buttons(bot)   # restore old messages
     cleanup_confession_map()
