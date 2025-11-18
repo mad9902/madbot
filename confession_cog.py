@@ -375,10 +375,8 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 thread = await self.bot.fetch_channel(parent_data["thread_id"])
 
                 # Parent message SELALU ada di parent_channel, bukan di thread
-                try:
-                    reference_target = await parent_channel.fetch_message(parent_id)
-                except:
-                    reference_target = None
+                reference_target = parent_msg  # ini sudah dijamin berada di channel yang benar
+
 
                 sent = await thread.send(
                     embed=embed,
