@@ -322,21 +322,25 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
             parent_confess_id = parent_data.get("confession_id", "?")
 
             # Tentukan parent_msg di channel yang BENAR
-            parent_msg = None
 
             # 1. Jika parent adalah pesan utama → ambil dari channel utama
-            if parent_data.get("is_parent", False):
+            parent_msg = None
+
+            # Pesan parent pasti ada di thread kalau thread sudah exist
+            if parent_data.get("thread_id"):
                 try:
-                    parent_msg = await interaction.guild.get_channel(parent_data["channel_id"]).fetch_message(parent_id)
+                    thread = await self.bot.fetch_channel(parent_data["thread_id"])
+                    parent_msg = await thread.fetch_message(parent_id)
+                except:
+                    parent_msg = None
+            else:
+                # Parent belum punya thread → parent di channel utama
+                try:
+                    ch = interaction.guild.get_channel(parent_data["channel_id"])
+                    parent_msg = await ch.fetch_message(parent_id)
                 except:
                     parent_msg = None
 
-            # 2. Jika parent adalah balasan → ambil dari thread tempat dia berada
-            else:
-                try:
-                    parent_msg = await interaction.guild.get_channel(parent_data["thread_id"]).fetch_message(parent_id)
-                except:
-                    parent_msg = None
 
             if parent_msg is None:
                 return await interaction.response.send_message(
@@ -352,11 +356,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                         else parent_data["thread_id"]
             msg_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{parent_id}"
 
-            embed.description = (
-                f"🔗 **[Jump to parent]({msg_link})**\n\n"
-                f'"{content}"'
-            )
-
+            embed.description = f'"{content}"'
 
             # ===================================================
             # Thread handling
@@ -378,9 +378,9 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 # Thread sudah ada
 
                 thread = await self.bot.fetch_channel(parent_data["thread_id"])
-
-                # Tidak pakai cross-channel reference (illegal)
+                # Selalu kirim reply TANPA reference (Discord melarang cross-channel reference)
                 sent = await thread.send(embed=embed)
+
 
 
 
@@ -413,12 +413,14 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
         sent = await target_channel.send(embed=embed)
 
         CONFESSION_THREAD_MAP[sent.id] = {
+            "message_id": sent.id,
             "thread_id": None,
             "channel_id": target_channel.id,
             "is_parent": True,
             "confession_id": confession_id
         }
         save_confession_map()
+
 
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
