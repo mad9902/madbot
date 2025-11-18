@@ -222,10 +222,16 @@ class SubmitImageConfessionButton(discord.ui.Button):
             description=f'"{caption}"',
             color=discord.Color.dark_gray()
         )
-        embed.set_image(url=f"attachment://{att.filename}")
-
         file = discord.File(temp_path, filename=att.filename)
-        sent = await target_ch.send(embed=embed, file=file)
+
+        # jika video/gif → jangan pakai embed image
+        if att.filename.lower().endswith((".mp4", ".mov", ".mkv", ".webm", ".gif")):
+            sent = await target_ch.send(content=f"Anonymous Confession (#{confession_id})\n\"{caption}\"", file=file)
+
+        # jika gambar → boleh pakai embed
+        else:
+            embed.set_image(url=f"attachment://{att.filename}")
+            sent = await target_ch.send(embed=embed, file=file)
 
         try:
             os.remove(temp_path)
