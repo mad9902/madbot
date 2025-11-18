@@ -271,10 +271,10 @@ class ConfessionView(discord.ui.View):
         self.add_item(SubmitImageConfessionButton(bot))
 
 
-class ThreadReplyView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, message_id: int):
-        super().__init__(timeout=None)
-        self.add_item(ReplyToConfessionButton(bot, message_id))
+# class ThreadReplyView(discord.ui.View):
+#     def __init__(self, bot: commands.Bot, message_id: int):
+#         super().__init__(timeout=None)
+#         self.add_item(ReplyToConfessionButton(bot, message_id))
 
 
 # ======================================================
@@ -404,7 +404,10 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
             }
             save_confession_map()
 
-            await sent.edit(view=ThreadReplyView(self.bot, sent.id))
+            view = discord.ui.View(timeout=None)
+            view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+            await sent.edit(view=view)
+
 
             return await interaction.followup.send(
                 "✅ Balasan kamu sudah dikirim!",
@@ -560,9 +563,6 @@ async def setup(bot):
         "confess_reply_",
         lambda cid: ReplyToConfessionButton.from_custom_id(bot, cid)
     )
-
-    # Register thread reply view globally
-    bot.add_view(ThreadReplyView(bot, 0))
 
     # Restore all buttons
     await restore_reply_buttons(bot)
