@@ -89,34 +89,62 @@ JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 
 async def generate_birthday_image(display_name: str, template_url=None, output_path="media/birthday_render.png"):
     BASE_DIR = os.getcwd()
+    original_url = template_url  # simpan yang asli untuk deteksi custom
 
-    # ========== Ambil template (custom / default) ==========
+    # ========== Fix extension .jpeg → .jpg (Imgur lebih suka .jpg) ==========
+    if template_url and template_url.endswith(".jpeg"):
+        template_url = template_url.replace(".jpeg", ".jpg")
+
+    # ==========================================
+    # DOWNLOAD CUSTOM TEMPLATE
+    # ==========================================
+    base = None
     if template_url:
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.get(template_url) as r:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Accept": "image/*"
+            }
+
+            async with aiohttp.ClientSession(headers=headers) as s:
+                async with s.get(template_url, allow_redirects=True) as r:
+
+                    print("DEBUG TEMPLATE:", template_url, "STATUS:", r.status)
+
+                    if r.status != 200:
+                        raise Exception(f"Download gagal: HTTP {r.status}")
+
                     data = await r.read()
+
+                    # PIL auto-detect format
                     base = Image.open(BytesIO(data)).convert("RGBA")
-        except:
-            print("❌ Gagal download template custom, fallback ke default.")
-            base = Image.open(os.path.join(BASE_DIR, "media", "ultahkos.png")).convert("RGBA")
-    else:
+
+        except Exception as e:
+            print("❌ Gagal download template custom:", e)
+            base = None
+
+    # ========== fallback default ==========
+    if base is None:
         base = Image.open(os.path.join(BASE_DIR, "media", "ultahkos.png")).convert("RGBA")
 
-    # ========== Resize otomatis biar ukuran selalu aman ==========
-    MAX_W, MAX_H = 1536, 1536  # square lebih fleksibel
+    # ========== Resize otomatis ==========
+    MAX_W, MAX_H = 1536, 1536
     base.thumbnail((MAX_W, MAX_H), Image.LANCZOS)
 
     W, H = base.size
     draw = ImageDraw.Draw(base)
 
-    # ========== Kalau custom template → JANGAN tulis nama ==========
-    if template_url:
+    # ==========================================
+    # IF CUSTOM TEMPLATE → NO NAME TEXT
+    # ==========================================
+    if original_url:  # <— pake yang asli, bukan yang di-edit
         output_path = os.path.join(BASE_DIR, output_path)
         base.save(output_path)
         return output_path
 
-    # ========== Default template → tulis nama ==========
+    # ==========================================
+    # DEFAULT TEMPLATE → Tulis Nama
+    # ==========================================
     display_name = display_name.strip()[:10]
 
     font_path = os.path.join(BASE_DIR, "assets", "Inter.ttf")
@@ -125,18 +153,15 @@ async def generate_birthday_image(display_name: str, template_url=None, output_p
     else:
         font = ImageFont.load_default()
 
-    text = display_name
-    bbox = draw.textbbox((0, 0), text, font=font)
+    bbox = draw.textbbox((0, 0), display_name, font=font)
     text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
 
-    # Posisi: bawah tengah area "Selamat Ulang Tahun"
     pos_x = (W - text_w) // 2
     pos_y = int(H * 0.50)
 
     draw.text(
         (pos_x, pos_y),
-        text,
+        display_name,
         font=font,
         fill=(250, 198, 62),
         stroke_width=3,
@@ -509,6 +534,7 @@ class Birthday(commands.Cog):
 
         # Cari ulang tahun terdekat
         for user_id, birthdate, display_name, wish, template_url in rows:
+            print("DEBUG TEMPLATE:", template_url)
             bday = birthdate.replace(year=today.year)
             if bday < today:
                 bday = bday.replace(year=today.year + 1)
