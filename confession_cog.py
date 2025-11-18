@@ -318,35 +318,73 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                     "❌ Confession yang kamu reply tidak ditemukan.",
                     ephemeral=True
                 )
-            
-            parent_confess_id = parent_data.get("confession_id", "?")
 
-            # Tentukan parent_msg di channel yang BENAR
+            thread = None
+            parent_msg_in_thread = None
 
-            # 1. Jika parent adalah pesan utama → ambil dari channel utama
-            parent_msg = None
-
-            # Pesan parent pasti ada di thread kalau thread sudah exist
+            # =========== CASE A: PARENT SUDAH PUNYA THREAD ===========
             if parent_data.get("thread_id"):
+                thread = await self.bot.fetch_channel(parent_data["thread_id"])
+
+                # ambil parent di thread
                 try:
-                    thread = await self.bot.fetch_channel(parent_data["thread_id"])
-                    parent_msg = await thread.fetch_message(parent_id)
+                    parent_msg_in_thread = await thread.fetch_message(parent_id)
                 except:
-                    parent_msg = None
+                    parent_msg_in_thread = None
+
+            # =========== CASE B: PARENT BELUM PUNYA THREAD ===========
             else:
-                # Parent belum punya thread → parent di channel utama
+                # Ambil parent dari CHANNEL UTAMA
                 try:
-                    ch = interaction.guild.get_channel(parent_data["channel_id"])
-                    parent_msg = await ch.fetch_message(parent_id)
+                    parent_msg_main = await interaction.guild.get_channel(
+                        parent_data["channel_id"]
+                    ).fetch_message(parent_id)
                 except:
-                    parent_msg = None
+                    return await interaction.response.send_message(
+                        "❌ Parent hilang.",
+                        ephemeral=True
+                    )
 
-
-            if parent_msg is None:
-                return await interaction.response.send_message(
-                    "❌ Parent message hilang.",
-                    ephemeral=True
+                # Buat thread baru dari parent
+                parent_confess_id = parent_data.get("confession_id", "?")
+                thread = await parent_msg_main.create_thread(
+                    name=f"Confession #{parent_confess_id}"
                 )
+
+                # simpan thread id
+                CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
+                save_confession_map()
+
+                # setelah thread dibuat → fetch lagi parent tapi dari dalam THREAD
+                try:
+                    parent_msg_in_thread = await thread.fetch_message(parent_id)
+                except:
+                    parent_msg_in_thread = parent_msg_main  # fallback
+
+            # =========== KIRIM BALASAN DI DALAM THREAD ===========
+            sent = await thread.send(
+                embed=embed,
+                reference=parent_msg_in_thread,
+                mention_author=False
+            )
+
+            # simpan mapping reply
+            CONFESSION_THREAD_MAP[sent.id] = {
+                "thread_id": thread.id,
+                "channel_id": parent_data["channel_id"],
+                "is_parent": False,
+                "confession_id": confession_id,
+                "parent_id": parent_id
+            }
+            save_confession_map()
+
+            await sent.edit(view=ThreadReplyView(self.bot, sent.id))
+
+            return await interaction.response.send_message(
+                "✅ Balasan kamu sudah dikirim!",
+                ephemeral=True
+            )
+
 
             # ============================
             # BUILD JUMP LINK
