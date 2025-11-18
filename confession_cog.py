@@ -261,38 +261,40 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
             color=discord.Color.dark_gray()
         )
 
-        # ============================
-        # 2) SMART REPLY BREADCRUMB
-        # ============================
+        # ============================================================
+        # 2) SMART REPLY BREADCRUMB — ONLY SHOW ORIGINAL PARENT CONTENT
+        # ============================================================
         if self.parent_message_id:
             try:
                 parent_data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
                 if not parent_data:
-                    raise Exception("Mapping parent hilang")
+                    raise Exception("parent_data missing")
 
-                # ambil pesan parent
-                if isinstance(interaction.channel, discord.Thread):
-                    parent_msg = await interaction.channel.fetch_message(self.parent_message_id)
-                else:
-                    parent_ch = interaction.guild.get_channel(int(parent_data["channel_id"]))
-                    parent_msg = await parent_ch.fetch_message(self.parent_message_id)
+                # ambil parent message selalu dari CHANNEL ASLI, bukan dari thread
+                parent_ch = interaction.guild.get_channel(int(parent_data["channel_id"]))
+                parent_msg = await parent_ch.fetch_message(self.parent_message_id)
 
-                # confession id parent
+                # ambil embed parent ORI (parent asli selalu ada satu embed)
+                parent_embed = parent_msg.embeds[0] if parent_msg.embeds else None
+                parent_desc = parent_embed.description or ""
+                
+                # HAPUS breadcrumb lama dari parent (!) supaya tidak recursive
+                # Regex kecil: ambil hanya "isi asli" yang ada dalam tanda kutip terakhir
+                import re
+                clean_text = re.findall(r'"(.*?)"', parent_desc)
+                parent_content = clean_text[-1] if clean_text else parent_desc.strip('"')
+
                 parent_cid = parent_data.get("confession_id", "unknown")
 
-                # ambil isi embed parent
-                parent_embed = parent_msg.embeds[0] if parent_msg.embeds else None
-                parent_desc = parent_embed.description if parent_embed and parent_embed.description else "(no content)"
-                parent_content = parent_desc.strip('"')
-
-                # build breadcrumb
                 breadcrumb = (
                     f"**🧵 Reply to: #{parent_cid}**\n"
                     f"⤷ *\"{parent_content}\"*\n\n"
                 )
 
-                # prepend ke embed sekarang
                 embed.description = breadcrumb + embed.description
+
+                # TAMBAH ID DI TITLE
+                embed.title = f"Balasan Anonim (#{parent_cid})"
 
             except Exception as e:
                 print("Breadcrumb error:", e)
