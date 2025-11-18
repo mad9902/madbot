@@ -175,7 +175,7 @@ class BirthdayView(View):
             color=discord.Color.blue()
         )
 
-        for _, birthdate, display_name, wish in self.chunks[page]:
+        for user_id, birthdate, display_name, wish, template_url in self.chunks[page]:
             desc = birthdate.strftime("%d %B")
             if wish:
                 desc += f"\n💬 _{wish}_"
