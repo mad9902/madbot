@@ -117,7 +117,7 @@ async def generate_birthday_image(display_name: str, template_url=None, output_p
         return output_path
 
     # ========== Default template → tulis nama ==========
-    display_name = display_name.strip()[:5]
+    display_name = display_name.strip()[:10]
 
     font_path = os.path.join(BASE_DIR, "assets", "Inter.ttf")
     if os.path.isfile(font_path):
