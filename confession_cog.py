@@ -244,48 +244,61 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         content = self.confession_input.value
 
         embed = discord.Embed(
-            title=f"Anonymous Confession (#{confession_id})" if not self.reply_thread else "Balasan Anonim",
+            title="Balasan Anonim" if self.parent_message_id else f"Anonymous Confession (#{confession_id})",
             description=f'"{content}"',
             color=discord.Color.dark_gray()
         )
 
         try:
             # ---------- Reply IN_THREAD ----------
-            if self.reply_thread:
-                try:
-                    parent_id = self.parent_message_id
+            if self.parent_message_id:
+                # Ambil data mapping parent
+                data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
+                thread = None
 
-                    if not parent_id:
-                        for mid, data in CONFESSION_THREAD_MAP.items():
-                            if (
-                                data["thread_id"] == self.reply_thread.id
-                                and data.get("is_parent") == True
-                            ):
-                                parent_id = mid
-                                break
+                # === THREAD BELUM ADA → BUAT DI SINI ===
+                if not data or data.get("thread_id") is None:
+                    # Ambil parent_channel dari mapping agar tidak salah thread
+                    parent_channel_id = data["channel_id"] if data else interaction.channel.id
+                    parent_channel = interaction.guild.get_channel(int(parent_channel_id))
 
-                    if parent_id:
-                        parent_msg = await self.reply_thread.fetch_message(int(parent_id))
-                        sent = await parent_msg.reply(embed=embed, mention_author=False)
-                    else:
-                        sent = await self.reply_thread.send(embed=embed)
+                    if not parent_channel:
+                        raise Exception("Parent confession channel tidak ditemukan.")
 
-                except Exception as e:
-                    print("Reply error:", e)
-                    sent = await self.reply_thread.send(embed=embed)
 
-                CONFESSION_THREAD_MAP[sent.id] = {
-                    "thread_id": self.reply_thread.id,
-                    "channel_id": self.reply_thread.parent_id,
-                    "is_parent": False
-                }
-                save_confession_map()
+                    parent_msg = await parent_channel.fetch_message(int(self.parent_message_id))
 
+                    thread = await parent_msg.create_thread(
+                        name=f"Confession Thread #{self.parent_message_id}"
+                    )
+
+
+                    # Simpan mapping untuk reply berikutnya
+                    CONFESSION_THREAD_MAP[self.parent_message_id] = {
+                        "thread_id": thread.id,
+                        "channel_id": parent_channel.id,
+                        "is_parent": True
+                    }
+                    save_confession_map()
+
+                else:
+                    # Thread sudah ada → pakai yang lama
+                    thread_id = data["thread_id"]
+                    thread = await self.bot.fetch_channel(thread_id)
+
+                # Kirim reply dalam thread
+                sent = await thread.send(embed=embed)
+
+                # Tambahkan tombol Reply di tiap balasan
                 view = ThreadReplyView(self.bot, sent.id)
                 await sent.edit(view=view)
 
-                await interaction.response.send_message("✅ Balasan kamu sudah dikirim secara anonim!", ephemeral=True)
-                return  # <-- PEMBEDA HIDUP DAN MATI
+                await interaction.response.send_message(
+                    "✅ Balasan kamu sudah dikirim secara anonim!",
+                    ephemeral=True
+                )
+                return
+
 
             # -------------------------------------------
             # CONFESSION BARU (bukan reply) MULAI DI SINI
@@ -369,54 +382,15 @@ class ReplyToConfessionButton(discord.ui.Button):
         self.message_id = message_id
 
     async def callback(self, interaction: discord.Interaction):
-        data = CONFESSION_THREAD_MAP.get(self.message_id)
-
-        # === Jika BELUM ADA thread (thread_id masih None), BUAT BARU SEKARANG ===
-        if not data or data.get("thread_id") is None:
-            parent_message = await interaction.channel.fetch_message(self.message_id)
-            thread = await parent_message.create_thread(name=f"Confession Thread")
-
-            CONFESSION_THREAD_MAP[self.message_id] = {
-                "thread_id": thread.id,
-                "channel_id": interaction.channel.id,
-                "is_parent": True
-            }
-            save_confession_map()
-
-            return await interaction.response.send_modal(
-                ConfessionModal(
-                    self.bot,
-                    reply_thread=thread,
-                    parent_message_id=self.message_id
-                )
-            )
-
-        # === Jika thread SUDAH ADA, langsung pakai ===
-        thread_id = data["thread_id"]
-        thread = await self.bot.fetch_channel(thread_id)
-
+     # Tombol Reply TIDAK MEMBUAT THREAD
+        # Hanya buka modal dan kasih parent_message_id
         await interaction.response.send_modal(
             ConfessionModal(
                 self.bot,
-                reply_thread=thread,
+                reply_thread=None,
                 parent_message_id=self.message_id
             )
         )
-
-
-        # === Jika thread sudah ada, langsung pakai ===
-        thread_id = data["thread_id"]
-        thread = await self.bot.fetch_channel(thread_id)
-
-        await interaction.response.send_modal(
-            ConfessionModal(
-                self.bot,
-                reply_thread=thread,
-                parent_message_id=self.message_id
-            )
-        )
-
-
 
 # ==============================
 # VIEW
