@@ -279,92 +279,83 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         content = self.confession_input.value
         is_reply = self.parent_message_id is not None
 
-        # ========================================================
-        # BASE EMBED
-        # ========================================================
+        # ===================================================
+        # Base embed
+        # ===================================================
         embed = discord.Embed(
-            title="Anonymous Confession" if not is_reply else "Balasan Anonim",
+            title="Anonymous Confession" if not is_reply else f"Balasan Anonim (#{confession_id})",
             description=f'"{content}"',
             color=discord.Color.dark_gray()
         )
 
-        # ===================================================================
-        # ======================== REPLY MODE ===============================
-        # ===================================================================
+        # ===================================================
+        # =============== REPLY MODE ========================
+        # ===================================================
         if is_reply:
 
-            # -------------------------------------------------------------------
-            # Ambil data parent aslinya (root)
-            # -------------------------------------------------------------------
-            root_id = self.parent_message_id
-            parent_data = CONFESSION_THREAD_MAP.get(root_id)
+            parent_id = self.parent_message_id
+            parent_data = CONFESSION_THREAD_MAP.get(parent_id)
 
             if not parent_data:
                 return await interaction.response.send_message(
-                    "❌ Confession parent tidak ditemukan.",
+                    "❌ Confession yang kamu reply tidak ditemukan.",
                     ephemeral=True
                 )
 
-            # Jika reply-to-reply → naik ke root parent
-            if not parent_data.get("is_parent", False):
-                root_id = parent_data.get("root_parent_id", root_id)
-                parent_data = CONFESSION_THREAD_MAP.get(root_id)
+            parent_channel = interaction.guild.get_channel(parent_data["channel_id"])
+            parent_msg = None
 
-            channel_id = int(parent_data["channel_id"])
-
-            # -------------------------------------------------------------------
-            # Ambil pesan ROOT untuk breadcrumb
-            # -------------------------------------------------------------------
+            # ambil pesan parentnya
             try:
-                parent_channel = interaction.guild.get_channel(channel_id)
-                root_msg = await parent_channel.fetch_message(root_id)
+                parent_msg = await parent_channel.fetch_message(parent_id)
+            except:
+                return await interaction.response.send_message("❌ Parent message hilang.", ephemeral=True)
 
-                root_embed = root_msg.embeds[0] if root_msg.embeds else None
-                root_desc = root_embed.description or ""
+            # extract only the REAL content from parent embed
+            parent_embed = parent_msg.embeds[0] if parent_msg.embeds else None
+            parent_desc = parent_embed.description or ""
 
-                import re
-                cleaned = re.findall(r'"(.*?)"', root_desc)
-                root_content = cleaned[-1] if cleaned else root_desc.strip('"')
+            import re
+            cleaned = re.findall(r'"(.*?)"', parent_desc)
+            parent_content = cleaned[-1] if cleaned else parent_desc.strip('"')
 
-                parent_cid = parent_data.get("confession_id", "?")
+            parent_confess_id = parent_data.get("confession_id", "?")
 
-                # Breadcrumb final (NON-RECURSIVE)
-                breadcrumb = (
-                    f"**🧵 Reply to: #{parent_cid}**\n"
-                    f"⤷ *\"{root_content}\"*\n\n"
-                )
+            # ===================================================
+            # Build breadcrumb untuk direct parent
+            # ===================================================
+            breadcrumb = (
+                f"**🧵 Reply to: #{parent_confess_id}**\n"
+                f"⤷ *\"{parent_content}\"*\n\n"
+            )
 
-                embed.title = f"Balasan Anonim (#{parent_cid})"
-                embed.description = breadcrumb + f'"{content}"'
+            embed.description = breadcrumb + f'"{content}"'
 
-            except Exception as e:
-                print("Breadcrumb error:", e)
+            # ===================================================
+            # Thread handling
+            # ===================================================
+            thread = None
 
-            # -------------------------------------------------------------------
-            # THREAD LOGIC
-            # -------------------------------------------------------------------
-            thread_id = parent_data.get("thread_id")
-
-            # Thread belum ada → buat
-            if thread_id is None:
-                parent_msg = await parent_channel.fetch_message(root_id)
-                thread = await parent_msg.create_thread(
-                    name=f"Confession #{parent_cid}"
-                )
-
-                CONFESSION_THREAD_MAP[root_id]["thread_id"] = thread.id
+            # jika parent belum punya thread → buat
+            if parent_data.get("thread_id") is None:
+                thread = await parent_msg.create_thread(name=f"Confession #{parent_confess_id}")
+                CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
                 save_confession_map()
 
+                # reply pertama → tidak boleh pakai reference
                 sent = await thread.send(embed=embed)
 
             else:
-                # Thread sudah ada
-                thread = await self.bot.fetch_channel(thread_id)
+                # thread sudah ada
+                thread = await self.bot.fetch_channel(parent_data["thread_id"])
 
-                try:
-                    reference_target = await parent_channel.fetch_message(root_id)
-                except:
-                    reference_target = None
+                # reference hanya aman jika parent_msg berada di thread
+                reference_target = None
+                if isinstance(thread, discord.Thread):
+                    try:
+                        reference_target = await thread.fetch_message(parent_id)
+                    except:
+                        reference_target = None
 
                 sent = await thread.send(
                     embed=embed,
@@ -372,18 +363,17 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                     mention_author=False
                 )
 
-            # -------------------------------------------------------------------
-            # SAVE mapping reply
-            # -------------------------------------------------------------------
+            # simpan mapping BALASAN
             CONFESSION_THREAD_MAP[sent.id] = {
                 "thread_id": thread.id,
-                "channel_id": channel_id,
+                "channel_id": parent_data["channel_id"],
                 "is_parent": False,
-                "confession_id": parent_cid,
-                "root_parent_id": root_id
+                "confession_id": confession_id,
+                "parent_id": parent_id      # direct parent
             }
             save_confession_map()
 
+            # add reply button
             await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
             return await interaction.response.send_message(
@@ -391,21 +381,17 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 ephemeral=True
             )
 
-        # ===================================================================
-        # ======================== NEW CONFESSION ===========================
-        # ===================================================================
+        # ===================================================
+        # =============== NEW CONFESSION ====================
+        # ===================================================
         db = connect_db()
         channel_id = get_channel_settings(db, interaction.guild_id, "confession")
         db.close()
 
-        target_channel = (
-            interaction.guild.get_channel(int(channel_id))
-            if channel_id else interaction.channel
-        )
+        target_channel = interaction.guild.get_channel(int(channel_id)) if channel_id else interaction.channel
 
         sent = await target_channel.send(embed=embed)
 
-        # Save sebagai parent utama
         CONFESSION_THREAD_MAP[sent.id] = {
             "thread_id": None,
             "channel_id": target_channel.id,
@@ -414,20 +400,13 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         }
         save_confession_map()
 
-        # Tambah tombol
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
         view.add_item(SubmitImageConfessionButton(self.bot))
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
-        save_confession(
-            self.bot.db,
-            interaction.guild_id,
-            interaction.user.id,
-            confession_id,
-            content
-        )
+        save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, content)
 
         await interaction.response.send_message(
             "✅ Confession kamu telah dikirim!",
