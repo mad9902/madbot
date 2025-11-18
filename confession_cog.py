@@ -372,14 +372,22 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 save_confession_map()
 
                 # ❗ Reply pertama TIDAK BOLEH pakai reference
-                sent = await thread.send(embed=embed)
+                sent = await thread.send(
+                    embed=embed,
+                    reference=parent_msg,
+                    mention_author=False
+                )
 
             else:
                 # Thread sudah ada
 
                 thread = await self.bot.fetch_channel(parent_data["thread_id"])
                 # Selalu kirim reply TANPA reference (Discord melarang cross-channel reference)
-                sent = await thread.send(embed=embed)
+                sent = await thread.send(
+                    embed=embed,
+                    reference=parent_msg,
+                    mention_author=False
+                )
 
 
 
