@@ -8,6 +8,8 @@ import asyncio
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 import os
+import aiohttp
+from io import BytesIO
 
 from database import (
     connect_db,
@@ -85,37 +87,36 @@ JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 #     base.save(output_path)
 #     return output_path
 
-def generate_birthday_image(display_name: str, output_path="media/birthday_render.png"):
-    from PIL import Image, ImageDraw, ImageFont
-    import os
+async def generate_birthday_image(display_name: str, template_url=None, output_path="media/birthday_render.png"):
+    BASE_DIR = os.getcwd()
 
-    BASE_DIR = os.getcwd()   # /app di dalam container!
+    # ========== ambil template image ==========
+    if template_url:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(template_url) as r:
+                    data = await r.read()
+                    base = Image.open(BytesIO(data)).convert("RGBA")
+        except:
+            print("❌ Gagal download template custom, fallback ke default.")
+            base = Image.open(os.path.join(BASE_DIR, "media", "ultahkos.png")).convert("RGBA")
+    else:
+        base = Image.open(os.path.join(BASE_DIR, "media", "ultahkos.png")).convert("RGBA")
 
-    # path absolut
-    img_path = os.path.join(BASE_DIR, "media", "ultahkos.png")
-    font_path = os.path.join(BASE_DIR, "assets", "Inter.ttf")
-    output_path = os.path.join(BASE_DIR, output_path)
-
-    # load image
-    base = Image.open(img_path).convert("RGBA")
     base = base.resize((1536, 1024), Image.LANCZOS)
     W, H = base.size
-
     draw = ImageDraw.Draw(base)
 
-    # display name max 5 chars
     display_name = display_name.strip()[:5]
 
-    # load font
+    # font
+    font_path = os.path.join(BASE_DIR, "assets", "Inter.ttf")
     if os.path.isfile(font_path):
         font = ImageFont.truetype(font_path, 180)
     else:
-        print("⚠️ Font tidak ditemukan:", font_path)
         font = ImageFont.load_default()
 
-    text = display_name
-
-    bbox = draw.textbbox((0, 0), text, font=font)
+    bbox = draw.textbbox((0, 0), display_name, font=font)
     text_w = bbox[2] - bbox[0]
 
     pos_x = (W - text_w) // 2
@@ -123,16 +124,16 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
 
     draw.text(
         (pos_x, pos_y),
-        text,
+        display_name,
         font=font,
         fill=(250, 198, 62),
         stroke_width=3,
         stroke_fill="black"
     )
 
+    output_path = os.path.join(BASE_DIR, output_path)
     base.save(output_path)
     return output_path
-
 
 # ================================================================
 # VIEW PAGING
@@ -267,64 +268,55 @@ class Birthday(commands.Cog):
     @commands.command(name="setbirthday")
     async def set_birthday_cmd(self, ctx, *, arg: str = None):
         if not arg:
-            return await ctx.send("❗ Format salah. Contoh: `mad setbirthday 21-06 -wish Semoga sehat selalu!`")
+            return await ctx.send("❗ Format: `mad setbirthday @user 21-06 -wish text -img https://link.png`")
 
         arg = arg.strip()
         wish = None
+        template_url = None
 
-        # flag -wish
-        wish_match = re.search(r"-wish\s+(.+)", arg)
+        # ----- parse -wish -----
+        wish_match = re.search(r"-wish\s+(.+?)(?=\s+-img|$)", arg)
         if wish_match:
             wish = wish_match.group(1).strip()
-            arg = arg[:wish_match.start()].strip()
+            arg = arg.replace(wish_match.group(0), "").strip()
 
+        # ----- parse -img -----
+        img_match = re.search(r"-img\s+(https?://\S+)", arg)
+        if img_match:
+            template_url = img_match.group(1).strip()
+            arg = arg.replace(img_match.group(0), "").strip()
+
+        # ----- parse tanggal + user -----
         user_id = ctx.author.id
         display_name = ctx.author.display_name
 
-        if re.fullmatch(r"\d{2}-\d{2}(?:-\d{4})?", arg):
+        mention_match = re.match(r"<@!?(\d+)>\s+(\d{2}-\d{2}(?:-\d{4})?)$", arg)
+        if mention_match:
+            user_id = int(mention_match.group(1))
+            date_str = mention_match.group(2)
+            member = ctx.guild.get_member(user_id)
+            display_name = member.display_name if member else f"user-{user_id}"
+        else:
+            # fallback user sendiri
             date_str = arg
 
-        else:
-            mention_match = re.match(r"<@!?(\d+)>\s+(\d{2}-\d{2}(?:-\d{4})?)$", arg)
-            if mention_match:
-                user_id = int(mention_match.group(1))
-                date_str = mention_match.group(2)
-                member = ctx.guild.get_member(user_id)
-                display_name = member.display_name if member else f"user-{user_id}"
-
-            else:
-                parts = arg.rsplit(" ", 1)
-                if len(parts) != 2:
-                    return await ctx.send("❗ Format salah!")
-
-                name, date_str = parts
-                member = discord.utils.find(lambda m: name.lower() in m.display_name.lower(), ctx.guild.members)
-
-                if member:
-                    user_id = member.id
-                    display_name = member.display_name
-                else:
-                    user_id = abs(hash(name.lower())) % (10**18)
-                    display_name = name
-
-        # parse tanggal
+        # ----- parse tanggal -----
         try:
-            parts = date_str.split("-")
-            day = int(parts[0])
-            month = int(parts[1])
-            year = int(parts[2]) if len(parts) == 3 else 2000
-            birthdate = datetime(year, month, day).date()
+            d,m,*y = date_str.split("-")
+            y = int(y[0]) if y else 2000
+            birthdate = datetime(int(y), int(m), int(d)).date()
         except:
-            return await ctx.send("❗ Format tanggal salah. Gunakan `dd-mm` atau `dd-mm-yyyy`.")
+            return await ctx.send("❗ Format tanggal salah! (dd-mm atau dd-mm-yyyy)")
 
-        # simpan
+        # ----- save ke DB -----
         db = connect_db()
-        set_birthday(db, user_id, ctx.guild.id, birthdate, display_name, wish)
+        set_birthday(db, user_id, ctx.guild.id, birthdate, display_name, wish, template_url)
         db.close()
 
-        msg = f"🎉 Ulang tahun untuk **{display_name}** disimpan: `{birthdate.strftime('%d %B')}`"
-        if wish:
-            msg += f"\n💬 _{wish}_"
+        msg = f"🎉 Birthday **{display_name}** disimpan!"
+        if wish: msg += f"\n💬 _{wish}_"
+        if template_url: msg += f"\n🖼️ Custom template: {template_url}"
+
         await ctx.send(msg)
 
     # =========================================================

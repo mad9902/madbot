@@ -101,6 +101,14 @@ def migrate(db):
     );
     """)
 
+    # Cek kolom template_url
+    cursor.execute("SHOW COLUMNS FROM birthdays LIKE 'template_url';")
+    exists = cursor.fetchone()
+
+    if not exists:
+        cursor.execute("ALTER TABLE birthdays ADD COLUMN template_url TEXT NULL;")
+
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS banned_words (
         guild_id BIGINT NOT NULL,

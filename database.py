@@ -366,16 +366,18 @@ def get_xp_leaderboard(db, guild_id, limit=10):
     cursor.close()
     return results
 
-def set_birthday(db, user_id, guild_id, birthdate, display_name=None, wish=None):
+def set_birthday(db, user_id, guild_id, birthdate,
+                 display_name=None, wish=None, template_url=None):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO birthdays (user_id, guild_id, birthdate, display_name, wish)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO birthdays (user_id, guild_id, birthdate, display_name, wish, template_url)
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             birthdate = VALUES(birthdate),
             display_name = VALUES(display_name),
-            wish = VALUES(wish)
-    """, (user_id, guild_id, birthdate, display_name, wish))
+            wish = VALUES(wish),
+            template_url = VALUES(template_url)
+    """, (user_id, guild_id, birthdate, display_name, wish, template_url))
     db.commit()
     cursor.close()
 
