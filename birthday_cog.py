@@ -31,8 +31,13 @@ class BirthdayView(View):
         self.current_page = 0
         self.message = None
 
-        self.add_item(Button(label="⬅️ Previous", style=discord.ButtonStyle.secondary, callback=self.prev_page))
-        self.add_item(Button(label="➡️ Next", style=discord.ButtonStyle.secondary, callback=self.next_page))
+        btn_prev = Button(label="⬅️ Previous", style=discord.ButtonStyle.secondary)
+        btn_prev.callback = self.prev_page
+        self.add_item(btn_prev)
+
+        btn_next = Button(label="➡️ Next", style=discord.ButtonStyle.secondary)
+        btn_next.callback = self.next_page
+        self.add_item(btn_next)
 
     async def send_initial(self):
         embed = self.make_embed(self.current_page)
@@ -73,7 +78,7 @@ class Birthday(commands.Cog):
         self.birthday_loop.start()
 
     # LOOP SUPER AKURAT JAM 00:00 WIB
-    @tasks.loop(time=dt_time(0, 0, tzinfo=JAKARTA_TZ))
+    @tasks.loop(time=dt_time(1, 45))
     async def birthday_loop(self):
         print("🔔 Running birthday check at 00:00 WIB...")
 
@@ -108,34 +113,41 @@ class Birthday(commands.Cog):
     @commands.command(name="setbirthday")
     async def set_birthday_cmd(self, ctx, *, arg: str = None):
         if not arg:
-            return await ctx.send("❗ Format salah. Contoh: `mad setbirthday 21-06-2002 -wish Semoga sehat selalu!`")
+            return await ctx.send("❗ Format salah. Contoh: `mad setbirthday 21-06 -wish Semoga sehat selalu!`")
 
         arg = arg.strip()
         wish = None
 
-        # Flag -wish
+        # Ambil flag -wish
         wish_match = re.search(r"-wish\s+(.+)", arg)
         if wish_match:
             wish = wish_match.group(1).strip()
             arg = arg[:wish_match.start()].strip()
 
-        # Format 1: user sendiri
-        if re.fullmatch(r"\d{2}-\d{2}-\d{4}", arg):
-            user_id = ctx.author.id
-            display_name = ctx.author.display_name
+        user_id = ctx.author.id
+        display_name = ctx.author.display_name
+
+        # ================================
+        # CASE 1 — user sendiri (dd-mm / dd-mm-yyyy)
+        # ================================
+        if re.fullmatch(r"\d{2}-\d{2}(?:-\d{4})?", arg):
             date_str = arg
 
-        # Format 2: mention
         else:
-            mention_match = re.match(r"<@!?(\d+)>\s+(\d{2}-\d{2}-\d{4})$", arg)
+            # ================================
+            # CASE 2 — mention format
+            # ================================
+            mention_match = re.match(r"<@!?(\d+)>\s+(\d{2}-\d{2}(?:-\d{4})?)$", arg)
             if mention_match:
                 user_id = int(mention_match.group(1))
                 date_str = mention_match.group(2)
                 member = ctx.guild.get_member(user_id)
                 display_name = member.display_name if member else f"user-{user_id}"
 
-            # Format 3: nama manual
             else:
+                # ================================
+                # CASE 3 — nama manual + tanggal
+                # ================================
                 parts = arg.rsplit(" ", 1)
                 if len(parts) != 2:
                     return await ctx.send("❗ Format salah!")
@@ -151,22 +163,29 @@ class Birthday(commands.Cog):
                     user_id = abs(hash(name.lower())) % (10**18)
                     display_name = name
 
-        # Validasi tanggal
+        # ================================
+        # PARSE TANGGAL (tahun opsional)
+        # ================================
         try:
-            birthdate = datetime.strptime(date_str, "%d-%m-%Y").date()
+            parts = date_str.split("-")
+            day = int(parts[0])
+            month = int(parts[1])
+            year = int(parts[2]) if len(parts) == 3 else 2000  # dummy year
+            birthdate = datetime(year, month, day).date()
         except:
-            return await ctx.send("❗ Format tanggal salah. Gunakan `dd-mm-yyyy`.")
+            return await ctx.send("❗ Format tanggal salah. Gunakan `dd-mm` atau `dd-mm-yyyy`.")
 
-        # Simpan
+        # ================================
+        # SIMPAN KE DB
+        # ================================
         db = connect_db()
         set_birthday(db, user_id, ctx.guild.id, birthdate, display_name, wish)
         db.close()
 
-        msg = f"🎉 Ulang tahun untuk **{display_name}** disimpan: `{birthdate.strftime('%d %B %Y')}`"
+        msg = f"🎉 Ulang tahun untuk **{display_name}** disimpan: `{birthdate.strftime('%d %B')}`"
         if wish:
             msg += f"\n💬 _{wish}_"
         await ctx.send(msg)
-
     @commands.command(name="mybirthday")
     async def my_birthday(self, ctx):
         db = connect_db()
@@ -257,17 +276,6 @@ class Birthday(commands.Cog):
 
         name, bdate = closest
         await ctx.send(f"⏰ Ulang tahun terdekat: **{name}** → `{bdate.strftime('%d %B')}` (dalam {min_diff} hari).")
-
-    @commands.command(name="setbirthdaych")
-    async def set_birthday_channel(self, ctx, channel: discord.TextChannel):
-        if ctx.author.id not in [ctx.guild.owner_id, 416234104317804544]:
-            return await ctx.send("❌ Kamu tidak punya izin.")
-
-        db = connect_db()
-        set_channel_settings(db, ctx.guild.id, "birthday", channel.id)
-        db.close()
-
-        await ctx.send(f"✅ Channel ulang tahun diset ke {channel.mention}")
 
     @commands.command(name="testclock")
     async def test_clock(self, ctx):
