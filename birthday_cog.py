@@ -98,19 +98,39 @@ class Birthday(commands.Cog):
             if channel:
                 member = guild.get_member(user_id)
 
-                # ========== MENTION LOGIC ==========
+                # nama tampil persis seperti display_name
                 if member:
-                    mention = member.mention
+                    display_name = member.display_name
                 else:
-                    # data manual / user sudah left server
-                    mention = f"**{display_name}**"
-                # ===================================
+                    display_name = display_name  # fallback dari DB
 
-                await channel.send(f"🎉 Selamat ulang tahun {mention}! 🎂 Semoga harimu menyenangkan!")
+                # ========== EMBED ULANG TAHUN PREMIUM DENGAN GAMBAR ==========
+                embed = discord.Embed(
+                    title="🎉 Selamat Ulang Tahun! 🎂",
+                    description=f"**{display_name}**",
+                    color=discord.Color.gold()
+                )
 
+                # tambahkan tanggal
+                today_str = datetime.now(JAKARTA_TZ).strftime("%d %B %Y")
+                embed.add_field(name="📅 Tanggal", value=f"`{today_str}`", inline=True)
+
+                # wish kalau ada
                 if wish:
-                    await channel.send(f"💬 Pesan ulang tahun: _{wish}_")
+                    embed.add_field(name="💌 Pesan Spesial", value=f"_{wish}_", inline=False)
 
+                # avatar
+                if member and member.avatar:
+                    embed.set_thumbnail(url=member.avatar.url)
+
+                # attach file image banner ultah
+                file = discord.File("media/ultahkos.png", filename="ultahkos.png")
+                embed.set_image(url="attachment://ultahkos.png")
+
+                embed.set_footer(text=f"Dirayakan oleh {guild.name}")
+                embed.timestamp = datetime.utcnow()
+
+                await channel.send(file=file, embed=embed)
 
     @birthday_loop.before_loop
     async def before_loop(self):
@@ -288,6 +308,68 @@ class Birthday(commands.Cog):
 
         name, bdate = closest
         await ctx.send(f"⏰ Ulang tahun terdekat: **{name}** → `{bdate.strftime('%d %B')}` (dalam {min_diff} hari).")
+
+    @commands.command(name="testbirthday")
+    async def test_birthday(self, ctx):
+        """Debug: kirim ucapan ulang tahun untuk pengguna dengan tanggal terdekat."""
+        
+        db = connect_db()
+        rows = get_all_birthdays(db, ctx.guild.id)
+        db.close()
+
+        if not rows:
+            return await ctx.send("📭 Tidak ada data ulang tahun untuk dites.")
+
+        today = datetime.now(JAKARTA_TZ).date()
+        closest = None
+        min_diff = 999
+
+        # cari ulang tahun terdekat (tanpa tunggu tanggal asli)
+        for user_id, birthdate, display_name, wish in rows:
+            bday = birthdate.replace(year=today.year)
+            if bday < today:
+                bday = bday.replace(year=today.year + 1)
+            diff = (bday - today).days
+            if diff < min_diff:
+                min_diff = diff
+                closest = (user_id, display_name, wish)
+
+        user_id, display_name, wish = closest
+        guild = ctx.guild
+        member = guild.get_member(user_id)
+
+        if member:
+            display_name = member.display_name
+            mention = member.mention
+        else:
+            mention = f"**{display_name}**"
+
+        # UCAPAN ULTAH (SAMA KAYA LOOP ASLI)
+        embed = discord.Embed(
+            title="🎉 Selamat Ulang Tahun! 🎂",
+            description=f"**{display_name}**",
+            color=discord.Color.gold()
+        )
+
+        today_str = datetime.now(JAKARTA_TZ).strftime("%d %B %Y")
+        embed.add_field(name="📅 Tanggal", value=f"`{today_str}`", inline=True)
+
+        if wish:
+            embed.add_field(name="💌 Pesan Spesial", value=f"_{wish}_", inline=False)
+
+        if member and member.avatar:
+            embed.set_thumbnail(url=member.avatar.url)
+
+        # attach banner ulang tahun
+        file = discord.File("media/ultahkos.png", filename="ultahkos.png")
+        embed.set_image(url="attachment://ultahkos.png")
+
+        embed.set_footer(text=f"Dirayakan oleh {guild.name}")
+        embed.timestamp = datetime.utcnow()
+
+        await ctx.send("🔧 **DEBUG:** Mengirim simulasi ucapan ulang tahun…")
+        await ctx.send(file=file, embed=embed)
+
 
     @commands.command(name="testclock")
     async def test_clock(self, ctx):
