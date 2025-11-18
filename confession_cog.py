@@ -78,6 +78,8 @@ async def restore_reply_buttons(bot: commands.Bot):
             # view untuk parent
             view = ConfessionView(bot)
             view.add_item(ReplyToConfessionButton(bot, message_id))
+            bot.add_view(view)  # <---- register juga parent view custom ini
+
             await parent_msg.edit(view=view)
 
             # restore thread messages
@@ -88,7 +90,9 @@ async def restore_reply_buttons(bot: commands.Bot):
                         if msg.author.id != bot.user.id:
                             continue
                         v = ThreadReplyView(bot, msg.id)
+                        bot.add_view(v)  # <---- REGISTER PERSISTENT VIEW
                         await msg.edit(view=v)
+
                 except:
                     pass
 
