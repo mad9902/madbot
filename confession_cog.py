@@ -26,13 +26,18 @@ def save_confession_map():
 def load_confession_map():
     global CONFESSION_THREAD_MAP
     try:
+        if os.path.getsize(MAP_FILE) == 0:
+            CONFESSION_THREAD_MAP = {}
+            return
+
         with open(MAP_FILE, "r") as f:
             raw = json.load(f)
             CONFESSION_THREAD_MAP = {}
             for k, v in raw.items():
                 k = int(k)
                 CONFESSION_THREAD_MAP[k] = v
-    except FileNotFoundError:
+
+    except (FileNotFoundError, json.JSONDecodeError):
         CONFESSION_THREAD_MAP = {}
 
 
