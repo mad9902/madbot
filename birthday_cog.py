@@ -199,7 +199,7 @@ class Birthday(commands.Cog):
         birthdays = get_today_birthdays(db)
         db.close()
 
-        for user_id, guild_id, display_name, wish in birthdays:
+        for user_id, guild_id, display_name, wish, template_url in birthdays:
             guild = self.bot.get_guild(guild_id)
             if not guild:
                 continue
@@ -216,7 +216,7 @@ class Birthday(commands.Cog):
                 display_name = member.display_name
 
             # GENERATE GAMBAR
-            img_path = generate_birthday_image(display_name)
+            img_path = await generate_birthday_image(display_name, template_url)
             unique = f"birthday_{int(datetime.now().timestamp())}.png"
             file = discord.File(img_path, filename=unique)
             content = f"🎉 Selamat ulang tahun {member.mention}!! 🎂"
@@ -331,10 +331,13 @@ class Birthday(commands.Cog):
         if not result:
             return await ctx.send("❌ Kamu belum menyimpan tanggal ulang tahun.")
 
-        birthdate, _, wish = result
+        birthdate, display_name, wish, template_url = result
         msg = f"🎂 Ulang tahun kamu: `{birthdate.strftime('%d %B %Y')}`"
         if wish:
             msg += f"\n💬 _{wish}_"
+        if template_url:
+            msg += f"\n🖼️ Custom template terpasang."
+
         await ctx.send(msg)
 
     # =========================================================
@@ -405,25 +408,26 @@ class Birthday(commands.Cog):
         closest = None
         min_diff = 999
 
-        for _, birthdate, display_name, _ in rows:
+        for _, birthdate, display_name, wish, template_url in rows:
             bday = birthdate.replace(year=today.year)
             if bday < today:
                 bday = bday.replace(year=today.year + 1)
             diff = (bday - today).days
+
             if diff < min_diff:
                 min_diff = diff
                 closest = (display_name, birthdate)
 
         name, bdate = closest
-        await ctx.send(f"⏰ Ulang tahun terdekat: **{name}** → `{bdate.strftime('%d %B')}` (dalam {min_diff} hari).")
+        await ctx.send(
+            f"⏰ Ulang tahun terdekat: **{name}** → `{bdate.strftime('%d %B')}` (dalam {min_diff} hari)."
+        )
 
     # =========================================================
     # COMMAND: Test Birthday (DEBUG)
     # =========================================================
     @commands.command(name="testbirthday")
     async def test_birthday(self, ctx):
-        """Debug: kirim ucapan ulang tahun untuk pengguna dengan tanggal terdekat."""
-
         db = connect_db()
         rows = get_all_birthdays(db, ctx.guild.id)
         db.close()
@@ -436,7 +440,7 @@ class Birthday(commands.Cog):
         min_diff = 999
 
         # Cari ulang tahun terdekat
-        for user_id, birthdate, display_name, wish in rows:
+        for user_id, birthdate, display_name, wish, template_url in rows:
             bday = birthdate.replace(year=today.year)
             if bday < today:
                 bday = bday.replace(year=today.year + 1)
@@ -444,39 +448,33 @@ class Birthday(commands.Cog):
             diff = (bday - today).days
             if diff < min_diff:
                 min_diff = diff
-                closest = (user_id, birthdate, display_name, wish)
+                closest = (user_id, birthdate, display_name, wish, template_url)
 
-        user_id, birthdate, display_name, wish = closest
+        user_id, birthdate, display_name, wish, template_url = closest
         guild = ctx.guild
         member = guild.get_member(user_id)
 
-        # pakai display_name user asli kalau ada
+        # override nama biar sesuai display_name terkini
         if member:
             display_name = member.display_name
 
-        # =============================
-        # AMBIL CHANNEL ULTAH
-        # =============================
+        # ambil channel ulang tahun
         db = connect_db()
         ch_id = get_channel_settings(db, guild.id, "birthday")
         db.close()
 
         channel = guild.get_channel(int(ch_id)) if ch_id else ctx.channel
-        # fallback: kalau channel ulang tahun belum diset → kirim ke channel tempat command dipakai
 
-        # =============================
-        # GENERATE GAMBAR
-        # =============================
-        img_path = generate_birthday_image(display_name)
+        # ==== GENERATE GAMBAR ====
+        img_path = await generate_birthday_image(display_name, template_url)
         unique = f"birthday_{int(datetime.now().timestamp())}.png"
         file = discord.File(img_path, filename=unique)
-        content = f"🎉 Selamat ulang tahun {member.mention}!! 🎂"
 
-        # =============================
-        # BIKIN EMBED KEKINIAN
-        # =============================
+        content = f"🎉 (TEST) Selamat ulang tahun {member.mention}!! 🎂"
+
+        # ==== EMBED ====
         embed = discord.Embed(
-            title="🎉 Selamat Ulang Tahun! 🎂",
+            title="🎉 Selamat Ulang Tahun! (TEST MODE) 🎂",
             description=f"{member.mention if member else f'**{display_name}**'}",
             color=discord.Color.gold()
         )
@@ -494,10 +492,7 @@ class Birthday(commands.Cog):
         embed.set_footer(text=f"Dirayakan oleh {guild.name}")
         embed.timestamp = datetime.utcnow()
 
-        # =============================
-        # KIRIM
-        # =============================
-        await ctx.send("🔧 **DEBUG:** Mengirim simulasi ucapan ulang tahun…")
+        await ctx.send("🔧 **DEBUG:** Mengirim simulasi ulang tahun…")
         await channel.send(
             content=content,
             file=file,
@@ -509,9 +504,6 @@ class Birthday(commands.Cog):
                 replied_user=True
             )
         )
-
-
-
 
     # =========================================================
     # COMMAND: Check Time

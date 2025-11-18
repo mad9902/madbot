@@ -392,7 +392,8 @@ def delete_birthday(db, user_id, guild_id):
 def get_birthday(db, user_id, guild_id):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT birthdate, display_name, wish FROM birthdays
+        SELECT birthdate, display_name, wish, template_url
+        FROM birthdays
         WHERE user_id = %s AND guild_id = %s
     """, (user_id, guild_id))
     result = cursor.fetchone()
@@ -403,24 +404,27 @@ def get_birthday(db, user_id, guild_id):
 def get_today_birthdays(db):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT user_id, guild_id, display_name, wish FROM birthdays
-        WHERE DAY(birthdate) = DAY(CURDATE()) AND MONTH(birthdate) = MONTH(CURDATE())
+        SELECT user_id, guild_id, display_name, wish, template_url
+        FROM birthdays
+        WHERE DAY(birthdate) = DAY(CURDATE())
+          AND MONTH(birthdate) = MONTH(CURDATE())
     """)
     result = cursor.fetchall()
     cursor.close()
     return result
 
-
 def get_all_birthdays(db, guild_id):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT user_id, birthdate, display_name, wish FROM birthdays
+        SELECT user_id, birthdate, display_name, wish, template_url
+        FROM birthdays
         WHERE guild_id = %s
         ORDER BY MONTH(birthdate), DAY(birthdate)
     """, (guild_id,))
     result = cursor.fetchall()
     cursor.close()
     return result
+
 
 def add_banned_word(db, guild_id, word, response, word_type=None):
     cursor = db.cursor()
