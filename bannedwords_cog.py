@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from database import connect_db, add_banned_word, get_all_banned_words, remove_banned_word, get_feature_status, set_feature_status
 from discord import ui, Interaction
+from streak_cog import BLOCKED_MESSAGES
 
 ALLOWED_USER_ID = 416234104317804544
 VALID_TYPES = {"female", "partnership", "pelanggaran"}
@@ -113,7 +114,12 @@ class BannedWordsCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        if message.id in BLOCKED_MESSAGES:
+            return
         if message.author.bot or not message.guild:
+            return
+        
+        if getattr(message, "_streak_block", False):
             return
 
         # ⛔ Cek jika fitur reply_words sedang dimatikan

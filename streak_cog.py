@@ -2,7 +2,7 @@
 
 import discord
 from discord.ext import commands, tasks
-
+from weakref import WeakKeyDictionary
 from database import (
     get_streak_pair,
     create_streak_pair,
@@ -31,6 +31,9 @@ import aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import random
 from datetime import datetime, date, timedelta
+
+BLOCKED_MESSAGES = set()   # pakai set biasa untuk simpan pesan yang diblokir
+
 # =========================
 #  Helper kecil
 # =========================
@@ -447,6 +450,7 @@ class StreakCog(commands.Cog):
     # -------------------------------------------------
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        
         if message.author.bot or message.guild is None:
             return
 
@@ -458,6 +462,17 @@ class StreakCog(commands.Cog):
             return
 
         cmd_channel_id = settings.get("command_channel_id")
+        # ❌ Cegah API di channel log
+        log_channel_id = settings.get("log_channel_id")
+
+        if log_channel_id and message.channel.id == log_channel_id:
+            if message.content.lower().startswith("api "):
+                await message.channel.send(
+                    "❌ Tidak bisa menyalakan api di channel log.\nGunakan channel command."
+                )
+            BLOCKED_MESSAGES.add(message.id)
+            return  # ⬅ FIX PENTING: stop SELURUH fungsi
+
         if cmd_channel_id is None or message.channel.id != cmd_channel_id:
             return
 
