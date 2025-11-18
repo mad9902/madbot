@@ -175,28 +175,51 @@ class BirthdayView(View):
             color=discord.Color.gold()
         )
 
-        for user_id, birthdate, display_name, wish, template_url in self.chunks[page]:
+        today = datetime.now(JAKARTA_TZ).date()
+        rows = self.chunks[page]
+
+        for index, row in enumerate(rows, start=1):
+            user_id, birthdate, display_name, wish, template_url = row
             user_mention = f"<@{user_id}>"
             date_str = birthdate.strftime("%d %B")
 
-            desc = (
-                f"📅 **Tanggal:** `{date_str}`\n"
+            # --- hitung countdown ---
+            this_year = birthdate.replace(year=today.year)
+            if this_year < today:
+                this_year = this_year.replace(year=today.year + 1)
+
+            diff = (this_year - today).days
+
+            if diff == 0:
+                countdown = "🎉 **Hari ini!**"
+            elif diff == 1:
+                countdown = "⏳ **Besok (1 hari lagi)**"
+            else:
+                countdown = f"⏳ **{diff} hari lagi**"
+
+            # --- format rapi ---
+            value = (
                 f"👤 **User:** {user_mention}\n"
+                f"📅 **Tanggal:** `{date_str}`\n"
+                f"{countdown}\n"
             )
 
             if wish:
-                desc += f"💌 **Wish:** _{wish}_\n"
+                value += f"💌 **Wish:** _{wish}_\n"
 
             if template_url:
-                desc += "🖼️ **Custom template:** ✔️\n"
+                value += "🖼️ **Custom template:** ✔️\n"
+
+            # garis pemisah antar user
+            value += "───"
 
             embed.add_field(
-                name=f"🎉 {display_name}",
-                value=desc,
+                name=f"**#{index}** — 🎉 {display_name}",
+                value=value,
                 inline=False
             )
 
-        embed.set_footer(text="Gunakan mad nearestbirthday untuk melihat yg terdekat ✨")
+        embed.set_footer(text="Gunakan mad nearestbirthday untuk melihat yang terdekat ✨")
         return embed
 
     async def prev_page(self, interaction: discord.Interaction):
