@@ -356,15 +356,6 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
                 # ❗ Reply pertama TIDAK BOLEH pakai reference
                 sent = await thread.send(embed=embed)
-            if parent_data.get("thread_id") is None:
-                thread = await parent_msg.create_thread(
-                    name=f"Confession #{parent_confess_id}"
-                )
-                CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
-                save_confession_map()
-
-                # ❗ Reply pertama TIDAK BOLEH pakai reference
-                sent = await thread.send(embed=embed)
 
             else:
                 # Thread sudah ada
@@ -376,12 +367,12 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 except:
                     reference_target = None
 
-                # Kirim ke thread, tapi reference menuju parent di channel utama (VALID)
                 sent = await thread.send(
                     embed=embed,
                     reference=reference_target,
                     mention_author=False
                 )
+
 
 
             # SAVE mapping reply
