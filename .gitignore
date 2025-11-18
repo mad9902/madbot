@@ -22,3 +22,6 @@ confession_map.json
 *.jpeg
 *.png
 *.gif
+
+# IZINKAN gambar spesifik
+!media/ultahkos.png
