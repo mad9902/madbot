@@ -90,7 +90,7 @@ JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 async def generate_birthday_image(display_name: str, template_url=None, output_path="media/birthday_render.png"):
     BASE_DIR = os.getcwd()
 
-    # ========== ambil template image ==========
+    # ========== Ambil template (custom / default) ==========
     if template_url:
         try:
             async with aiohttp.ClientSession() as s:
@@ -103,28 +103,40 @@ async def generate_birthday_image(display_name: str, template_url=None, output_p
     else:
         base = Image.open(os.path.join(BASE_DIR, "media", "ultahkos.png")).convert("RGBA")
 
-    base = base.resize((1536, 1024), Image.LANCZOS)
+    # ========== Resize otomatis biar ukuran selalu aman ==========
+    MAX_W, MAX_H = 1536, 1536  # square lebih fleksibel
+    base.thumbnail((MAX_W, MAX_H), Image.LANCZOS)
+
     W, H = base.size
     draw = ImageDraw.Draw(base)
 
+    # ========== Kalau custom template → JANGAN tulis nama ==========
+    if template_url:
+        output_path = os.path.join(BASE_DIR, output_path)
+        base.save(output_path)
+        return output_path
+
+    # ========== Default template → tulis nama ==========
     display_name = display_name.strip()[:5]
 
-    # font
     font_path = os.path.join(BASE_DIR, "assets", "Inter.ttf")
     if os.path.isfile(font_path):
-        font = ImageFont.truetype(font_path, 180)
+        font = ImageFont.truetype(font_path, 130)
     else:
         font = ImageFont.load_default()
 
-    bbox = draw.textbbox((0, 0), display_name, font=font)
+    text = display_name
+    bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
 
+    # Posisi: bawah tengah area "Selamat Ulang Tahun"
     pos_x = (W - text_w) // 2
     pos_y = int(H * 0.50)
 
     draw.text(
         (pos_x, pos_y),
-        display_name,
+        text,
         font=font,
         fill=(250, 198, 62),
         stroke_width=3,
