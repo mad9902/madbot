@@ -224,11 +224,14 @@ class SubmitImageConfessionButton(discord.ui.Button):
         )
         file = discord.File(temp_path, filename=att.filename)
 
-        # jika video/gif → jangan pakai embed image
-        if att.filename.lower().endswith((".mp4", ".mov", ".mkv", ".webm", ".gif")):
-            sent = await target_ch.send(content=f"Anonymous Confession (#{confession_id})\n\"{caption}\"", file=file)
+        # Video or animated GIF
+        if att.filename.lower().endswith((".mp4", ".mov", ".webm", ".mkv", ".gif")):
+            # Embed TETAP ADA
+            embed.description = f'"{caption}"'
+            # Jangan set_image untuk video/gif
+            sent = await target_ch.send(embed=embed, file=file)
 
-        # jika gambar → boleh pakai embed
+        # Image
         else:
             embed.set_image(url=f"attachment://{att.filename}")
             sent = await target_ch.send(embed=embed, file=file)
