@@ -318,6 +318,8 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                     "❌ Confession yang kamu reply tidak ditemukan.",
                     ephemeral=True
                 )
+            
+            parent_confess_id = parent_data.get("confession_id", "?")
 
             # Tentukan parent_msg di channel yang BENAR
             parent_msg = None
