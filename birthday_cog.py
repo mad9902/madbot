@@ -219,9 +219,12 @@ class Birthday(commands.Cog):
         self.birthday_loop.start()
 
     # LOOP JAM 00:00 WIB (saat ini debug jam 17:00)
-    @tasks.loop(time=dt_time(17, 0))
+    # @tasks.loop(time=dt_time(17, 0))
+    # async def birthday_loop(self):
+    #     print("🔔 Running birthday check at 00:00 WIB...")
+    @tasks.loop(time=dt_time(5, 11))
     async def birthday_loop(self):
-        print("🔔 Running birthday check at 00:00 WIB...")
+        print("🔔 Running birthday check at 12:11 WIB (DEBUG)...")
 
         db = connect_db()
         birthdays = get_today_birthdays(db)
