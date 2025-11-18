@@ -91,14 +91,26 @@ class Birthday(commands.Cog):
             if not guild:
                 continue
 
-            # Ambil channel birthday khusus
+            # Ambil channel birthday
             ch_id = get_channel_settings(connect_db(), guild_id, "birthday")
             channel = guild.get_channel(int(ch_id)) if ch_id else guild.system_channel
 
             if channel:
-                await channel.send(f"🎉 Selamat ulang tahun **{display_name}**! 🎂 Semoga harimu menyenangkan!")
+                member = guild.get_member(user_id)
+
+                # ========== MENTION LOGIC ==========
+                if member:
+                    mention = member.mention
+                else:
+                    # data manual / user sudah left server
+                    mention = f"**{display_name}**"
+                # ===================================
+
+                await channel.send(f"🎉 Selamat ulang tahun {mention}! 🎂 Semoga harimu menyenangkan!")
+
                 if wish:
                     await channel.send(f"💬 Pesan ulang tahun: _{wish}_")
+
 
     @birthday_loop.before_loop
     async def before_loop(self):
