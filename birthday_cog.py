@@ -171,16 +171,32 @@ class BirthdayView(View):
 
     def make_embed(self, page):
         embed = discord.Embed(
-            title=f"📅 Daftar Ulang Tahun (Halaman {page+1}/{len(self.chunks)})",
-            color=discord.Color.blue()
+            title=f"🎂 Daftar Ulang Tahun — Halaman {page+1}/{len(self.chunks)}",
+            color=discord.Color.gold()
         )
 
         for user_id, birthdate, display_name, wish, template_url in self.chunks[page]:
-            desc = birthdate.strftime("%d %B")
-            if wish:
-                desc += f"\n💬 _{wish}_"
-            embed.add_field(name=display_name, value=desc, inline=False)
+            user_mention = f"<@{user_id}>"
+            date_str = birthdate.strftime("%d %B")
 
+            desc = (
+                f"📅 **Tanggal:** `{date_str}`\n"
+                f"👤 **User:** {user_mention}\n"
+            )
+
+            if wish:
+                desc += f"💌 **Wish:** _{wish}_\n"
+
+            if template_url:
+                desc += "🖼️ **Custom template:** ✔️\n"
+
+            embed.add_field(
+                name=f"🎉 {display_name}",
+                value=desc,
+                inline=False
+            )
+
+        embed.set_footer(text="Gunakan mad nearestbirthday untuk melihat yg terdekat ✨")
         return embed
 
     async def prev_page(self, interaction: discord.Interaction):
