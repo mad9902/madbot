@@ -78,7 +78,7 @@ class Birthday(commands.Cog):
         self.birthday_loop.start()
 
     # LOOP SUPER AKURAT JAM 00:00 WIB
-    @tasks.loop(time=dt_time(1, 45))
+    @tasks.loop(time=dt_time(17, 0))
     async def birthday_loop(self):
         print("🔔 Running birthday check at 00:00 WIB...")
 
