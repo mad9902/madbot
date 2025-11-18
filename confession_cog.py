@@ -259,7 +259,7 @@ class ThreadReplyView(discord.ui.View):
 # MODAL (HEADER SAJA — tanpa on_submit)
 # ======================================================
 
-class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
+class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
     confession_input = discord.ui.TextInput(
         label="Confession",
@@ -275,6 +275,14 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         self.parent_message_id = parent_message_id
 
     async def on_submit(self, interaction: discord.Interaction):
+        if is_reply:
+            data = CONFESSION_THREAD_MAP.get(self.parent_message_id)
+
+            # kalau ini reply ke reply, ambil parent aslinya
+            if data and not data.get("is_parent", False):
+                parent_id = data.get("parent_id")     # <-- FIX
+            else:
+                parent_id
         confession_id = str(uuid.uuid4())[:8]
         content = self.confession_input.value
         is_reply = self.parent_message_id is not None
@@ -283,7 +291,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         # Base embed
         # ===================================================
         embed = discord.Embed(
-            title="Anonymous Confession" if not is_reply else f"Balasan Anonim (#{confession_id})",
+            title=f"Anonymous Confession (#{confession_id})" if not is_reply else f"Balasan Anonim (#{confession_id})",
             description=f'"{content}"',
             color=discord.Color.dark_gray()
         )
@@ -293,7 +301,7 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
         # ===================================================
         if is_reply:
 
-            parent_id = self.parent_message_id
+            parent_id
             parent_data = CONFESSION_THREAD_MAP.get(parent_id)
 
             if not parent_data:
