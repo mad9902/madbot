@@ -416,7 +416,24 @@ class Birthday(commands.Cog):
         if not rows:
             return await ctx.send("📭 Belum ada data ulang tahun.")
 
+        today = datetime.now(JAKARTA_TZ).date()
+
+        # ---------- SORT BY NEAREST ----------
+        def nearest_sort(row):
+            user_id, birthdate, display_name, wish, template_url = row
+
+            bday_this_year = birthdate.replace(year=today.year)
+            if bday_this_year < today:
+                bday_this_year = bday_this_year.replace(year=today.year + 1)
+
+            diff = (bday_this_year - today).days
+            return diff
+
+        rows.sort(key=nearest_sort)
+
+        # ---------- PAGINATION SPLIT ----------
         chunks = [rows[i:i+10] for i in range(0, len(rows), 10)]
+
         view = BirthdayView(ctx, chunks)
         await view.send_initial()
 
