@@ -167,7 +167,7 @@ class SubmitImageConfessionButton(discord.ui.Button):
             dm = await interaction.user.create_dm()
             await dm.send("📸 Kirim gambar/video max 5MB + caption (opsional).")
         except:
-            return await interaction.response.send_message(
+            await interaction.followup.send(
                 "❌ Tidak dapat mengirim DM. Aktifkan DM dulu.",
                 ephemeral=True
             )
@@ -307,6 +307,9 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
         parent_id = None
         parent_data = None
 
+        await interaction.response.defer(ephemeral=True, thinking=False)
+
+
         if is_reply:
             raw = CONFESSION_THREAD_MAP.get(self.parent_message_id)
 
@@ -331,7 +334,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
         if is_reply:
 
             if not parent_id or not parent_data:
-                return await interaction.response.send_message(
+                await interaction.followup.send(
                     "❌ Confession yang kamu reply tidak ditemukan.",
                     ephemeral=True
                 )
@@ -343,18 +346,26 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
             if parent_data.get("thread_id"):
                 thread = await self.bot.fetch_channel(parent_data["thread_id"])
 
+                # coba fetch parent
                 try:
                     parent_msg_in_thread = await thread.fetch_message(parent_id)
                 except:
                     parent_msg_in_thread = None
 
-                # Sudah dalam thread → boleh pakai reference
-                sent = await thread.send(
-                    embed=embed,
-                    reference=parent_msg_in_thread,
-                    mention_author=False
-                )
-
+                # parent ketemu → pakai reference
+                if parent_msg_in_thread:
+                    sent = await thread.send(
+                        embed=embed,
+                        reference=parent_msg_in_thread,
+                        mention_author=False
+                    )
+                else:
+                    # fallback aman
+                    sent = await thread.send(
+                        embed=embed,
+                        mention_author=False
+                    )
+                    
             else:
                 # =========== CASE B: PARENT BELUM PUNYA THREAD ===========
                 try:
@@ -362,7 +373,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                         parent_data["channel_id"]
                     ).fetch_message(parent_id)
                 except:
-                    return await interaction.response.send_message(
+                    await interaction.followup.send(
                         "❌ Parent hilang.",
                         ephemeral=True
                     )
@@ -395,73 +406,73 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
             await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "✅ Balasan kamu sudah dikirim!",
                 ephemeral=True
             )
 
 
 
-            # ============================
-            # BUILD JUMP LINK
-            # ============================
-            guild_id = interaction.guild.id
-            channel_id = parent_data["channel_id"] if parent_data.get("is_parent", False) \
-                        else parent_data["thread_id"]
-            msg_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{parent_id}"
+            # # ============================
+            # # BUILD JUMP LINK
+            # # ============================
+            # guild_id = interaction.guild.id
+            # channel_id = parent_data["channel_id"] if parent_data.get("is_parent", False) \
+            #             else parent_data["thread_id"]
+            # msg_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{parent_id}"
 
-            embed.description = f'"{content}"'
+            # embed.description = f'"{content}"'
 
-            # ===================================================
-            # Thread handling
-            # ===================================================
-            thread = None
+            # # ===================================================
+            # # Thread handling
+            # # ===================================================
+            # thread = None
 
-            # Thread belum ada
-            if parent_data.get("thread_id") is None:
-                thread = await parent_msg.create_thread(
-                    name=f"Confession #{parent_confess_id}"
-                )
-                CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
-                save_confession_map()
+            # # Thread belum ada
+            # if parent_data.get("thread_id") is None:
+            #     thread = await parent_msg.create_thread(
+            #         name=f"Confession #{parent_confess_id}"
+            #     )
+            #     CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
+            #     save_confession_map()
 
-                # ❗ Reply pertama TIDAK BOLEH pakai reference
-                sent = await thread.send(
-                    embed=embed,
-                    reference=parent_msg,
-                    mention_author=False
-                )
+            #     # ❗ Reply pertama TIDAK BOLEH pakai reference
+            #     sent = await thread.send(
+            #         embed=embed,
+            #         reference=parent_msg,
+            #         mention_author=False
+            #     )
 
-            else:
-                # Thread sudah ada
+            # else:
+            #     # Thread sudah ada
 
-                thread = await self.bot.fetch_channel(parent_data["thread_id"])
-                # Selalu kirim reply TANPA reference (Discord melarang cross-channel reference)
-                sent = await thread.send(
-                    embed=embed,
-                    reference=parent_msg,
-                    mention_author=False
-                )
-
-
+            #     thread = await self.bot.fetch_channel(parent_data["thread_id"])
+            #     # Selalu kirim reply TANPA reference (Discord melarang cross-channel reference)
+            #     sent = await thread.send(
+            #         embed=embed,
+            #         reference=parent_msg,
+            #         mention_author=False
+            #     )
 
 
-            # SAVE mapping reply
-            CONFESSION_THREAD_MAP[sent.id] = {
-                "thread_id": thread.id,
-                "channel_id": parent_data["channel_id"],
-                "is_parent": False,
-                "confession_id": confession_id,
-                "parent_id": parent_id
-            }
-            save_confession_map()
 
-            await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
-            return await interaction.response.send_message(
-                "✅ Balasan kamu sudah dikirim!",
-                ephemeral=True
-            )
+            # # SAVE mapping reply
+            # CONFESSION_THREAD_MAP[sent.id] = {
+            #     "thread_id": thread.id,
+            #     "channel_id": parent_data["channel_id"],
+            #     "is_parent": False,
+            #     "confession_id": confession_id,
+            #     "parent_id": parent_id
+            # }
+            # save_confession_map()
+
+            # await sent.edit(view=ThreadReplyView(self.bot, sent.id))
+
+            # await interaction.followup.send(
+            #     "✅ Balasan kamu sudah dikirim!",
+            #     ephemeral=True
+            # )
 
         # ===================================================
         # =============== NEW CONFESSION ====================
@@ -492,7 +503,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, content)
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "✅ Confession kamu telah dikirim!",
             ephemeral=True
         )
