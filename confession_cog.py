@@ -97,19 +97,19 @@ async def restore_reply_buttons(bot: commands.Bot):
 
                         # Loop semua pesan di thread
                         async for msg in thread.history(limit=None):
-                            # Cuma restore pesan yang dikirim bot
                             if msg.author.id != bot.user.id:
                                 continue
 
-                            # Re-attach reply button
                             view = ThreadReplyView(bot, msg.id)
                             await msg.edit(view=view)
 
+                            # FIX: simpan mapping yang BENAR
                             CONFESSION_THREAD_MAP[msg.id] = {
                                 "thread_id": thread.id,
-                                "channel_id": channel_id,
+                                "channel_id": parent_channel.id,   # parent text channel
                                 "is_parent": False
                             }
+
                         save_confession_map()
 
                     except Exception as e:
@@ -321,9 +321,18 @@ class ConfessionModal(discord.ui.Modal, title="Anonymous Confession"):
                 # Kirim reply dalam thread
                 sent = await thread.send(embed=embed)
 
+                # Mapping baru untuk pesan reply ini
+                CONFESSION_THREAD_MAP[sent.id] = {
+                    "thread_id": thread.id,
+                    "channel_id": data["channel_id"],  # parent text channel
+                    "is_parent": False
+                }
+                save_confession_map()
+
                 # Tambahkan tombol Reply di tiap balasan
                 view = ThreadReplyView(self.bot, sent.id)
                 await sent.edit(view=view)
+
 
                 await interaction.response.send_message(
                     "✅ Balasan kamu sudah dikirim secara anonim!",
