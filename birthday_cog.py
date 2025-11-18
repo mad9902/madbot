@@ -7,6 +7,7 @@ import re
 import asyncio
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+import os
 
 from database import (
     connect_db,
@@ -30,30 +31,32 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
 
     draw = ImageDraw.Draw(base)
 
-    # load font
+    # font
     try:
         font = ImageFont.truetype("media/fonts/Montserrat-Bold.ttf", 90)
-    except:
+    except Exception:
         font = ImageFont.load_default()
 
-    # posisi teks (di bawah tulisan "Selamat Ulang Tahun")
+    # posisi teks kira2 di bawah tulisan "Selamat Ulang Tahun"
     text_y = int(H * 0.58)
 
-    # wrap nama
-    wrapped = textwrap.fill(display_name, width=20)
+    # bungkus nama kalau kepanjangan
+    wrapped = textwrap.fill(display_name, width=18)
 
-    # gunakan textbbox → pengganti textsize
-    bbox = draw.textbbox((0, 0), wrapped, font=font)
-    w = bbox[2] - bbox[0]
-    h = bbox[3] - bbox[1]
+    # ukur teks (Pillow baru pakai textbbox, bukan textsize)
+    try:
+        bbox = draw.textbbox((0, 0), wrapped, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+    except Exception:
+        # fallback kalau versi pillow beda
+        w, h = font.getsize(wrapped)
 
-    # center pos
     x = (W - w) / 2
 
-    # warna emas
-    color = (255, 215, 0)
+    color = (255, 215, 0)  # emas
 
-    # outline
+    # outline biar kebaca
     outline_range = 3
     for ox in range(-outline_range, outline_range + 1):
         for oy in range(-outline_range, outline_range + 1):
@@ -64,7 +67,6 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
 
     base.save(output_path)
     return output_path
-
 
 # ================================================================
 # VIEW PAGING
