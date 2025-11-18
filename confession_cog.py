@@ -365,7 +365,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                         embed=embed,
                         mention_author=False
                     )
-                    
+
             else:
                 # =========== CASE B: PARENT BELUM PUNYA THREAD ===========
                 try:
@@ -560,6 +560,9 @@ async def setup(bot):
         "confess_reply_",
         lambda cid: ReplyToConfessionButton.from_custom_id(bot, cid)
     )
+
+    # Register thread reply view globally
+    bot.add_view(ThreadReplyView(bot, 0))
 
     # Restore all buttons
     await restore_reply_buttons(bot)
