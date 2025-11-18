@@ -30,7 +30,7 @@ def generate_birthday_image(display_name: str, output_path="media/birthday_rende
     import os
 
     # ============ Gambar Base ============
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.getcwd()
     img_path = os.path.join(BASE_DIR, "..", "media", "ultahkos.png")
     base = Image.open(img_path).convert("RGBA")
 
