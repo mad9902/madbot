@@ -343,15 +343,20 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
             if parent_data.get("thread_id"):
                 thread = await self.bot.fetch_channel(parent_data["thread_id"])
 
-                # ambil parent di thread
                 try:
                     parent_msg_in_thread = await thread.fetch_message(parent_id)
                 except:
                     parent_msg_in_thread = None
 
-            # =========== CASE B: PARENT BELUM PUNYA THREAD ===========
+                # Sudah dalam thread → boleh pakai reference
+                sent = await thread.send(
+                    embed=embed,
+                    reference=parent_msg_in_thread,
+                    mention_author=False
+                )
+
             else:
-                # Ambil parent dari CHANNEL UTAMA
+                # =========== CASE B: PARENT BELUM PUNYA THREAD ===========
                 try:
                     parent_msg_main = await interaction.guild.get_channel(
                         parent_data["channel_id"]
@@ -362,7 +367,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                         ephemeral=True
                     )
 
-                # Buat thread baru dari parent
+                # Buat thread
                 parent_confess_id = parent_data.get("confession_id", "?")
                 thread = await parent_msg_main.create_thread(
                     name=f"Confession #{parent_confess_id}"
@@ -372,18 +377,11 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 CONFESSION_THREAD_MAP[parent_id]["thread_id"] = thread.id
                 save_confession_map()
 
-                # setelah thread dibuat → fetch lagi parent tapi dari dalam THREAD
-                try:
-                    parent_msg_in_thread = await thread.fetch_message(parent_id)
-                except:
-                    parent_msg_in_thread = parent_msg_main  # fallback
-
-            # =========== KIRIM BALASAN DI DALAM THREAD ===========
-            sent = await thread.send(
-                embed=embed,
-                reference=parent_msg_in_thread,
-                mention_author=False
-            )
+                # Reply pertama → TIDAK PAKAI reference
+                sent = await thread.send(
+                    embed=embed,
+                    mention_author=False
+                )
 
             # simpan mapping reply
             CONFESSION_THREAD_MAP[sent.id] = {
@@ -401,6 +399,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                 "✅ Balasan kamu sudah dikirim!",
                 ephemeral=True
             )
+
 
 
             # ============================
