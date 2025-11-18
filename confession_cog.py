@@ -77,14 +77,7 @@ async def restore_reply_buttons(bot: commands.Bot):
 
             # view untuk parent
             view = ConfessionView(bot)
-            view.add_item(
-                discord.ui.Button(
-                    label="Reply",
-                    style=discord.ButtonStyle.gray,
-                    custom_id="persistent_reply_button"
-                )
-            )
-
+            view.add_item(ReplyToConfessionButton(bot, message_id))
             await parent_msg.edit(view=view)
 
             # restore thread messages
@@ -94,17 +87,8 @@ async def restore_reply_buttons(bot: commands.Bot):
                     async for msg in thread.history(limit=None):
                         if msg.author.id != bot.user.id:
                             continue
-                        view = discord.ui.View(timeout=None)
-                        view.add_item(
-                            discord.ui.Button(
-                                label="Reply",
-                                style=discord.ButtonStyle.gray,
-                                custom_id="persistent_reply_button"
-                            )
-                        )
-
-                        await msg.edit(view=view)
-
+                        v = ThreadReplyView(bot, msg.id)
+                        await msg.edit(view=v)
                 except:
                     pass
 
@@ -139,28 +123,28 @@ class SubmitConfessionButton(discord.ui.Button):
 # BUTTON — REPLY
 # ======================================================
 
-# class ReplyToConfessionButton(discord.ui.Button):
-#     def __init__(self, bot: commands.Bot, message_id: int):
-#         super().__init__(
-#             label="Reply",
-#             style=discord.ButtonStyle.gray,
-#             custom_id=f"confess_reply_{message_id}"
-#         )
-#         self.bot = bot
-#         self.message_id = message_id
+class ReplyToConfessionButton(discord.ui.Button):
+    def __init__(self, bot: commands.Bot, message_id: int):
+        super().__init__(
+            label="Reply",
+            style=discord.ButtonStyle.gray,
+            custom_id=f"confess_reply_{message_id}"
+        )
+        self.bot = bot
+        self.message_id = message_id
 
-#     @classmethod
-#     def from_custom_id(cls, bot, custom_id: str):
-#         mid = int(custom_id.split("_")[-1])
-#         return cls(bot, mid)
+    @classmethod
+    def from_custom_id(cls, bot, custom_id: str):
+        mid = int(custom_id.split("_")[-1])
+        return cls(bot, mid)
 
-#     async def callback(self, interaction: discord.Interaction):
-#         await interaction.response.send_modal(
-#             ConfessionModal(
-#                 self.bot,
-#                 parent_message_id=self.message_id
-#             )
-#         )
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            ConfessionModal(
+                self.bot,
+                parent_message_id=self.message_id
+            )
+        )
 
 
 # ======================================================
@@ -270,13 +254,7 @@ class SubmitImageConfessionButton(discord.ui.Button):
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
         view.add_item(SubmitImageConfessionButton(self.bot))
-        view.add_item(
-            discord.ui.Button(
-                label="Reply",
-                style=discord.ButtonStyle.gray,
-                custom_id="persistent_reply_button"
-            )
-        )
+        view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
         await dm.send("✅ Confession berhasil dikirim!")
@@ -285,21 +263,6 @@ class SubmitImageConfessionButton(discord.ui.Button):
 # ======================================================
 # VIEWS
 # ======================================================
-class ReplyViewGlobal(discord.ui.View):
-    def __init__(self, bot):
-        super().__init__(timeout=None)
-        self.bot = bot
-
-    @discord.ui.button(label="Reply", style=discord.ButtonStyle.gray, custom_id="persistent_reply_button")
-    async def reply_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Ambil ID pesan yang ditekan
-        message_id = interaction.message.id
-
-        # Buka modal
-        await interaction.response.send_modal(
-            ConfessionModal(self.bot, parent_message_id=message_id)
-        )
-
 
 class ConfessionView(discord.ui.View):
     def __init__(self, bot: commands.Bot):
@@ -308,10 +271,10 @@ class ConfessionView(discord.ui.View):
         self.add_item(SubmitImageConfessionButton(bot))
 
 
-# class ThreadReplyView(discord.ui.View):
-#     def __init__(self, bot: commands.Bot, message_id: int):
-#         super().__init__(timeout=None)
-#         self.add_item(ReplyToConfessionButton(bot, message_id))
+class ThreadReplyView(discord.ui.View):
+    def __init__(self, bot: commands.Bot, message_id: int):
+        super().__init__(timeout=None)
+        self.add_item(ReplyToConfessionButton(bot, message_id))
 
 
 # ======================================================
@@ -402,7 +365,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
                         embed=embed,
                         mention_author=False
                     )
-
+                    
             else:
                 # =========== CASE B: PARENT BELUM PUNYA THREAD ===========
                 try:
@@ -441,18 +404,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
             }
             save_confession_map()
 
-            view = discord.ui.View(timeout=None)
-            view.add_item(
-                discord.ui.Button(
-                    label="Reply",
-                    style=discord.ButtonStyle.gray,
-                    custom_id="persistent_reply_button"
-                )
-            )
-
-            await sent.edit(view=view)
-
-
+            await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
             return await interaction.followup.send(
                 "✅ Balasan kamu sudah dikirim!",
@@ -546,13 +498,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
         view = discord.ui.View(timeout=None)
         view.add_item(SubmitConfessionButton(self.bot))
         view.add_item(SubmitImageConfessionButton(self.bot))
-        view.add_item(
-            discord.ui.Button(
-                label="Reply",
-                style=discord.ButtonStyle.gray,
-                custom_id="persistent_reply_button"
-            )
-        )
+        view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
         save_confession(self.bot.db, interaction.guild_id, interaction.user.id, confession_id, content)
@@ -609,7 +555,11 @@ async def setup(bot):
     # Persist main view
     bot.add_view(ConfessionView(bot))
 
-    bot.add_view(ReplyViewGlobal(bot))
+    # Dynamic reply buttons
+    bot.add_dynamic_items(
+        "confess_reply_",
+        lambda cid: ReplyToConfessionButton.from_custom_id(bot, cid)
+    )
 
     # Restore all buttons
     await restore_reply_buttons(bot)
