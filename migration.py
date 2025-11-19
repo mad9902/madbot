@@ -614,6 +614,13 @@ def migrate(db):
     #         PRIMARY KEY (guild_id, setting_key)
     #     );
     # """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rob_stats (
+            user_id BIGINT PRIMARY KEY,
+            success INT DEFAULT 0,
+            fail INT DEFAULT 0
+        );
+    """)
 
     db.commit()
     cursor.close()

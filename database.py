@@ -1684,7 +1684,6 @@ def get_user_cash(db, user_id, guild_id=None):
     cursor.close()
     return 0
 
-
 def set_user_cash(db, user_id, amount):
     cursor = db.cursor()
     cursor.execute("""
@@ -1695,8 +1694,6 @@ def set_user_cash(db, user_id, amount):
     """, (user_id, amount))
     db.commit()
     cursor.close()
-
-
 
 # ============================================================
 #  GAMBLE LOG
@@ -1756,6 +1753,15 @@ def log_gamble(db, *args):
     db.commit()
     cursor.close()
 
+def get_total_gamble_wins(db, user_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM gamble_log
+        WHERE user_id=%s AND result='WIN'
+    """, (user_id,))
+    total = cursor.fetchone()[0]
+    cursor.close()
+    return total
 
 # ============================================================
 #  CHANNEL SETTINGS
@@ -1850,6 +1856,35 @@ def set_rob_victim_protect(db, user_id, ts):
     db.commit()
     cursor.close()
 
+# ============================================================
+# ROB STATS
+# ============================================================
+def get_rob_stats(db, user_id):
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM rob_stats WHERE user_id=%s", (user_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    return row or {"success": 0, "fail": 0}
+
+def add_rob_success(db, user_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO rob_stats (user_id, success, fail)
+        VALUES (%s, 1, 0)
+        ON DUPLICATE KEY UPDATE success = success + 1
+    """, (user_id,))
+    db.commit()
+    cursor.close()
+
+def add_rob_fail(db, user_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO rob_stats (user_id, success, fail)
+        VALUES (%s, 0, 1)
+        ON DUPLICATE KEY UPDATE fail = fail + 1
+    """, (user_id,))
+    db.commit()
+    cursor.close()
 
 # ============================================================
 # DICE DUEL SYSTEM
@@ -1865,7 +1900,6 @@ def create_duel_request(db, guild_id, challenger, target, bet):
     db.commit()
     cursor.close()
 
-
 def get_duel_request(db, guild_id, challenger):
     cursor = db.cursor(dictionary=True)
     cursor.execute("""
@@ -1877,7 +1911,6 @@ def get_duel_request(db, guild_id, challenger):
     cursor.close()
     return row
 
-
 def delete_duel_request(db, guild_id, challenger):
     cursor = db.cursor()
     cursor.execute("""
@@ -1886,7 +1919,6 @@ def delete_duel_request(db, guild_id, challenger):
     """, (guild_id, challenger))
     db.commit()
     cursor.close()
-
 
 def set_gamble_setting(db, guild_id, key, value):
     cursor = db.cursor()
@@ -1897,7 +1929,6 @@ def set_gamble_setting(db, guild_id, key, value):
     """, (guild_id, key, str(value)))
     db.commit()
     cursor.close()
-
 
 def get_gamble_setting(db, guild_id, key):
     cursor = db.cursor()

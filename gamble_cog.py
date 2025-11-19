@@ -2,12 +2,14 @@ import discord
 from discord.ext import commands
 import random
 import time
+import datetime
 import asyncio
 
 from database import (
     get_user_cash, set_user_cash,
-    log_gamble,
-    get_gamble_setting, set_gamble_setting
+    log_gamble, get_rob_victim_protect,
+    get_gamble_setting, set_gamble_setting, get_rob_stats, 
+    add_rob_success, add_rob_fail, get_total_gamble_wins, get_user_protection
 )
 
 from gamble_utils import (
@@ -189,29 +191,46 @@ class GambleCog(commands.Cog):
         if cash < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
 
-        symbols = ["🍒", "🍋", "🔔", "⭐", "7️⃣"]
+        # ================================
+        # PROBABILITY TABLE
+        # ================================
+        symbols = ["🍆", "💖", "🍒", "💵", "🔵"]
+        weights = [20, 20, 5, 2.5, 1]  # total 48.5% win chance
         multipliers = {
-            "🍒": 2,
-            "🍋": 3,
-            "🔔": 5,
-            "⭐": 8,
-            "7️⃣": 10
+            "🍆": 1,
+            "💖": 2,
+            "🍒": 3,
+            "💵": 4,
+            "🔵": 10
         }
 
-        # 8% win chance
-        if random.random() < 0.12:
-            r = random.choice(symbols)
-            r1 = r2 = r3 = r
-            is_win = True
+        # ================================
+        # DETERMINE WIN OR LOSS
+        # ================================
+        roll = random.random() * 100  # 0 - 100
+
+        is_win = roll < 48.5  # 48.5% chance of win
+
+        # ================================
+        # GENERATE RESULT
+        # ================================
+        if is_win:
+            # Pick symbol by weight
+            chosen = random.choices(symbols, weights=weights, k=1)[0]
+            r1 = r2 = r3 = chosen
+
         else:
+            # LOSS pattern → MUST NOT be all identical
             while True:
                 r1 = random.choice(symbols)
                 r2 = random.choice(symbols)
                 r3 = random.choice(symbols)
                 if not (r1 == r2 == r3):
                     break
-            is_win = False
 
+        # ================================
+        # ANIMATION PHASE
+        # ================================
         spin1 = f"[ {random.choice(symbols)} | ❔ | ❔ ]"
         spin2 = f"[ {r1} | {random.choice(symbols)} | ❔ ]"
         final = f"[ {r1} | {r2} | {r3} ]"
@@ -231,6 +250,9 @@ class GambleCog(commands.Cog):
         embed.description = f"**Hasil:**\n\n{final}"
         await msg.edit(embed=embed)
 
+        # ================================
+        # CALCULATE RESULT
+        # ================================
         if is_win:
             multi = multipliers[r1]
             win_amount = bet * multi
@@ -249,15 +271,93 @@ class GambleCog(commands.Cog):
             color = discord.Color.red()
             status = "LOSE"
 
+        # Save
         set_user_cash(self.db, ctx.author.id, cash)
         log_gamble(self.db, ctx.guild.id, ctx.author.id, "slots", bet, status)
 
+        # Final embed
         result = discord.Embed(
             title="🎰 Slots Result",
             description=f"{final}\n\n{desc}\n\n💰 **Saldo: {comma(cash)}**",
             color=color
         )
         await msg.edit(embed=result)
+
+    @commands.command(name="profile")
+    async def mprofile(self, ctx, member: discord.Member = None):
+        user = member or ctx.author
+        uid = user.id
+
+        # =============================
+        # Ambil data dari database
+        # =============================
+        cash = get_user_cash(self.db, uid)
+
+        # protection 24 jam
+        active_until = get_user_protection(self.db, uid)
+        now = int(time.time())
+
+        if active_until > now:
+            prot_status = "🟢 Aktif"
+            left_secs = active_until - now
+            left_fmt = str(datetime.timedelta(seconds=left_secs))
+        else:
+            prot_status = "🔴 Tidak aktif"
+            left_fmt = "—"
+
+        # victim cooldown = last robbed indicator
+        last_robbed_ts = get_rob_victim_protect(self.db, uid)
+
+        if last_robbed_ts > now:
+            # artinya baru saja dirampok (karena kamu pakai protect_until)
+            last_robbed = f"<t:{last_robbed_ts}:R>"
+        else:
+            last_robbed = "—"
+
+        rob_stats = get_rob_stats(self.db, uid)
+        rob_success = rob_stats["success"]
+        rob_fail = rob_stats["fail"]
+
+        # gamble wins
+        total_gamble_wins = get_total_gamble_wins(self.db, uid)
+
+        # =============================
+        # Buat embed
+        # =============================
+        embed = discord.Embed(
+            title=f"👤 Profile — {user.display_name}",
+            color=discord.Color.gold()
+        )
+
+        embed.add_field(name="💰 Cash", value=f"**{comma(cash)}**", inline=False)
+
+        embed.add_field(
+            name="🛡 Protection (24h)",
+            value=f"Status: **{prot_status}**\nTime left: **{left_fmt}**",
+            inline=False
+        )
+
+        embed.add_field(
+            name="📛 Last Robbed",
+            value=f"{last_robbed}",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🗡 Rob Stats",
+            value=f"Success: **{rob_success}**\nFail: **{rob_fail}**",
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎰 Total Gamble Wins",
+            value=f"**{total_gamble_wins}**",
+            inline=False
+        )
+
+        embed.set_thumbnail(url=user.display_avatar.url)
+
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):
