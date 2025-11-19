@@ -1703,9 +1703,11 @@ def set_user_cash(db, user_id, amount):
 # ============================================================
 def log_gamble(db, *args):
     """
-    Support 2 formats:
-    OLD → log_gamble(db, guild_id, user_id, type, amount, result)
-    NEW → log_gamble(db, user_id, type, amount, result)
+    Supported formats:
+
+    6 args → (guild_id, user_id, type, amount, result)
+    5 args → (user_id, type, amount, result)
+    4 args → (guild_id?, type, amount, result)  <-- auto-fix
     """
 
     cursor = db.cursor()
@@ -1713,12 +1715,21 @@ def log_gamble(db, *args):
     # --- Format lama: 6 args ---
     if len(args) == 6:
         guild_id, user_id, gamble_type, amount, result = args[1:]
-    
+
     # --- Format baru: 5 args ---
     elif len(args) == 5:
         user_id, gamble_type, amount, result = args[1:]
-        guild_id = 0  # default global
-    
+        guild_id = 0  # global
+
+    # --- Format salah (4 args) → auto-fix ---
+    elif len(args) == 4:
+        # interpretasi:
+        # (guild_or_user, type, amount, result)
+        guild_or_user, gamble_type, amount, result = args[1:]
+
+        guild_id = 0
+        user_id = guild_or_user  # fallback agar tidak error
+
     else:
         raise ValueError(f"log_gamble() invalid args: {args}")
 
@@ -1729,7 +1740,6 @@ def log_gamble(db, *args):
 
     db.commit()
     cursor.close()
-
 
 # ============================================================
 #  CHANNEL SETTINGS
