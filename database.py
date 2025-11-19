@@ -1669,28 +1669,30 @@ def get_emoji_for_streak(guild_id, streak):
 # ============================================================
 #  USER CASH (GAMBLE SYSTEM)
 # ============================================================
-def get_user_cash(db, user_id, guild_id):
+def get_user_cash(db, user_id, guild_id=None):
     cursor = db.cursor()
-    cursor.execute("""
-        SELECT cash FROM user_cash
-        WHERE guild_id=%s AND user_id=%s
-    """, (guild_id, user_id))
-
+    cursor.execute("SELECT cash FROM user_cash WHERE user_id = %s", (user_id,))
     row = cursor.fetchone()
     cursor.close()
-    return row[0] if row else 0
 
+    if row:
+        return row[0]
 
-def set_user_cash(db, user_id, guild_id, cash):
     cursor = db.cursor()
-    cursor.execute("""
-        INSERT INTO user_cash (guild_id, user_id, cash)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE cash=%s
-    """, (guild_id, user_id, cash, cash))
+    cursor.execute("INSERT INTO user_cash (user_id, cash) VALUES (%s, %s)", (user_id, 0))
     db.commit()
     cursor.close()
+    return 0
 
+def set_user_cash(db, user_id, guild_id, amount):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO user_cash (user_id, cash)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE cash = VALUES(cash)
+    """, (user_id, amount))
+    db.commit()
+    cursor.close()
 
 # ============================================================
 #  GAMBLE LOG
@@ -1734,27 +1736,26 @@ def get_channel_settings(db, guild_id, key):
 # ============================================================
 #  DAILY SYSTEM
 # ============================================================
-def get_daily_data(db, guild_id, user_id):
+def get_daily_data(db, user_id):
     cursor = db.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT last_claim, streak
-        FROM user_daily
-        WHERE guild_id=%s AND user_id=%s
-    """, (guild_id, user_id))
-
+    cursor.execute("SELECT last_claim, streak FROM user_daily WHERE user_id=%s", (user_id,))
     row = cursor.fetchone()
     cursor.close()
 
-    return row if row else {"last_claim": None, "streak": 0}
+    if not row:
+        return {"last_claim": None, "streak": 0}
 
+    return row
 
-def set_daily_data(db, guild_id, user_id, last_claim, streak):
+def set_daily_data(db, user_id, last_claim, streak):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO user_daily (guild_id, user_id, last_claim, streak)
-        VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE last_claim=%s, streak=%s
-    """, (guild_id, user_id, last_claim, streak, last_claim, streak))
+        INSERT INTO user_daily (user_id, last_claim, streak)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            last_claim=VALUES(last_claim),
+            streak=VALUES(streak)
+    """, (user_id, last_claim, streak))
     db.commit()
     cursor.close()
 
@@ -1762,51 +1763,40 @@ def set_daily_data(db, guild_id, user_id, last_claim, streak):
 # ============================================================
 # ROB: 24-HOUR PROTECTION (BUY)
 # ============================================================
-def get_user_protection(db, guild_id, user_id):
+def get_user_protection(db, user_id):
     cursor = db.cursor()
-    cursor.execute("""
-        SELECT active_until FROM user_protection
-        WHERE guild_id=%s AND user_id=%s
-    """, (guild_id, user_id))
-
+    cursor.execute("SELECT active_until FROM user_protection WHERE user_id=%s", (user_id,))
     row = cursor.fetchone()
     cursor.close()
     return row[0] if row else 0
 
-
-def set_user_protection(db, guild_id, user_id, until_ts):
+def set_user_protection(db, user_id, ts):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO user_protection (guild_id, user_id, active_until)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE active_until=%s
-    """, (guild_id, user_id, until_ts, until_ts))
+        INSERT INTO user_protection (user_id, active_until)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE active_until=VALUES(active_until)
+    """, (user_id, ts))
     db.commit()
     cursor.close()
-
 
 # ============================================================
 # ROB: 2-HOUR VICTIM COOLDOWN
 # ============================================================
-def get_rob_victim_protect(db, guild_id, user_id):
+def get_rob_victim_protect(db, user_id):
     cursor = db.cursor()
-    cursor.execute("""
-        SELECT protect_until FROM user_rob_protect
-        WHERE guild_id=%s AND user_id=%s
-    """, (guild_id, user_id))
-
+    cursor.execute("SELECT protect_until FROM user_rob_protect WHERE user_id=%s", (user_id,))
     row = cursor.fetchone()
     cursor.close()
     return row[0] if row else 0
 
-
-def set_rob_victim_protect(db, guild_id, user_id, until_ts):
+def set_rob_victim_protect(db, user_id, ts):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO user_rob_protect (guild_id, user_id, protect_until)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE protect_until=%s
-    """, (guild_id, user_id, until_ts, until_ts))
+        INSERT INTO user_rob_protect (user_id, protect_until)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE protect_until=VALUES(protect_until)
+    """, (user_id, ts))
     db.commit()
     cursor.close()
 

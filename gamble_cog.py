@@ -5,7 +5,6 @@ import time
 import asyncio
 
 from database import (
-    connect_db,
     get_user_cash, set_user_cash,
     log_gamble,
     get_gamble_setting, set_gamble_setting
@@ -22,60 +21,65 @@ class GambleCog(commands.Cog):
         self.bot = bot
         self.db = bot.db
 
+        # Earn system
         self.last_earn = {}
         self.last_message = {}
 
+        # Cooldown
         self.gamble_cooldown = 3
         self.last_gamble = {}
 
+
     # =====================================================
-    # AUTO EARN SYSTEM (boleh di semua channel)
+    # AUTO EARN SYSTEM (GLOBAL CASH)
     # =====================================================
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.author.bot:
             return
 
-        guild = message.guild.id
         user = message.author.id
+        guild = message.guild.id
 
         content = message.content.strip()
         if len(content) < 5:
             return
 
-        # Anti duplicate spam
+        # anti-spam: same message
         if (guild, user) in self.last_message:
             if self.last_message[(guild, user)] == content:
                 return
-
         self.last_message[(guild, user)] = content
 
+        # 10s cooldown
         now = time.time()
         if (guild, user) in self.last_earn:
             if now - self.last_earn[(guild, user)] < 10:
                 return
-
         self.last_earn[(guild, user)] = now
 
+        # reward calculation
         gain = 3 + min(len(content) // 30, 7)
 
-        money = get_user_cash(self.db, user, guild)
-        set_user_cash(self.db, user, guild, money + gain)
+        cash = get_user_cash(self.db, user)
+        set_user_cash(self.db, user, cash + gain)
+
 
     # =====================================================
-    # GAMBLE COOLDOWN
+    # LOCAL GAMBLE COOLDOWN
     # =====================================================
     def gamble_on_cooldown(self, ctx):
-        key = (ctx.guild.id, ctx.author.id)
+        user = ctx.author.id
         now = time.time()
 
-        if key in self.last_gamble:
-            diff = now - self.last_gamble[key]
+        if user in self.last_gamble:
+            diff = now - self.last_gamble[user]
             if diff < self.gamble_cooldown:
                 return round(self.gamble_cooldown - diff, 1)
 
-        self.last_gamble[key] = now
+        self.last_gamble[user] = now
         return None
+
 
     # =====================================================
     # SET GAMBLE CHANNEL
@@ -88,8 +92,9 @@ class GambleCog(commands.Cog):
         set_gamble_setting(self.db, ctx.guild.id, "gamble_ch", channel.id)
         await ctx.send(f"🎰 Channel gamble telah diatur ke {channel.mention}")
 
+
     # =====================================================
-    # SET MAXBET
+    # SET MAXBET (per guild)
     # =====================================================
     @commands.command(name="setmaxbet")
     async def set_maxbet(self, ctx, amount: int):
@@ -102,23 +107,25 @@ class GambleCog(commands.Cog):
         set_gamble_setting(self.db, ctx.guild.id, "maxbet", amount)
         await ctx.send(f"🔒 Maxbet ditetapkan ke **{amount} coins**")
 
+
     # =====================================================
-    # BALANCE
+    # BALANCE (GLOBAL CASH)
     # =====================================================
     @commands.command(name="bal", aliases=["balance"])
     @gamble_only()
     async def balance(self, ctx):
-        cash = get_user_cash(self.db, ctx.author.id, ctx.guild.id)
+        cash = get_user_cash(self.db, ctx.author.id)
         await ctx.send(f"💰 Saldo kamu: **{comma(cash)} coins**")
 
+
     # =====================================================
-    # PARSE BET
+    # PARSE BET (GLOBAL CASH)
     # =====================================================
     def parse_bet(self, ctx, amount_str):
-        guild = ctx.guild.id
         user = ctx.author.id
+        guild = ctx.guild.id
 
-        cash = get_user_cash(self.db, user, guild)
+        cash = get_user_cash(self.db, user)
 
         maxbet = get_gamble_setting(self.db, guild, "maxbet")
         maxbet = int(maxbet) if maxbet else None
@@ -131,11 +138,11 @@ class GambleCog(commands.Cog):
             return None, cash, maxbet
 
         bet = int(amount_str)
-
         if maxbet and bet > maxbet:
             bet = maxbet
 
         return bet, cash, maxbet
+
 
     # =====================================================
     # COINFLIP
@@ -156,15 +163,16 @@ class GambleCog(commands.Cog):
 
         if result == "WIN":
             cash += bet
-            msg = f"🟢 MENANG! +{bet}"
+            msg = f"🟢 MENANG! +{comma(bet)}"
         else:
             cash -= bet
-            msg = f"🔴 KALAH! -{bet}"
+            msg = f"🔴 KALAH! -{comma(bet)}"
 
-        set_user_cash(self.db, ctx.author.id, ctx.guild.id, cash)
-        log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, result)
+        set_user_cash(self.db, ctx.author.id, cash)
+        log_gamble(self.db, ctx.author.id, "coinflip", bet, result)
 
         await ctx.send(f"{ctx.author.mention} {msg}\n💰 Saldo: **{comma(cash)}**")
+
 
     # =====================================================
     # SLOTS
@@ -228,25 +236,25 @@ class GambleCog(commands.Cog):
             win_amount = bet * multi
             cash += win_amount
 
-            text = (
+            desc = (
                 f"🟢 **MENANG!** {r1*3}\n"
                 f"Multiplier x{multi}\n"
-                f"**+{win_amount} coins**"
+                f"**+{comma(win_amount)} coins**"
             )
             color = discord.Color.green()
             status = "WIN"
         else:
             cash -= bet
-            text = f"🔴 **KALAH! -{bet} coins**"
+            desc = f"🔴 **KALAH! -{comma(bet)} coins**"
             color = discord.Color.red()
             status = "LOSE"
 
-        set_user_cash(self.db, ctx.author.id, ctx.guild.id, cash)
-        log_gamble(self.db, ctx.guild.id, ctx.author.id, "slots", bet, status)
+        set_user_cash(self.db, ctx.author.id, cash)
+        log_gamble(self.db, ctx.author.id, "slots", bet, status)
 
         result = discord.Embed(
             title="🎰 Slots Result",
-            description=f"{final}\n\n{text}\n\n💰 **Saldo: {comma(cash)}**",
+            description=f"{final}\n\n{desc}\n\n💰 **Saldo: {comma(cash)}**",
             color=color
         )
         await msg.edit(embed=result)

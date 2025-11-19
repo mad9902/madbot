@@ -41,7 +41,7 @@ class DuelCog(commands.Cog):
     # DUEL
     # =====================================================================
     @commands.command(name="duel")
-    @gamble_only()     # ⬅️ hanya bisa di channel gamble
+    @gamble_only()
     async def duel(self, ctx, amount: str, target: discord.Member):
 
         guild_id = ctx.guild.id
@@ -56,8 +56,9 @@ class DuelCog(commands.Cog):
         if target_id == challenger_id:
             return await ctx.send("❌ Tidak bisa duel dengan diri sendiri.")
 
-        cashA = get_user_cash(self.db, challenger_id, guild_id)
-        cashB = get_user_cash(self.db, target_id, guild_id)
+        # CASH GLOBAL !!!
+        cashA = get_user_cash(self.db, challenger_id)
+        cashB = get_user_cash(self.db, target_id)
 
         bet = self.parse_bet(ctx, amount, cashA)
         if bet is None:
@@ -125,13 +126,16 @@ class DuelCog(commands.Cog):
         winner = challenger_id if rollA > rollB else target_id
         loser  = target_id if winner == challenger_id else challenger_id
 
-        # Money adjust
-        cashW = get_user_cash(self.db, winner, guild_id)
-        cashL = get_user_cash(self.db, loser, guild_id)
+        # ======================
+        # Money transfer (GLOBAL)
+        # ======================
+        cashW = get_user_cash(self.db, winner)
+        cashL = get_user_cash(self.db, loser)
 
-        set_user_cash(self.db, winner, guild_id, cashW + bet)
-        set_user_cash(self.db, loser, guild_id, cashL - bet)
+        set_user_cash(self.db, winner, cashW + bet)
+        set_user_cash(self.db, loser, cashL - bet)
 
+        # log per-guild
         log_gamble(self.db, guild_id, challenger_id, "duel", bet,
                    "WIN" if winner == challenger_id else "LOSE")
         log_gamble(self.db, guild_id, target_id, "duel", bet,

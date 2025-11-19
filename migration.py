@@ -534,9 +534,9 @@ def migrate(db):
             PRIMARY KEY (guild_id, challenger)
         );
     """)
-
+    
     # ============================================================
-    # GUILD SETTINGS (NEW SYSTEM FOR ECONOMY)
+    # GUILD SETTINGS
     # ============================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS gamble_settings (
@@ -546,6 +546,55 @@ def migrate(db):
             PRIMARY KEY (guild_id, setting_key)
         );
     """)
+
+    # ============================================================
+    # MIGRATE user_cash → GLOBAL (user_id ONLY)
+    # ============================================================
+    # drop PK
+    cursor.execute("ALTER TABLE user_cash DROP PRIMARY KEY")
+
+    # drop guild_id if exists
+    cursor.execute("""
+        ALTER TABLE user_cash
+        DROP COLUMN IF EXISTS guild_id
+    """)
+
+    # add PK
+    cursor.execute("ALTER TABLE user_cash ADD PRIMARY KEY (user_id)")
+
+
+    # ============================================================
+    # MIGRATE user_daily → GLOBAL
+    # ============================================================
+    cursor.execute("ALTER TABLE user_daily DROP PRIMARY KEY")
+    cursor.execute("""
+        ALTER TABLE user_daily
+        DROP COLUMN IF EXISTS guild_id
+    """)
+    cursor.execute("ALTER TABLE user_daily ADD PRIMARY KEY (user_id)")
+
+
+    # ============================================================
+    # MIGRATE user_rob_protect → GLOBAL
+    # ============================================================
+    cursor.execute("ALTER TABLE user_rob_protect DROP PRIMARY KEY")
+    cursor.execute("""
+        ALTER TABLE user_rob_protect
+        DROP COLUMN IF EXISTS guild_id
+    """)
+    cursor.execute("ALTER TABLE user_rob_protect ADD PRIMARY KEY (user_id)")
+
+
+    # ============================================================
+    # MIGRATE user_protection → GLOBAL
+    # ============================================================
+    cursor.execute("ALTER TABLE user_protection DROP PRIMARY KEY")
+    cursor.execute("""
+        ALTER TABLE user_protection
+        DROP COLUMN IF EXISTS guild_id
+    """)
+    cursor.execute("ALTER TABLE user_protection ADD PRIMARY KEY (user_id)")
+
 
     # cursor.execute("""
     #     CREATE TABLE IF NOT EXISTS guild_settings (

@@ -101,8 +101,8 @@ class BlackjackCog(commands.Cog):
         if key in self.active_games:
             return await ctx.send("❌ Kamu masih dalam permainan blackjack.")
 
-        # parse bet
-        cash = get_user_cash(self.db, user_id, guild_id)
+        # parse bet (GLOBAL CASH)
+        cash = get_user_cash(self.db, user_id)
         maxbet = get_gamble_setting(self.db, guild_id, "maxbet")
         maxbet = int(maxbet) if maxbet else None
 
@@ -204,7 +204,7 @@ class BlackjackCog(commands.Cog):
 
                 if self.hand_value(player) > 21:
                     new_cash = cash - bet
-                    set_user_cash(self.db, user_id, guild_id, new_cash)
+                    set_user_cash(self.db, user_id, new_cash)
                     log_gamble(self.db, guild_id, user_id, "blackjack", bet, "LOSE")
                     del self.active_games[key]
 
@@ -222,7 +222,7 @@ class BlackjackCog(commands.Cog):
             if emoji == "🏳️":
                 loss = bet // 2
                 new_cash = cash - loss
-                set_user_cash(self.db, user_id, guild_id, new_cash)
+                set_user_cash(self.db, user_id, new_cash)
                 log_gamble(self.db, guild_id, user_id, "blackjack", loss, "LOSE")
                 del self.active_games[key]
 
@@ -261,7 +261,7 @@ class BlackjackCog(commands.Cog):
                 win = int(bet * 1.5)
 
             new_cash = cash + win
-            set_user_cash(self.db, user_id, guild_id, new_cash)
+            set_user_cash(self.db, user_id, new_cash)
             log_gamble(self.db, guild_id, user_id, "blackjack", bet, "WIN")
 
             result = f"🟢 Menang **+{comma(win)}**"
@@ -269,7 +269,7 @@ class BlackjackCog(commands.Cog):
 
         elif d_val > p_val:
             new_cash = cash - bet
-            set_user_cash(self.db, user_id, guild_id, new_cash)
+            set_user_cash(self.db, user_id, new_cash)
             log_gamble(self.db, guild_id, user_id, "blackjack", bet, "LOSE")
 
             result = f"🔴 Kalah **-{comma(bet)}**"
