@@ -27,7 +27,16 @@ def save_confession_map():
 def load_confession_map():
     global CONFESSION_THREAD_MAP
     try:
-        if os.path.getsize(MAP_FILE) == 0:
+        if not os.path.exists(MAP_FILE):
+            print("[ConfessionMap] MAP_FILE tidak ada, pakai map kosong.")
+            CONFESSION_THREAD_MAP = {}
+            return
+
+        size = os.path.getsize(MAP_FILE)
+        print(f"[ConfessionMap] MAP_FILE ditemukan, size = {size} bytes")
+
+        if size == 0:
+            print("[ConfessionMap] MAP_FILE kosong, set map kosong.")
             CONFESSION_THREAD_MAP = {}
             return
 
@@ -35,10 +44,23 @@ def load_confession_map():
             raw = json.load(f)
             CONFESSION_THREAD_MAP = {}
             for k, v in raw.items():
-                k = int(k)
-                CONFESSION_THREAD_MAP[k] = v
+                try:
+                    ik = int(k)
+                except ValueError:
+                    print(f"[ConfessionMap] KEY bukan int: {k}, skip")
+                    continue
 
-    except (FileNotFoundError, json.JSONDecodeError):
+                CONFESSION_THREAD_MAP[ik] = v
+
+        print(f"[ConfessionMap] Loaded {len(CONFESSION_THREAD_MAP)} entries dari file.")
+        # Optional: print beberapa contoh
+        for i, (mid, data) in enumerate(CONFESSION_THREAD_MAP.items()):
+            if i >= 5:
+                break
+            print(f"[ConfessionMap] Sample {i}: mid={mid}, data={data}")
+
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"[ConfessionMap] ERROR saat load file: {e}")
         CONFESSION_THREAD_MAP = {}
 
 
@@ -56,48 +78,96 @@ def cleanup_confession_map():
 # ======================================================
 
 async def restore_reply_buttons(bot: commands.Bot):
+    print("====================================================")
+    print("[Restore] MULAI restore_reply_buttons")
+    print(f"[Restore] Total entry di CONFESSION_THREAD_MAP: {len(CONFESSION_THREAD_MAP)}")
+    print("====================================================")
 
     for message_id, data in CONFESSION_THREAD_MAP.items():
+        print("----------------------------------------------------")
+        print(f"[Restore] Proses message_id={message_id} | data={data}")
 
         try:
+            # Validasi basic
             if not isinstance(data, dict):
+                print(f"[Restore] SKIP message_id={message_id} karena data bukan dict: {type(data)}")
                 continue
 
             channel_id = data.get("channel_id")
             thread_id = data.get("thread_id")
 
-            parent_ch = await bot.fetch_channel(channel_id)
-            if not isinstance(parent_ch, discord.TextChannel):
+            print(f"[Restore] channel_id={channel_id}, thread_id={thread_id}")
+
+            if not channel_id:
+                print(f"[Restore] SKIP message_id={message_id} karena channel_id kosong / None")
                 continue
 
+            # ====== FETCH PARENT CHANNEL ======
+            try:
+                parent_ch = await bot.fetch_channel(channel_id)
+                print(f"[Restore] parent_ch fetched: {parent_ch} (type={type(parent_ch)})")
+            except Exception as e:
+                print(f"[Restore] GAGAL fetch_channel({channel_id}) → {repr(e)}")
+                continue
+
+            if not isinstance(parent_ch, discord.TextChannel):
+                print(f"[Restore] SKIP message_id={message_id} karena parent_ch bukan TextChannel (type={type(parent_ch)})")
+                continue
+
+            # ====== FETCH PARENT MESSAGE ======
             try:
                 parent_msg = await parent_ch.fetch_message(int(message_id))
-            except:
+                print(f"[Restore] parent_msg fetched: id={parent_msg.id}, content={parent_msg.content!r}")
+            except Exception as e:
+                print(f"[Restore] GAGAL fetch_message di channel {channel_id} untuk mid={message_id} → {repr(e)}")
                 continue
 
-            # view untuk parent
-            view = ConfessionView(bot)
-            view.add_item(ReplyToConfessionButton(bot, message_id))
-            bot.add_view(view)  # <---- register juga parent view custom ini
+            # ====== BUILD & REGISTER VIEW UNTUK PARENT ======
+            try:
+                view = ConfessionView(bot)
+                # pastikan pakai int(message_id)
+                view.add_item(ReplyToConfessionButton(bot, int(message_id)))
+                bot.add_view(view)
+                print(f"[Restore] Berhasil add_view untuk parent message_id={message_id}")
 
-            await parent_msg.edit(view=view)
+                await parent_msg.edit(view=view)
+                print(f"[Restore] Berhasil edit parent_msg id={message_id} (tambah view).")
+            except Exception as e:
+                print(f"[Restore] GAGAL set view pada parent_msg id={message_id} → {repr(e)}")
 
-            # restore thread messages
+            # ====== RESTORE THREAD (JIKA ADA) ======
             if thread_id:
+                print(f"[Restore] Coba restore thread dengan thread_id={thread_id}")
                 try:
                     thread = await bot.fetch_channel(thread_id)
+                    print(f"[Restore] Thread fetched: {thread} (type={type(thread)})")
+                except Exception as e:
+                    print(f"[Restore] GAGAL fetch thread {thread_id} → {repr(e)}")
+                    continue
+
+                try:
                     async for msg in thread.history(limit=None):
                         if msg.author.id != bot.user.id:
                             continue
-                        v = ThreadReplyView(bot, msg.id)
-                        bot.add_view(v)  # <---- REGISTER PERSISTENT VIEW
-                        await msg.edit(view=v)
+                        print(f"[Restore] Tambah view ke thread msg id={msg.id}")
 
-                except:
-                    pass
+                        v = ThreadReplyView(bot, msg.id)
+                        bot.add_view(v)
+                        try:
+                            await msg.edit(view=v)
+                            print(f"[Restore] Berhasil edit thread msg {msg.id}")
+                        except Exception as e_msg:
+                            print(f"[Restore] GAGAL edit thread msg {msg.id} → {repr(e_msg)}")
+                except Exception as e_hist:
+                    print(f"[Restore] ERROR saat iterasi history thread {thread_id} → {repr(e_hist)}")
 
         except Exception as e:
-            print("[Restore Error]", e)
+            # Ini last-resort kalau ada error di luar yang lain
+            print("[Restore Error] Exception tak terduga:", repr(e))
+
+    print("====================================================")
+    print("[Restore] SELESAI restore_reply_buttons")
+    print("====================================================")
 
 # ======================================================
 # BUTTON — SUBMIT CONFESSION
@@ -554,19 +624,24 @@ class ConfessionCog(commands.Cog):
 # ======================================================
 
 async def setup(bot):
+    print("[ConfessionCog] setup() dipanggil, mulai init cog + views + restore")
+
     await bot.add_cog(ConfessionCog(bot))
+    print("[ConfessionCog] Cog ditambahkan")
 
-    # Persist main view
     bot.add_view(ConfessionView(bot))
+    print("[ConfessionCog] ConfessionView global terdaftar (persistent)")
 
-    # Dynamic reply buttons
     bot.add_dynamic_items(
         "confess_reply_",
         lambda cid: ReplyToConfessionButton.from_custom_id(bot, cid)
     )
+    print("[ConfessionCog] dynamic_items untuk confess_reply_ terdaftar")
 
-    # Restore all buttons
+    print("[ConfessionCog] Panggil restore_reply_buttons...")
     await restore_reply_buttons(bot)
 
-    # Cleanup mapping
+    print("[ConfessionCog] Panggil cleanup_confession_map...")
     cleanup_confession_map()
+    print("[ConfessionCog] setup() selesai")
+
