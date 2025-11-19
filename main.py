@@ -57,7 +57,10 @@ def get_prefix(bot, message):
         return commands.when_mentioned(bot)
 
     # Prioritas prefix panjang → pendek
-    return ['kos ', 'kos', 'mad ', 'mad', 'm', 'k']
+    return commands.when_mentioned_or(
+        "kos ", "mad ", "kos", "mad", "m", "k"
+    )(bot, message)
+
 
 
 # ======================================================
