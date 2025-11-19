@@ -235,29 +235,18 @@ class GambleCog(commands.Cog):
     @commands.command(name="cf", aliases=["coinflip"])
     @gamble_only()
     async def coinflip(self, ctx, arg1: str, arg2: str = None):
-        """
-        Format fleksibel:
-        - mcf all t
-        - mcf t all
-        - mcf 100 h
-        - mcf h 100
-        - mcf all      (default HEAD)
-        - mcf 100      (default HEAD)
-        """
 
+        # ============================
+        # GUESS PARSER
+        # ============================
         valid_guess = {
-            "h": "HEAD",
-            "head": "HEAD",
-            "t": "TAIL",
-            "tail": "TAIL"
+            "h": "HEAD", "head": "HEAD",
+            "t": "TAIL", "tail": "TAIL"
         }
 
         guess = None
         amount_str = None
 
-        # ============================
-        # DETECT arg1
-        # ============================
         if arg1.lower() in valid_guess:
             guess = valid_guess[arg1.lower()]
             amount_str = arg2
@@ -266,15 +255,9 @@ class GambleCog(commands.Cog):
             if arg2 and arg2.lower() in valid_guess:
                 guess = valid_guess[arg2.lower()]
 
-        # ============================
-        # DEFAULT HEAD jika tidak ada tebakan
-        # ============================
         if not guess:
-            guess = "HEAD"
+            guess = "HEAD"  # default tebakan
 
-        # ============================
-        # BET wajib ada
-        # ============================
         if not amount_str:
             return await ctx.send("❌ Kamu belum memasukkan nominal bet.")
 
@@ -286,42 +269,53 @@ class GambleCog(commands.Cog):
         if cash < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
 
-        # ============================================================
+
+        # ============================
         # PATH GAMBAR
-        # ============================================================
+        # (ga gue ubah, ikut directory kamu)
+        # ============================
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         COIN_DIR = os.path.join(BASE_DIR, "media")
 
-        flip_gif = os.path.join(COIN_DIR, "flip.gif")
-        head_img = os.path.join(COIN_DIR, "head.png")
-        tail_img = os.path.join(COIN_DIR, "tail.png")
+        fast_flip = os.path.join(COIN_DIR, "flip_fast.webp")
+        slow_flip = os.path.join(COIN_DIR, "flip_slow.webp")
+        head_img = os.path.join(COIN_DIR, "head_small.png")
+        tail_img = os.path.join(COIN_DIR, "tail_small.png")
 
-        # ============================================================
-        # ANIMASI AWAL (flip.gif)
-        # ============================================================
-        flip_embed = discord.Embed(
+        # ============================
+        # STEP 1 — FAST FLIP
+        # ============================
+        fast_embed = discord.Embed(
             title="🪙 Coinflip",
-            description=f"{ctx.author.mention} melempar koin...\n\n**Sedang berputar...**",
+            description=f"{ctx.author.mention} melempar koin...\n\n**Berputar cepat...**",
             color=discord.Color.blurple()
         )
+        fast_file = discord.File(fast_flip, filename="fast.webp")
+        fast_embed.set_image(url="attachment://fast.webp")
 
-        flip_file = discord.File(flip_gif, filename="flip.gif")
-        flip_embed.set_image(url="attachment://flip.gif")
+        msg = await ctx.send(embed=fast_embed, file=fast_file)
+        await asyncio.sleep(0.7)
 
-        msg = await ctx.send(embed=flip_embed, file=flip_file)
+        # ============================
+        # STEP 2 — SLOW FLIP
+        # ============================
+        slow_embed = discord.Embed(
+            title="🪙 Coinflip",
+            description=f"**Melambat...**",
+            color=discord.Color.blurple()
+        )
+        slow_file = discord.File(slow_flip, filename="slow.webp")
+        slow_embed.set_image(url="attachment://slow.webp")
 
-        # Tambahin waktu biar GIF kebaca
-        await asyncio.sleep(2.1)
+        await msg.edit(embed=slow_embed, attachments=[slow_file])
+        await asyncio.sleep(0.8)
 
-        # ============================================================
-        # HASIL
-        # ============================================================
+        # ============================
+        # STEP 3 — RESULT
+        # ============================
         actual = random.choice(["HEAD", "TAIL"])
         final_img = head_img if actual == "HEAD" else tail_img
 
-        # ============================================================
-        # HITUNG MENANG / KALAH
-        # ============================================================
         if guess == actual:
             cash += bet
             status = f"🟢 **Kamu menang! +{comma(bet)}**"
@@ -336,9 +330,9 @@ class GambleCog(commands.Cog):
         set_user_cash(self.db, ctx.author.id, cash)
         log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, res_code)
 
-        # ============================================================
-        # EMBED FINAL
-        # ============================================================
+        # ============================
+        # FINAL EMBED
+        # ============================
         final_embed = discord.Embed(
             title="🪙 Coinflip Result",
             description=(
@@ -350,10 +344,10 @@ class GambleCog(commands.Cog):
             color=color
         )
 
-        res_file = discord.File(final_img, filename="final.png")
+        final_file = discord.File(final_img, filename="final.png")
         final_embed.set_image(url="attachment://final.png")
 
-        await msg.edit(embed=final_embed, attachments=[res_file])
+        await msg.edit(embed=final_embed, attachments=[final_file])
 
     # =====================================================
     # SLOTS
