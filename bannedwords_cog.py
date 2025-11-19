@@ -131,8 +131,24 @@ class BannedWordsCog(commands.Cog):
         banned_words = get_all_banned_words(db, message.guild.id)
         db.close()
 
-        if message.content.startswith(tuple(await self.bot.get_prefix(message))):
+        prefixes = await self.bot.get_prefix(message)
+        content = message.content
+
+        is_valid_command = False
+
+        for p in prefixes:
+            if content.startswith(p):
+                # ambil kata setelah prefix
+                after = content[len(p):].strip().split(" ")[0].lower()
+
+                # cek apakah kata setelah prefix memang nama command bot
+                if after in self.bot.all_commands:
+                    is_valid_command = True
+                break
+
+        if is_valid_command:
             return
+
 
         content_lower = message.content.lower()
 
