@@ -150,7 +150,7 @@ class GambleCog(commands.Cog):
     # =====================================================
     # COINFLIP
     # =====================================================
-    @commands.command(name="cf", aliases=["coinflip"])
+    @commands.command(name="mcf", aliases=["cf", "coinflip"])
     @gamble_only()
     async def coinflip(self, ctx, arg1: str, arg2: str = None):
         """
@@ -159,22 +159,10 @@ class GambleCog(commands.Cog):
         - mcf t all
         - mcf 100 h
         - mcf h 100
-        - mcf 50 head
+        - mcf all      (default HEAD)
+        - mcf 100      (default HEAD)
         """
 
-        # ============================================================
-        # PATH GAMBAR (pastikan sesuai struktur kamu)
-        # ============================================================
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # folder MADBOT
-        COIN_DIR = os.path.join(BASE_DIR, "media")
-
-        flip_gif = os.path.join(COIN_DIR, "flip.gif")
-        head_img = os.path.join(COIN_DIR, "head.png")
-        tail_img = os.path.join(COIN_DIR, "tail.png")
-
-        # ============================================================
-        # DETECT YANG MANA BET & YANG MANA TEBAKAN
-        # ============================================================
         valid_guess = {
             "h": "HEAD",
             "head": "HEAD",
@@ -185,7 +173,9 @@ class GambleCog(commands.Cog):
         guess = None
         amount_str = None
 
-        # Coba parse arg1
+        # ============================
+        # DETECT arg1
+        # ============================
         if arg1.lower() in valid_guess:
             guess = valid_guess[arg1.lower()]
             amount_str = arg2
@@ -194,12 +184,15 @@ class GambleCog(commands.Cog):
             if arg2 and arg2.lower() in valid_guess:
                 guess = valid_guess[arg2.lower()]
 
+        # ============================
+        # DEFAULT HEAD jika tidak ada tebakan
+        # ============================
         if not guess:
-            return await ctx.send("❌ Format salah.\nContoh: `mcf 100 t` atau `mcf all head`")
+            guess = "HEAD"
 
-        # ============================================================
-        # PARSE BET
-        # ============================================================
+        # ============================
+        # BET wajib ada
+        # ============================
         if not amount_str:
             return await ctx.send("❌ Kamu belum memasukkan nominal bet.")
 
@@ -210,9 +203,19 @@ class GambleCog(commands.Cog):
             return await ctx.send("❌ Bet minimal 1.")
         if cash < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
-        
+
         # ============================================================
-        # ANIMASI AWAL — flip.gif
+        # PATH GAMBAR
+        # ============================================================
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        COIN_DIR = os.path.join(BASE_DIR, "media")
+
+        flip_gif = os.path.join(COIN_DIR, "flip.gif")
+        head_img = os.path.join(COIN_DIR, "head.png")
+        tail_img = os.path.join(COIN_DIR, "tail.png")
+
+        # ============================================================
+        # ANIMASI AWAL (flip.gif)
         # ============================================================
         flip_embed = discord.Embed(
             title="🪙 Coinflip",
@@ -225,19 +228,17 @@ class GambleCog(commands.Cog):
 
         msg = await ctx.send(embed=flip_embed, file=flip_file)
 
-        # Discord butuh waktu buat load GIF (tergantung koneksi)
-        # delay optimal 1.8 - 2.2 detik
-        await asyncio.sleep(2.2)
-
+        # Tambahin waktu biar GIF kebaca
+        await asyncio.sleep(2.1)
 
         # ============================================================
-        # HASIL SEBENARNYA
+        # HASIL
         # ============================================================
         actual = random.choice(["HEAD", "TAIL"])
         final_img = head_img if actual == "HEAD" else tail_img
 
         # ============================================================
-        # PENENTUAN MENANG / KALAH (berdasarkan tebakan user)
+        # HITUNG MENANG / KALAH
         # ============================================================
         if guess == actual:
             cash += bet
@@ -271,7 +272,6 @@ class GambleCog(commands.Cog):
         final_embed.set_image(url="attachment://final.png")
 
         await msg.edit(embed=final_embed, attachments=[res_file])
-
 
     # =====================================================
     # SLOTS
