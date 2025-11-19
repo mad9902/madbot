@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import random
+import os
 import time
 import datetime
 import asyncio
@@ -151,9 +152,58 @@ class GambleCog(commands.Cog):
     # =====================================================
     @commands.command(name="cf", aliases=["coinflip"])
     @gamble_only()
-    async def coinflip(self, ctx, amount: str):
+    async def coinflip(self, ctx, arg1: str, arg2: str = None):
+        """
+        Format fleksibel:
+        - mcf all t
+        - mcf t all
+        - mcf 100 h
+        - mcf h 100
+        - mcf 50 head
+        """
 
-        bet, cash, maxbet = self.parse_bet(ctx, amount)
+        # ============================================================
+        # PATH GAMBAR (pastikan sesuai struktur kamu)
+        # ============================================================
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # folder MADBOT
+        COIN_DIR = os.path.join(BASE_DIR, "media")
+
+        flip_gif = os.path.join(COIN_DIR, "flip.gif")
+        head_img = os.path.join(COIN_DIR, "head.png")
+        tail_img = os.path.join(COIN_DIR, "tail.png")
+
+        # ============================================================
+        # DETECT YANG MANA BET & YANG MANA TEBAKAN
+        # ============================================================
+        valid_guess = {
+            "h": "HEAD",
+            "head": "HEAD",
+            "t": "TAIL",
+            "tail": "TAIL"
+        }
+
+        guess = None
+        amount_str = None
+
+        # Coba parse arg1
+        if arg1.lower() in valid_guess:
+            guess = valid_guess[arg1.lower()]
+            amount_str = arg2
+        else:
+            amount_str = arg1
+            if arg2 and arg2.lower() in valid_guess:
+                guess = valid_guess[arg2.lower()]
+
+        if not guess:
+            return await ctx.send("❌ Format salah.\nContoh: `mcf 100 t` atau `mcf all head`")
+
+        # ============================================================
+        # PARSE BET
+        # ============================================================
+        if not amount_str:
+            return await ctx.send("❌ Kamu belum memasukkan nominal bet.")
+
+        bet, cash, maxbet = self.parse_bet(ctx, amount_str)
         if bet is None:
             return await ctx.send("❌ Nominal tidak valid.")
         if bet < 1:
@@ -162,18 +212,7 @@ class GambleCog(commands.Cog):
             return await ctx.send("❌ Saldo tidak cukup.")
 
         # ============================================================
-        # PATH GAMBAR
-        # ============================================================
-        import os
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # /cog folder
-        COIN_DIR = os.path.join(BASE_DIR, "..", "media")
-
-        flip_gif = os.path.join(COIN_DIR, "flip.gif")
-        head_img = os.path.join(COIN_DIR, "head.png")
-        tail_img = os.path.join(COIN_DIR, "tail.png")
-
-        # ============================================================
-        # ANIMASI AWAL
+        # TAMPILKAN ANIMASI AWAL (flip.gif)
         # ============================================================
         flip_embed = discord.Embed(
             title="🪙 Coinflip",
@@ -181,34 +220,30 @@ class GambleCog(commands.Cog):
             color=discord.Color.blurple()
         )
 
-        file = discord.File(flip_gif, filename="flip.gif")
+        flip_file = discord.File(flip_gif, filename="flip.gif")
         flip_embed.set_image(url="attachment://flip.gif")
 
-        msg = await ctx.send(embed=flip_embed, file=file)
+        msg = await ctx.send(embed=flip_embed, file=flip_file)
 
-        await asyncio.sleep(1.4)
+        await asyncio.sleep(1.2)
 
         # ============================================================
-        # HASIL
+        # HASIL SEBENARNYA
         # ============================================================
-        result = random.choice(["HEAD", "TAIL"])
+        actual = random.choice(["HEAD", "TAIL"])
+        final_img = head_img if actual == "HEAD" else tail_img
 
-        if result == "HEAD":
-            final_img = head_img
-            win = True
-        else:
-            final_img = tail_img
-            win = False
-
-        # update balance
-        if win:
+        # ============================================================
+        # PENENTUAN MENANG / KALAH (berdasarkan tebakan user)
+        # ============================================================
+        if guess == actual:
             cash += bet
-            status = f"🟢 **MENANG! +{comma(bet)}**"
+            status = f"🟢 **Kamu menang! +{comma(bet)}**"
             color = discord.Color.green()
             res_code = "WIN"
         else:
             cash -= bet
-            status = f"🔴 **KALAH! -{comma(bet)}**"
+            status = f"🔴 **Kamu kalah! -{comma(bet)}**"
             color = discord.Color.red()
             res_code = "LOSE"
 
@@ -220,14 +255,19 @@ class GambleCog(commands.Cog):
         # ============================================================
         final_embed = discord.Embed(
             title="🪙 Coinflip Result",
-            description=f"**Hasil: `{result}`**\n\n{status}\n\n💰 **Saldo: {comma(cash)}**",
+            description=(
+                f"Tebakan kamu: **{guess}**\n"
+                f"Hasil koin: **{actual}**\n\n"
+                f"{status}\n\n"
+                f"💰 **Saldo sekarang: {comma(cash)}**"
+            ),
             color=color
         )
 
-        file2 = discord.File(final_img, filename="final.png")
+        res_file = discord.File(final_img, filename="final.png")
         final_embed.set_image(url="attachment://final.png")
 
-        await msg.edit(embed=final_embed, attachments=[file2])
+        await msg.edit(embed=final_embed, attachments=[res_file])
 
 
     # =====================================================
