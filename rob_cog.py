@@ -300,10 +300,10 @@ untuk melanjutkan.
             m = (left % 3600) // 60
             return await ctx.send(f"❌ Kamu sudah punya proteksi **{h} jam {m} menit**.")
 
-        if cash < 500:
-            return await ctx.send("❌ Butuh **500 coins**.")
+        if cash < 25000:
+            return await ctx.send("❌ Butuh **25000 coins**.")
 
-        set_user_cash(self.db, user, cash - 500)
+        set_user_cash(self.db, user, cash - 25000)
         set_user_protection(self.db, user, now_ts + 86400)
 
         await ctx.send("🛡 Proteksi aktif **24 jam**!")
