@@ -169,7 +169,7 @@ Target: {target.mention}
 🎯 Chance sukses: **{int(chance*100)}%**
 
 Ketik:
-**rob {target.mention} confirm**
+**mrob {target.mention} confirm**
 untuk melanjutkan.
 """
         )

@@ -158,7 +158,7 @@ class ReplyToConfessionButton(discord.ui.Button):
 class SubmitImageConfessionButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot):
         super().__init__(
-            label="Submit confession with image",
+            label="Submit with image / video",
             style=discord.ButtonStyle.green,
             custom_id="confess_image_submit"
         )
