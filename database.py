@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector import Error
 import os
+import pytz
 import time
 from datetime import datetime, timedelta, date
 import json
@@ -12,7 +13,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
+JAKARTA_TZ = pytz.timezone("Asia/Jakarta")
 
 def retry_database(retries=5, delay=3):
     def decorator(func):
@@ -403,12 +404,17 @@ def get_birthday(db, user_id, guild_id):
 
 def get_today_birthdays(db):
     cursor = db.cursor()
+
+    # tanggal WIB yang benar
+    today = datetime.now(JAKARTA_TZ).date()
+
     cursor.execute("""
         SELECT user_id, guild_id, display_name, wish, template_url
         FROM birthdays
-        WHERE DAY(birthdate) = DAY(CURDATE())
-          AND MONTH(birthdate) = MONTH(CURDATE())
-    """)
+        WHERE DAY(birthdate) = %s
+          AND MONTH(birthdate) = %s
+    """, (today.day, today.month))
+
     result = cursor.fetchall()
     cursor.close()
     return result
