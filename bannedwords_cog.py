@@ -184,7 +184,7 @@ class BannedWordsCog(commands.Cog):
                 await message.channel.send(embed=embed)
                 break
             
-        message._from_bannedwords = True
+        BLOCKED_MESSAGES.add(message.id)
 
         await self.bot.process_commands(message)
 
