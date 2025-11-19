@@ -55,7 +55,8 @@ def get_prefix(bot, message):
     if message.guild and message.guild.id in DISABLED_GUILDS:
         if message.content.strip().lower().startswith(("mad boton", "md boton", "mboton")):
             return ['mad', 'm', 'k', 'kos ']
-        return commands.when_mentioned(bot)
+        commands.when_mentioned(bot, message)
+
 
     # Prioritas prefix panjang → pendek
     return commands.when_mentioned_or(
