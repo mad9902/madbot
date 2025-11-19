@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ui import View, Button
 import random
 import os
 import time
@@ -18,6 +19,51 @@ from gamble_utils import (
     comma
 )
 
+class ConfirmGive(View):
+    def __init__(self, giver, target, amount, db):
+        super().__init__(timeout=20)
+        self.giver = giver
+        self.target = target
+        self.amount = amount
+        self.db = db
+        self.value = None
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        # Hanya yg menjalankan command yg bisa klik
+        if interaction.user.id != self.giver.id:
+            await interaction.response.send_message("❌ Bukan aksi kamu.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: Button):
+        # Update cash
+        cash = get_user_cash(self.db, self.target.id)
+        new_cash = cash + self.amount
+        set_user_cash(self.db, self.target.id, new_cash)
+
+        embed = discord.Embed(
+            title="💸 Cash Given",
+            description=(
+                f"{self.giver.mention} memberikan **{comma(self.amount)} coins** kepada {self.target.mention}!\n\n"
+                f"💰 Saldo baru {self.target.mention}: **{comma(new_cash)}**"
+            ),
+            color=discord.Color.green()
+        )
+
+        await interaction.response.edit_message(embed=embed, view=None)
+        self.value = True
+        self.stop()
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.edit_message(
+            content="❌ **Dibatalkan.**",
+            embed=None,
+            view=None
+        )
+        self.value = False
+        self.stop()
 
 class GambleCog(commands.Cog):
     def __init__(self, bot):
@@ -110,6 +156,42 @@ class GambleCog(commands.Cog):
         set_gamble_setting(self.db, ctx.guild.id, "maxbet", amount)
         await ctx.send(f"🔒 Maxbet ditetapkan ke **{amount} coins**")
 
+    
+    
+
+
+    # ======================================================================
+    # COMMAND: mgive (WITH CONFIRMATION)
+    # ======================================================================
+    @commands.command(name="give")
+    async def mgive(self, ctx, user: discord.Member, amount: str):
+        # Validasi nominal
+        if amount.lower() == "all":
+            return await ctx.send("❌ Nominal tidak boleh 'all' untuk mgive.")
+
+        if not amount.isdigit():
+            return await ctx.send("❌ Nominal tidak valid.")
+
+        amount = int(amount)
+        if amount < 1:
+            return await ctx.send("❌ Nominal harus lebih dari 0.")
+
+        # View konfirmasi
+        view = ConfirmGive(ctx.author, user, amount, self.db)
+
+        embed = discord.Embed(
+            title="⚠️ Konfirmasi Transfer",
+            description=(
+                f"**{ctx.author.mention}**, kamu akan memberikan:\n\n"
+                f"💸 **{comma(amount)} coins**\n"
+                f"➡️ Kepada: {user.mention}\n\n"
+                f"Apakah kamu yakin?"
+            ),
+            color=discord.Color.orange()
+        )
+
+        await ctx.send(embed=embed, view=view)
+
 
     # =====================================================
     # BALANCE (GLOBAL CASH)
@@ -150,7 +232,7 @@ class GambleCog(commands.Cog):
     # =====================================================
     # COINFLIP
     # =====================================================
-    @commands.command(name="mcf", aliases=["cf", "coinflip"])
+    @commands.command(name="cf", aliases=["coinflip"])
     @gamble_only()
     async def coinflip(self, ctx, arg1: str, arg2: str = None):
         """
@@ -272,43 +354,6 @@ class GambleCog(commands.Cog):
         final_embed.set_image(url="attachment://final.png")
 
         await msg.edit(embed=final_embed, attachments=[res_file])
-
-    # =====================================================
-    # MGIVE (ADMIN GIVE CASH)
-    # =====================================================
-    @commands.command(name="give")
-    async def mgive(self, ctx, user: discord.Member, amount: str):
-        # if ctx.author.id not in [ctx.guild.owner_id, 416234104317804544]:
-        #     return await ctx.send("❌ Kamu tidak punya izin menggunakan command ini.")
-
-        # Validasi nominal
-        if amount.lower() == "all":
-            return await ctx.send("❌ Nominal tidak boleh 'all' untuk mgive.")
-
-        if not amount.isdigit():
-            return await ctx.send("❌ Nominal tidak valid.")
-
-        amount = int(amount)
-        if amount < 1:
-            return await ctx.send("❌ Nominal harus lebih dari 0.")
-
-        # Update cash user
-        cash = get_user_cash(self.db, user.id)
-        new_cash = cash + amount
-        set_user_cash(self.db, user.id, new_cash)
-
-        # Kirim embed notifikasi
-        embed = discord.Embed(
-            title="💸 Cash Given",
-            description=(
-                f"{ctx.author.mention} memberikan **{comma(amount)} coins** kepada {user.mention}!\n\n"
-                f"💰 Saldo baru {user.mention}: **{comma(new_cash)}**"
-            ),
-            color=discord.Color.green()
-        )
-
-        await ctx.send(embed=embed)
-
 
     # =====================================================
     # SLOTS
