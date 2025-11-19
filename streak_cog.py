@@ -25,6 +25,7 @@ from database import (
 
 )
 
+from discord.ui import View, Button
 import pytz
 import io
 import aiohttp
@@ -182,6 +183,26 @@ def format_pair_mention(pair_row):
     return f"<@{pair_row['user1_id']}> × <@{pair_row['user2_id']}>"
 
 
+
+class InfoPagination(View):
+    def __init__(self, pages):
+        super().__init__(timeout=120)
+        self.pages = pages
+        self.index = 0
+
+    async def update(self, interaction):
+        embed = self.pages[self.index]
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction: discord.Interaction, button: Button):
+        self.index = (self.index - 1) % len(self.pages)
+        await self.update(interaction)
+
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: Button):
+        self.index = (self.index + 1) % len(self.pages)
+        await self.update(interaction)
 # =========================
 #  Cog utama
 # =========================
@@ -1069,6 +1090,125 @@ class StreakCog(commands.Cog):
 
         await ctx.send(embed=embed)
 
+    # ----- mstreakinfo -----
+    @streak_group.command(name="info")
+    async def streak_info(self, ctx: commands.Context):
+        """Melihat status streak lengkap: pending, active, dan siapa yg belum nyala hari ini."""
+        guild_id = ctx.guild.id
+        me = ctx.author
+
+        wib = pytz.timezone("Asia/Jakarta")
+        today = datetime.now(wib).date()
+
+        # ================================
+        # 1) PENDING REQUESTS
+        # ================================
+        pendings = get_pending_streak_requests(
+            guild_id=guild_id,
+            target_user_id=me.id,
+            limit=100,
+            offset=0
+        )
+
+        emb1 = discord.Embed(
+            title="⏳ Pending Streak Requests",
+            colour=discord.Colour.orange()
+        )
+
+        if not pendings:
+            emb1.description = "Tidak ada permintaan streak yang pending."
+        else:
+            lines = []
+            for row in pendings:
+                u1 = row["user1_id"]
+                u2 = row["user2_id"]
+                initiator = row["initiator_id"]
+
+                other_id = u1 if me.id == u2 else u2
+                lines.append(
+                    f"- Dengan <@{other_id}> (initiator: <@{initiator}>)"
+                )
+            emb1.description = "\n".join(lines)
+
+        # ================================
+        # 2) ACTIVE STREAK LIST
+        # ================================
+        active_pairs = get_active_streaks(guild_id, limit=5000, offset=0)
+
+        emb2 = discord.Embed(
+            title="🔥 Active Streak Status",
+            colour=discord.Colour.orange()
+        )
+
+        if not active_pairs:
+            emb2.description = "Belum ada pasangan streak aktif."
+        else:
+            lines = []
+            for p in active_pairs:
+                u1 = p["user1_id"]
+                u2 = p["user2_id"]
+                pair = ensure_restore_cycle(p)
+
+                streak = pair["current_streak"]
+                last = pair["last_update_date"]
+                needs = pair.get("needs_restore", 0)
+                deadline = pair.get("restore_deadline")
+
+                emoji = get_display_emoji(self.bot, guild_id, streak)
+
+                if needs == 1:
+                    stat = f"⚠️ RESTORE (deadline {deadline})"
+                else:
+                    stat = "ACTIVE"
+
+                lines.append(
+                    f"{emoji} <@{u1}> × <@{u2}> — `{streak}x` ({stat})\n"
+                    f"Terakhir nyala: `{last}`"
+                )
+
+            emb2.description = "\n\n".join(lines)
+
+        # ================================
+        # 3) WHO HAS NOT LIT TODAY
+        # ================================
+        emb3 = discord.Embed(
+            title="📅 Yang Belum Nyalain Api Hari Ini",
+            colour=discord.Colour.red()
+        )
+
+        if not active_pairs:
+            emb3.description = "Tidak ada pasangan streak aktif."
+        else:
+            pending_today = []
+
+            for p in active_pairs:
+                row = ensure_restore_cycle(p)
+                last = row["last_update_date"]
+
+                if isinstance(last, str):
+                    try:
+                        last = datetime.strptime(last, "%Y-%m-%d").date()
+                    except:
+                        last = today
+
+                if last != today:  # belum nyala hari ini
+                    emoji = get_display_emoji(self.bot, guild_id, row["current_streak"])
+                    pending_today.append(
+                        f"{emoji} <@{row['user1_id']}> × <@{row['user2_id']}>"
+                        f"\nLast: `{row['last_update_date']}`\n"
+                    )
+
+            if not pending_today:
+                emb3.description = "🎉 Semua pasangan sudah menyalakan api hari ini!"
+            else:
+                emb3.description = "\n".join(pending_today)
+
+        # ================================
+        # SEND PAGINATION
+        # ================================
+        pages = [emb1, emb2, emb3]
+        view = InfoPagination(pages)
+        await ctx.send(embed=pages[0], view=view)
     # ----- mstreak request @user -----
 
     @streak_group.command(name="request")
