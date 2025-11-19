@@ -28,6 +28,11 @@ from werewolf_cog import Werewolf
 from lastActive_cog import LastActive
 from commandstatus_cog import CommandStatusCog
 from logs_cog import LogCog
+from gamble_cog import GambleCog
+from daily_cog import DailyCog
+from duel_cog import DuelCog
+from rob_cog import RobCog
+from help_cog import HelpCog
 from channelcontrol_cog import ChannelControl
 from admin_cog import AdminCog
 from confession_cog import ConfessionCog, ConfessionView, restore_reply_buttons
@@ -106,8 +111,11 @@ class MadBot(commands.Bot):
         await self.add_cog(StreakCog(self))
         await self.add_cog(ChannelControl(self))
         await self.add_cog(AdminCog(self))
-
-
+        await self.add_cog(GambleCog(self))
+        await self.add_cog(DailyCog(self))
+        await self.add_cog(DuelCog(self))
+        await self.add_cog(RobCog(self))
+        await self.add_cog(HelpCog(self))
 
         # Load cache semua guild
 

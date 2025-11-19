@@ -457,6 +457,84 @@ def migrate(db):
         );
     """)
 
+    # ============================================================
+    # 1. USER CASH STORAGE
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_cash (
+            guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            cash BIGINT NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id)
+        );
+    """)
+
+    # ============================================================
+    # 2. GAMBLE LOGS
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gamble_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT,
+            user_id BIGINT,
+            gamble_type VARCHAR(50),
+            amount BIGINT,
+            result VARCHAR(10),   -- WIN / LOSE / OTHER
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    # ============================================================
+    # 3. DAILY CLAIM & STREAK SYSTEM
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_daily (
+            guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            last_claim DATE,                -- Tanggal terakhir claim
+            streak INT DEFAULT 0,           -- Daily streak
+            PRIMARY KEY (guild_id, user_id)
+        );
+    """)
+
+    # ============================================================
+    # 4. ROB VICTIM COOLDOWN (ANTI-SPAM 2 JAM)
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_rob_protect (
+            guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            protect_until BIGINT DEFAULT 0,   -- UNIX TIMESTAMP
+            PRIMARY KEY (guild_id, user_id)
+        );
+    """)
+
+    # ============================================================
+    # 5. ROB 24-HOUR PROTECTION (BUY FOR 500 CASH)
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_protection (
+            guild_id BIGINT NOT NULL,
+            user_id BIGINT NOT NULL,
+            active_until BIGINT DEFAULT 0,     -- UNIX TIMESTAMP
+            PRIMARY KEY (guild_id, user_id)
+        );
+    """)
+
+    # ============================================================
+    # 6. DICE DUEL PENDING INVITES
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS duel_pending (
+            guild_id BIGINT NOT NULL,
+            challenger BIGINT NOT NULL,
+            target BIGINT NOT NULL,
+            bet BIGINT NOT NULL,
+            created_at BIGINT NOT NULL,
+            PRIMARY KEY (guild_id, challenger)
+        );
+    """)
+
     db.commit()
     cursor.close()
     

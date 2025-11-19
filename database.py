@@ -1665,3 +1665,184 @@ def get_emoji_for_streak(guild_id, streak):
         return row["emoji_id"]
 
     return None
+
+# ============================================================
+#  USER CASH (GAMBLE SYSTEM)
+# ============================================================
+def get_user_cash(db, user_id, guild_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT cash FROM user_cash
+        WHERE guild_id=%s AND user_id=%s
+    """, (guild_id, user_id))
+
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else 0
+
+
+def set_user_cash(db, user_id, guild_id, cash):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO user_cash (guild_id, user_id, cash)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE cash=%s
+    """, (guild_id, user_id, cash, cash))
+    db.commit()
+    cursor.close()
+
+
+# ============================================================
+#  GAMBLE LOG
+# ============================================================
+def log_gamble(db, guild_id, user_id, gamble_type, amount, result):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO gamble_log (guild_id, user_id, gamble_type, amount, result)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (guild_id, user_id, gamble_type, amount, result))
+    db.commit()
+    cursor.close()
+
+
+# ============================================================
+#  CHANNEL SETTINGS
+# ============================================================
+def set_channel_settings(db, guild_id, key, value):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO channel_settings (guild_id, setting_key, setting_value)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE setting_value=%s
+    """, (guild_id, key, value, value))
+    db.commit()
+    cursor.close()
+
+
+def get_channel_settings(db, guild_id, key):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT setting_value FROM channel_settings
+        WHERE guild_id=%s AND setting_key=%s
+    """, (guild_id, key))
+
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
+
+
+# ============================================================
+#  DAILY SYSTEM
+# ============================================================
+def get_daily_data(db, guild_id, user_id):
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT last_claim, streak
+        FROM user_daily
+        WHERE guild_id=%s AND user_id=%s
+    """, (guild_id, user_id))
+
+    row = cursor.fetchone()
+    cursor.close()
+
+    return row if row else {"last_claim": None, "streak": 0}
+
+
+def set_daily_data(db, guild_id, user_id, last_claim, streak):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO user_daily (guild_id, user_id, last_claim, streak)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE last_claim=%s, streak=%s
+    """, (guild_id, user_id, last_claim, streak, last_claim, streak))
+    db.commit()
+    cursor.close()
+
+
+# ============================================================
+# ROB: 24-HOUR PROTECTION (BUY)
+# ============================================================
+def get_user_protection(db, guild_id, user_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT active_until FROM user_protection
+        WHERE guild_id=%s AND user_id=%s
+    """, (guild_id, user_id))
+
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else 0
+
+
+def set_user_protection(db, guild_id, user_id, until_ts):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO user_protection (guild_id, user_id, active_until)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE active_until=%s
+    """, (guild_id, user_id, until_ts, until_ts))
+    db.commit()
+    cursor.close()
+
+
+# ============================================================
+# ROB: 2-HOUR VICTIM COOLDOWN
+# ============================================================
+def get_rob_victim_protect(db, guild_id, user_id):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT protect_until FROM user_rob_protect
+        WHERE guild_id=%s AND user_id=%s
+    """, (guild_id, user_id))
+
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else 0
+
+
+def set_rob_victim_protect(db, guild_id, user_id, until_ts):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO user_rob_protect (guild_id, user_id, protect_until)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE protect_until=%s
+    """, (guild_id, user_id, until_ts, until_ts))
+    db.commit()
+    cursor.close()
+
+
+# ============================================================
+# DICE DUEL SYSTEM
+# ============================================================
+def create_duel_request(db, guild_id, challenger, target, bet):
+    now = int(time.time())
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO duel_pending (guild_id, challenger, target, bet, created_at)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE target=%s, bet=%s, created_at=%s
+    """, (guild_id, challenger, target, bet, now, target, bet, now))
+    db.commit()
+    cursor.close()
+
+
+def get_duel_request(db, guild_id, challenger):
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT * FROM duel_pending
+        WHERE guild_id=%s AND challenger=%s
+    """, (guild_id, challenger))
+
+    row = cursor.fetchone()
+    cursor.close()
+    return row
+
+
+def delete_duel_request(db, guild_id, challenger):
+    cursor = db.cursor()
+    cursor.execute("""
+        DELETE FROM duel_pending
+        WHERE guild_id=%s AND challenger=%s
+    """, (guild_id, challenger))
+    db.commit()
+    cursor.close()
