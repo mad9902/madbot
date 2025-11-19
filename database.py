@@ -1766,23 +1766,23 @@ def get_total_gamble_wins(db, user_id):
 # ============================================================
 #  CHANNEL SETTINGS
 # ============================================================
-def set_channel_settings(db, guild_id, key, value):
+def set_channel_settings(db, guild_id, setting_type, channel_id):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO channel_settings (guild_id, setting_key, setting_value)
+        INSERT INTO channel_settings (guild_id, setting_type, channel_id)
         VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE setting_value=%s
-    """, (guild_id, key, value, value))
+        ON DUPLICATE KEY UPDATE channel_id=%s
+    """, (guild_id, setting_type, channel_id, channel_id))
     db.commit()
     cursor.close()
 
 
-def get_channel_settings(db, guild_id, key):
+def get_channel_settings(db, guild_id, setting_type):
     cursor = db.cursor()
     cursor.execute("""
-        SELECT setting_value FROM channel_settings
-        WHERE guild_id=%s AND setting_key=%s
-    """, (guild_id, key))
+        SELECT channel_id FROM channel_settings
+        WHERE guild_id=%s AND setting_type=%s
+    """, (guild_id, setting_type))
 
     row = cursor.fetchone()
     cursor.close()
