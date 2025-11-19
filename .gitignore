@@ -17,13 +17,13 @@ ffmpeg.exe
 # File konfigurasi & sementara
 confession_map.json
 
-# Gambar
-*.jpg
-*.jpeg
-*.png
-*.gif
+# # Gambar
+# *.jpg
+# *.jpeg
+# *.png
+# *.gif
 
-# IZINKAN folder media dulu
+# Track media folder
 !media/
 media/*
 !media/ultahkos.png
@@ -32,4 +32,5 @@ media/*
 !media/head.png
 !media/tail.png
 !media/flip.gif
+
 
