@@ -1,109 +1,93 @@
 import discord
 from discord.ext import commands
 
-
 class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        bot.remove_command("help")  # disable default help
 
+    @commands.command(name="ghelp")
+    async def help_category(self, ctx, category: str = None):
 
-    # ============================================================
-    #  MAIN HELP COMMAND
-    # ============================================================
-    @commands.command(name="help")
-    async def help(self, ctx, category: str = None):
-
-        # No category → show index
-        if not category:
+        if category is None:
             embed = discord.Embed(
-                title="📘 MadBot Help Menu",
+                title="📘 Economy Help Menu",
                 description="""
-Pilih kategori bantuan:
+Pilih kategori:
 
-🟢 **Gamble Commands**
-`help gamble`
-
-🔵 **Daily System**
-`help daily`
-
-🟣 **Duel**
-`help duel`
-
-🔴 **Robbery System**
-`help rob`
-
-⚙️ **Admin Commands**
-`help admin`
+🟢 `ghelp gamble`  
+🔵 `ghelp daily`  
+🟣 `ghelp duel`  
+🔴 `ghelp rob`  
+⚙️ `ghelp admin`
                 """,
                 color=discord.Color.blurple()
             )
-            embed.set_footer(text="MadBot — Smart Economy System")
             return await ctx.send(embed=embed)
 
-        category = category.lower()
+        c = category.lower()
 
-        # ============================================================
-        # GAMBLE HELP
-        # ============================================================
-        if category == "gamble":
+        # ======================================================
+        # GAMBLE HELP (Blackjack ditambahkan)
+        # ======================================================
+        if c == "gamble":
             embed = discord.Embed(
                 title="🟢 Gamble Commands",
                 description="""
 💰 **Earning Cash**
-Cash bertambah otomatis dari chat (anti-spam + anti-duplicate).
+Cash bertambah otomatis dari chat.
 
 🎲 **Coinflip**
 `cf <jumlah>`
 `cf all`
-• Menang/kalah 50%
 
-🎰 **Slots**
+🎰 **Slots (Basic)**
 `slots <jumlah>`
 `slots all`
-• Payout: x2, x4, x5, x10
+
+🃏 **Blackjack**
+`blackjack <jumlah>`
+• Animasi kartu delay 1-1  
+• Dealer AI  
+• React HIT / STAND  
+• Auto-cancel kalau kamu left  
+• Ada cooldown 5 detik  
+• Blackjack bayar ×2.5
 
 💼 **Balance**
-`bal`
-`balance`
+`bal`, `balance`
 
-🔒 **Set Max Bet (Admin)**
+🔒 **Max Bet (Admin)**
 `setmaxbet <angka>`
 
-📍 **Set Gamble Channel (Admin)**
+📍 **Gamble Channel (Admin)**
 `setgamblech #channel`
                 """,
                 color=discord.Color.green()
             )
             return await ctx.send(embed=embed)
 
-        # ============================================================
-        # DAILY HELP
-        # ============================================================
-        if category == "daily":
+        # ======================================================
+        # DAILY
+        # ======================================================
+        if c == "daily":
             embed = discord.Embed(
                 title="🔵 Daily Reward System",
                 description="""
 🎁 **Daily**
 `daily`
-• Reset harian jam 14:00 WIB
-• Streak meningkat tiap hari
-• Reward bertambah sesuai streak:
-  • Base 200 + (streak × 50)
 
-💰 Contoh:
-Hari 1 → 200  
-Hari 10 → 650  
-Hari 30 → 1700  
+• Reset jam 14:00 WIB
+• Streak meningkat tiap hari
+• Reward naik terus (200 + streak × 50)
                 """,
                 color=discord.Color.blue()
             )
             return await ctx.send(embed=embed)
 
-        # ============================================================
-        # DUEL HELP
-        # ============================================================
-        if category == "duel":
+        # ======================================================
+        # DUEL
+        # ======================================================
+        if c == "duel":
             embed = discord.Embed(
                 title="🟣 Duel System",
                 description="""
@@ -111,51 +95,32 @@ Hari 30 → 1700
 `duel <jumlah> @user`
 `duel all @user`
 
-• User A menantang user B  
-• User B harus accept/decline  
-• Roll dadu 1–6  
-• Jika seri → rematch otomatis  
-• Pemenang mendapat jumlah taruhan  
-• Tidak bisa duel diri sendiri atau bot  
-• Anti-abuse: tidak bisa duel saat pending duel lain
+• Target harus accept
+• Roll dadu 1–6
+• Seri → rematch
+• Pemenang ambil taruhan
                 """,
                 color=discord.Color.purple()
             )
             return await ctx.send(embed=embed)
 
-        # ============================================================
-        # ROB HELP
-        # ============================================================
-        if category == "rob":
+        # ======================================================
+        # ROB
+        # ======================================================
+        if c == "rob":
             embed = discord.Embed(
                 title="🔴 Robbery System",
-                description="""
-🔪 **Rob Target**
-`rob @user`
-→ Menampilkan preview:
-• Berapa yang akan dicuri (5–10%)
-• Risiko gagal (10% kehilangan sendiri)
-• Chance sukses (dynamic 35–65%)
+                description=""" 
+🔪 `rob @user` → Preview curian  
+🔪 `rob @user confirm` → Eksekusi
 
-🔪 **Confirm Rob**
-`rob @user confirm`
-→ Eksekusi rob setelah preview
+🛡 `buyprotection` → Shield 24 jam  
+🛡 Anti-Rob 2 jam untuk korban sukses rob
 
-🛡 **Buy Protection**
-`buyprotection`
-• 500 cash
-• Kebal rob selama 24 jam
+📊 `robstatus`  
+🏆 `roblb`
 
-🛡 **Anti-Rob 2 Jam**
-• Korban sukses rob → otomatis aman 2 jam
-
-📊 **Rob Status**
-`robstatus`
-
-🏆 **Rob Leaderboard**
-`roblb`
-
-🛑 **Disable/Enable Rob (Admin)**
+🛑 Admin:
 `robdisable`
 `robenable`
                 """,
@@ -163,34 +128,28 @@ Hari 30 → 1700
             )
             return await ctx.send(embed=embed)
 
-        # ============================================================
-        # ADMIN HELP
-        # ============================================================
-        if category == "admin":
+        # ======================================================
+        # ADMIN
+        # ======================================================
+        if c == "admin":
             embed = discord.Embed(
-                title="⚙️ Admin Commands",
+                title="⚙️ Admin Commands (Economy)",
                 description="""
-📍 **Gamble Settings**
-`setgamblech #channel`
-`setmaxbet <angka>`
-
-🛑 **Rob Toggle**
-`robdisable`
-`robenable`
-
-(Owner server + User ID master)
+📍 `setgamblech #channel`
+📍 `setmaxbet <angka>`
+📍 `robdisable`
+📍 `robenable`
                 """,
                 color=discord.Color.gold()
             )
             return await ctx.send(embed=embed)
 
-        # ============================================================
-        # UNKNOWN CATEGORY
-        # ============================================================
-        else:
-            return await ctx.send("❌ Kategori tidak dikenal. Gunakan `help` untuk daftar kategori.")
+        # Fallback → help bawaan
+        default_help = self.bot.get_command("help")
+        if default_help:
+            return await ctx.invoke(default_help)
 
-
+        return await ctx.send("❌ Kategori tidak dikenal.")
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))

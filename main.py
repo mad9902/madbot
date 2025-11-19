@@ -35,6 +35,7 @@ from rob_cog import RobCog
 from help_cog import HelpCog
 from channelcontrol_cog import ChannelControl
 from admin_cog import AdminCog
+from blackjack_cog import BlackjackCog
 from confession_cog import ConfessionCog, ConfessionView, restore_reply_buttons
 from bot_state import DISABLED_GUILDS, OWNER_ID
 
@@ -116,6 +117,7 @@ class MadBot(commands.Bot):
         await self.add_cog(DuelCog(self))
         await self.add_cog(RobCog(self))
         await self.add_cog(HelpCog(self))
+        await self.add_cog(BlackjackCog(self))
 
         # Load cache semua guild
 

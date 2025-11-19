@@ -2,27 +2,28 @@ import discord
 from discord.ext import commands
 import asyncio
 import random
-import time
 
 from database import (
     get_user_cash, set_user_cash,
     create_duel_request, get_duel_request, delete_duel_request,
-    get_channel_settings,
-    log_gamble
+    log_gamble, get_gamble_setting
 )
+from gamble_utils import gamble_only
 
 
 class DuelCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db = bot.db
-        self.pending_accept = {}  # key: (guild, target) → challenger
 
 
     # =====================================================================
-    #   Convert <amount> or "all"
+    # PARSE BET
     # =====================================================================
-    def parse_bet(self, ctx, amount_str, user_cash, maxbet):
+    def parse_bet(self, ctx, amount_str, user_cash):
+        maxbet = get_gamble_setting(self.db, ctx.guild.id, "maxbet")
+        maxbet = int(maxbet) if maxbet else None
+
         if amount_str.lower() == "all":
             return user_cash if not maxbet else min(user_cash, maxbet)
 
@@ -37,70 +38,57 @@ class DuelCog(commands.Cog):
 
 
     # =====================================================================
-    #   DUEL COMMAND: duel <amount> @target
+    # DUEL
     # =====================================================================
     @commands.command(name="duel")
+    @gamble_only()     # ⬅️ hanya bisa di channel gamble
     async def duel(self, ctx, amount: str, target: discord.Member):
+
         guild_id = ctx.guild.id
         challenger_id = ctx.author.id
         target_id = target.id
 
-        # ==========================
-        #   VALIDASI
-        # ==========================
+        # ======================
+        # Basic validation
+        # ======================
         if target.bot:
             return await ctx.send("❌ Tidak bisa duel dengan bot.")
         if target_id == challenger_id:
             return await ctx.send("❌ Tidak bisa duel dengan diri sendiri.")
 
-        # Gamble channel check
-        allow = get_channel_settings(self.db, guild_id, "gamble")
-        if allow and ctx.channel.id != int(allow):
-            return await ctx.send(f"🎰 Gunakan command ini di <#{allow}>.")
-
-        maxbet = get_channel_settings(self.db, guild_id, "maxbet")
-        maxbet = int(maxbet) if maxbet else None
-
         cashA = get_user_cash(self.db, challenger_id, guild_id)
         cashB = get_user_cash(self.db, target_id, guild_id)
 
-        bet = self.parse_bet(ctx, amount, cashA, maxbet)
+        bet = self.parse_bet(ctx, amount, cashA)
         if bet is None:
             return await ctx.send("❌ Nominal tidak valid.")
         if bet < 1:
-            return await ctx.send("❌ Nominal harus lebih dari 0.")
+            return await ctx.send("❌ Nominal minimal 1.")
         if cashA < bet:
-            return await ctx.send("❌ Kamu tidak punya saldo cukup.")
+            return await ctx.send("❌ Saldo kamu tidak cukup.")
         if cashB < bet:
             return await ctx.send("❌ Target tidak punya saldo cukup untuk duel.")
 
-        # ==========================
-        #   CHECK IF TARGET IS BUSY
-        # ==========================
-        active_req = get_duel_request(self.db, guild_id, target_id)
-        if active_req:
-            return await ctx.send("❌ Target sedang dalam duel pending lain.")
+        # ======================
+        # Duel pending check
+        # ======================
+        if get_duel_request(self.db, guild_id, target_id):
+            return await ctx.send("❌ Target sedang punya duel pending.")
 
-        active_req_2 = get_duel_request(self.db, guild_id, challenger_id)
-        if active_req_2:
+        if get_duel_request(self.db, guild_id, challenger_id):
             return await ctx.send("❌ Kamu sudah membuat duel lain.")
 
-        # ==========================
-        #   SIMPAN REQUEST
-        # ==========================
+        # ======================
+        # Save duel request
+        # ======================
         create_duel_request(self.db, guild_id, challenger_id, target_id, bet)
-        self.pending_accept[(guild_id, target_id)] = challenger_id
 
-        # ==========================
-        #   SEND REQUEST MESSAGE
-        # ==========================
         msg = await ctx.send(
             f"🎲 {target.mention}, kamu ditantang duel oleh {ctx.author.mention}!\n"
             f"Taruhan: **{bet} coins**\n"
-            f"Ketik `accept` atau `decline` dalam 30 detik."
+            f"Ketik **accept** atau **decline** dalam 30 detik."
         )
 
-        # Wait for response
         def check(m):
             return (
                 m.author.id == target_id and
@@ -112,24 +100,23 @@ class DuelCog(commands.Cog):
             reply = await self.bot.wait_for("message", timeout=30, check=check)
         except asyncio.TimeoutError:
             delete_duel_request(self.db, guild_id, challenger_id)
-            return await ctx.send(f"⏳ Duel expired. {target.mention} tidak merespon.")
+            return await ctx.send(f"⏳ {target.mention} tidak merespon — duel dibatalkan.")
 
-        # ==========================
-        #   ACCEPT OR DECLINE
-        # ==========================
+        # ======================
+        # DECLINE
+        # ======================
         if reply.content.lower() == "decline":
             delete_duel_request(self.db, guild_id, challenger_id)
             return await ctx.send(f"❌ {target.mention} menolak duel.")
 
-        # ==========================
-        #   PROCEED DUEL (ACCEPT)
-        # ==========================
-        await ctx.send("🎲 Duel dimulai!")
+        # ======================
+        # START DUEL
+        # ======================
+        await ctx.send("🎲 Duel dimulai...")
 
         rollA = random.randint(1, 6)
         rollB = random.randint(1, 6)
 
-        # auto rematch if tie
         while rollA == rollB:
             await ctx.send("↪️ Seri! Roll ulang...")
             rollA = random.randint(1, 6)
@@ -138,25 +125,20 @@ class DuelCog(commands.Cog):
         winner = challenger_id if rollA > rollB else target_id
         loser  = target_id if winner == challenger_id else challenger_id
 
-        # apply money
+        # Money adjust
         cashW = get_user_cash(self.db, winner, guild_id)
         cashL = get_user_cash(self.db, loser, guild_id)
 
-        cashW += bet
-        cashL -= bet
+        set_user_cash(self.db, winner, guild_id, cashW + bet)
+        set_user_cash(self.db, loser, guild_id, cashL - bet)
 
-        set_user_cash(self.db, winner, guild_id, cashW)
-        set_user_cash(self.db, loser, guild_id, cashL)
-
-        log_gamble(self.db, guild_id, challenger_id, "duel", bet, "WIN" if winner == challenger_id else "LOSE")
-        log_gamble(self.db, guild_id, target_id,     "duel", bet, "WIN" if winner == target_id else "LOSE")
+        log_gamble(self.db, guild_id, challenger_id, "duel", bet,
+                   "WIN" if winner == challenger_id else "LOSE")
+        log_gamble(self.db, guild_id, target_id, "duel", bet,
+                   "WIN" if winner == target_id else "LOSE")
 
         delete_duel_request(self.db, guild_id, challenger_id)
-        self.pending_accept.pop((guild_id, target_id), None)
 
-        # ==========================
-        #   OUTPUT RESULT
-        # ==========================
         await ctx.send(
             f"🎲 **HASIL DUEL!**\n"
             f"{ctx.author.mention}: 🎲 {rollA}\n"

@@ -18,119 +18,88 @@ class DailyCog(commands.Cog):
         self.db = bot.db
 
 
-    # ============================================================
-    #  HELPER: CHECK IF USER CAN CLAIM TODAY (14:00 WIB reset)
-    # ============================================================
-    def is_new_day(self, last_claim_date):
+    # ======================================================================
+    #   HELPER → menentukan "hari daily" berdasarkan reset jam 14:00 WIB
+    # ======================================================================
+    def get_daily_date(self, dt: datetime):
         """
-        last_claim_date di DB disimpan sebagai DATE (YYYY-MM-DD)
-        Reset harian jam 14:00 WIB
+        Mengubah datetime ke "hari daily".
+        Jika waktu < 14:00 → masih dianggap HARI SEBELUMNYA.
+        Jika >= 14:00 → hari ini.
         """
+        date = dt.date()
+        reset_point = dt.replace(hour=14, minute=0, second=0, microsecond=0)
 
-        now = datetime.now(JAKARTA)
-        today = now.date()
-
-        # Reset berlaku jam 14:00 WIB
-        reset_time = JAKARTA.localize(datetime(
-            year=now.year,
-            month=now.month,
-            day=now.day,
-            hour=14, minute=0, second=0
-        ))
-
-        # Jika belum pernah claim
-        if not last_claim_date:
-            return True
-
-        # Jika claim dilakukan hari ini sebelum reset
-        if last_claim_date == today and now < reset_time:
-            return False  # belum reset
-
-        # Jika claim dilakukan setelah reset tadi
-        if last_claim_date == today and now >= reset_time:
-            return False  # sudah claim hari ini
-
-        # Jika last_claim_date beda hari → cek apakah reset sudah lewat
-        if last_claim_date < today:
-            # Jika reset jam 14 belum terjadi hari ini (misal pagi)
-            if now < reset_time:
-                # user claim kemarin, reset belum lewat
-                return False
-            else:
-                # reset sudah lewat hari ini → claim OK
-                return True
-
-        return True
+        if dt < reset_point:
+            return date - timedelta(days=1)
+        return date
 
 
-    # ============================================================
-    #  DAILY COMMAND
-    # ============================================================
+    # ======================================================================
+    #   DAILY COMMAND
+    # ======================================================================
     @commands.command(name="daily")
     async def daily(self, ctx):
         guild_id = ctx.guild.id
         user_id = ctx.author.id
 
-        # Ambil data daily user
+        now = datetime.now(JAKARTA)
+        today_daily = self.get_daily_date(now)
+
         data = get_daily_data(self.db, guild_id, user_id)
         last_claim = data["last_claim"]
         streak = data["streak"]
 
-        # ================================================
-        #  CEK APAKAH BOLEH CLAIM
-        # ================================================
-        if not self.is_new_day(last_claim):
+        # ------------------------------------------------------------------
+        # SUDAH CLAIM?
+        # ------------------------------------------------------------------
+        if last_claim == today_daily:
             return await ctx.send(f"📅 Kamu sudah claim hari ini, {ctx.author.mention}!")
 
-        # ================================================
-        #  STREAK LOGIC
-        # ================================================
-        now_jkt = datetime.now(JAKARTA)
-        today = now_jkt.date()
-
-        # Jika claim kemarin di hari yang berbeda dan reset sudah lewat → streak lanjut
-        if last_claim:
-            time_diff = today - last_claim
-            if time_diff.days == 1:
-                streak += 1
-            else:
-                streak = 1
-        else:
+        # ------------------------------------------------------------------
+        # HITUNG STREAK
+        # ------------------------------------------------------------------
+        if last_claim is None:
             streak = 1
+        else:
+            if last_claim == today_daily - timedelta(days=1):
+                streak += 1     # streak lanjut
+            else:
+                streak = 1      # streak reset
 
-        # ================================================
-        #  HITUNG REWARD
-        # ================================================
-        base_reward = 20
-        reward_bonus = streak * 5
-        reward = base_reward + reward_bonus
+        # ------------------------------------------------------------------
+        # REWARD
+        # ------------------------------------------------------------------
+        base = 20
+        bonus = streak * 5
+        reward = base + bonus
 
-        # Tambah cash user
         cash_now = get_user_cash(self.db, user_id, guild_id)
         new_cash = cash_now + reward
         set_user_cash(self.db, user_id, guild_id, new_cash)
 
-        # Simpan daily data
-        set_daily_data(self.db, guild_id, user_id, today, streak)
+        # Simpan data daily
+        set_daily_data(self.db, guild_id, user_id, today_daily, streak)
 
-        # Log
+        # Logging
         log_gamble(self.db, guild_id, user_id, "daily", reward, "WIN")
 
-        # ================================================
-        #  RESPONSE
-        # ================================================
+        # ------------------------------------------------------------------
+        # EMBED
+        # ------------------------------------------------------------------
         embed = discord.Embed(
             title="🎁 Daily Reward",
             description=f"""
-{ctx.author.mention}, kamu mendapatkan **{reward} coins!**
+{ctx.author.mention}, kamu claim daily!
 
-📅 Streak: **{streak} hari**
-💰 Total saldo: **{new_cash} coins**
+💰 Reward: **{reward} coins**
+🔥 Streak: **{streak} hari**
+💼 Saldo sekarang: **{new_cash} coins**
+
+_Reset setiap jam **14:00 WIB**_
 """,
             color=discord.Color.green()
         )
-
-        embed.set_footer(text="Reset harian jam 14:00 WIB")
 
         await ctx.send(embed=embed)
 

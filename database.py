@@ -1846,3 +1846,31 @@ def delete_duel_request(db, guild_id, challenger):
     """, (guild_id, challenger))
     db.commit()
     cursor.close()
+
+
+def set_gamble_setting(db, guild_id, key, value):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO gamble_settings (guild_id, setting_key, setting_value)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+    """, (guild_id, key, str(value)))
+    db.commit()
+    cursor.close()
+
+
+def get_gamble_setting(db, guild_id, key):
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT setting_value FROM gamble_settings
+        WHERE guild_id = %s AND setting_key = %s
+    """, (guild_id, key))
+    row = cursor.fetchone()
+    cursor.close()
+    return row[0] if row else None
+
+def ensure_gamble_channel(self, ctx):
+    ch = get_gamble_setting(self.db, ctx.guild.id, "gamble_ch")
+    if ch and ctx.channel.id != int(ch):
+        return f"🎰 Gunakan command ini di <#{ch}>."
+    return None

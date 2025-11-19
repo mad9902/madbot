@@ -535,6 +535,27 @@ def migrate(db):
         );
     """)
 
+    # ============================================================
+    # GUILD SETTINGS (NEW SYSTEM FOR ECONOMY)
+    # ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gamble_settings (
+            guild_id BIGINT NOT NULL,
+            setting_key VARCHAR(50) NOT NULL,
+            setting_value VARCHAR(255),
+            PRIMARY KEY (guild_id, setting_key)
+        );
+    """)
+
+    # cursor.execute("""
+    #     CREATE TABLE IF NOT EXISTS guild_settings (
+    #         guild_id BIGINT NOT NULL,
+    #         setting_key VARCHAR(50) NOT NULL,
+    #         setting_value VARCHAR(255),
+    #         PRIMARY KEY (guild_id, setting_key)
+    #     );
+    # """)
+
     db.commit()
     cursor.close()
     
