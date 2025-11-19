@@ -199,7 +199,7 @@ class GambleCog(commands.Cog):
         }
 
         # 8% win chance
-        if random.random() < 0.08:
+        if random.random() < 0.12:
             r = random.choice(symbols)
             r1 = r2 = r3 = r
             is_win = True
