@@ -25,8 +25,8 @@ class LeaderboardView(View):
     @discord.ui.select(
         options=[
             discord.SelectOption(label="🪙 Global Cash", value="global_cash", description="Top cash tertinggi (global)"),
-            discord.SelectOption(label="🪙 Server Cash", value="server_cash", description="Top cash khusus server ini"),
-            discord.SelectOption(label="🎰 Server Gamble Wins", value="server_wins", description="Top menang judi server ini"),
+            # discord.SelectOption(label="🪙 Server Cash", value="server_cash", description="Top cash khusus server ini"),
+            # discord.SelectOption(label="🎰 Server Gamble Wins", value="server_wins", description="Top menang judi server ini"),
             discord.SelectOption(label="🌍 Global Gamble Wins", value="global_wins", description="Top menang judi (global)"),
         ]
     )
