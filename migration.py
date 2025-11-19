@@ -1,20 +1,5 @@
 def migrate(db):
 
-    def safe_drop_primary(cursor, table_name):
-        """Drop primary key kalau ada."""
-        cursor.execute(f"""
-            SELECT COUNT(*)
-            FROM information_schema.TABLE_CONSTRAINTS
-            WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = '{table_name}'
-            AND CONSTRAINT_NAME = 'PRIMARY';
-        """)
-        has_pk = cursor.fetchone()[0]
-
-        if has_pk:
-            cursor.execute(f"ALTER TABLE {table_name} DROP PRIMARY KEY")
-
-
     cursor = db.cursor()
 
     # Buat tabel user_levels jika belum ada
@@ -563,67 +548,63 @@ def migrate(db):
         );
     """)
 
+   # Helper
+    def safe_drop_primary(cursor, table_name):
+        cursor.execute(f"""
+            SELECT COUNT(*)
+            FROM information_schema.TABLE_CONSTRAINTS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = '{table_name}'
+            AND CONSTRAINT_NAME = 'PRIMARY';
+        """)
+        has_pk = cursor.fetchone()[0]
+        if has_pk:
+            cursor.execute(f"ALTER TABLE {table_name} DROP PRIMARY KEY")
+
+
+    def drop_column_if_exists(cursor, table, column):
+        cursor.execute(f"""
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = '{table}'
+            AND COLUMN_NAME = '{column}';
+        """)
+        exists = cursor.fetchone()[0]
+        if exists:
+            cursor.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+
+
     # ============================================================
-    # MIGRATE user_cash → GLOBAL
+    # user_cash GLOBAL
     # ============================================================
     safe_drop_primary(cursor, "user_cash")
+    drop_column_if_exists(cursor, "user_cash", "guild_id")
+    cursor.execute("ALTER TABLE user_cash ADD PRIMARY KEY (user_id)")
 
-    cursor.execute("""
-        ALTER TABLE user_cash
-        DROP COLUMN IF EXISTS guild_id
-    """)
-
-    cursor.execute("""
-        ALTER TABLE user_cash
-        ADD PRIMARY KEY (user_id)
-    """)
 
     # ============================================================
-    # MIGRATE user_daily → GLOBAL
+    # user_daily GLOBAL
     # ============================================================
     safe_drop_primary(cursor, "user_daily")
+    drop_column_if_exists(cursor, "user_daily", "guild_id")
+    cursor.execute("ALTER TABLE user_daily ADD PRIMARY KEY (user_id)")
 
-    cursor.execute("""
-        ALTER TABLE user_daily
-        DROP COLUMN IF EXISTS guild_id
-    """)
-
-    cursor.execute("""
-        ALTER TABLE user_daily
-        ADD PRIMARY KEY (user_id)
-    """)
 
     # ============================================================
-    # MIGRATE user_rob_protect → GLOBAL
+    # user_rob_protect GLOBAL
     # ============================================================
     safe_drop_primary(cursor, "user_rob_protect")
+    drop_column_if_exists(cursor, "user_rob_protect", "guild_id")
+    cursor.execute("ALTER TABLE user_rob_protect ADD PRIMARY KEY (user_id)")
 
-    cursor.execute("""
-        ALTER TABLE user_rob_protect
-        DROP COLUMN IF EXISTS guild_id
-    """)
-
-    cursor.execute("""
-        ALTER TABLE user_rob_protect
-        ADD PRIMARY KEY (user_id)
-    """)
 
     # ============================================================
-    # MIGRATE user_protection → GLOBAL
+    # user_protection GLOBAL
     # ============================================================
     safe_drop_primary(cursor, "user_protection")
-
-    cursor.execute("""
-        ALTER TABLE user_protection
-        DROP COLUMN IF EXISTS guild_id
-    """)
-
-    cursor.execute("""
-        ALTER TABLE user_protection
-        ADD PRIMARY KEY (user_id)
-    """)
-
-
+    drop_column_if_exists(cursor, "user_protection", "guild_id")
+    cursor.execute("ALTER TABLE user_protection ADD PRIMARY KEY (user_id)")
 
     # cursor.execute("""
     #     CREATE TABLE IF NOT EXISTS guild_settings (
