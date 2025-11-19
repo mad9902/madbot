@@ -1701,12 +1701,32 @@ def set_user_cash(db, user_id, amount):
 # ============================================================
 #  GAMBLE LOG
 # ============================================================
-def log_gamble(db, guild_id, user_id, gamble_type, amount, result):
+def log_gamble(db, *args):
+    """
+    Support 2 formats:
+    OLD → log_gamble(db, guild_id, user_id, type, amount, result)
+    NEW → log_gamble(db, user_id, type, amount, result)
+    """
+
     cursor = db.cursor()
+
+    # --- Format lama: 6 args ---
+    if len(args) == 6:
+        guild_id, user_id, gamble_type, amount, result = args[1:]
+    
+    # --- Format baru: 5 args ---
+    elif len(args) == 5:
+        user_id, gamble_type, amount, result = args[1:]
+        guild_id = 0  # default global
+    
+    else:
+        raise ValueError(f"log_gamble() invalid args: {args}")
+
     cursor.execute("""
         INSERT INTO gamble_log (guild_id, user_id, gamble_type, amount, result)
         VALUES (%s, %s, %s, %s, %s)
     """, (guild_id, user_id, gamble_type, amount, result))
+
     db.commit()
     cursor.close()
 
