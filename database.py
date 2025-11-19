@@ -1684,15 +1684,19 @@ def get_user_cash(db, user_id, guild_id=None):
     cursor.close()
     return 0
 
-def set_user_cash(db, user_id, guild_id, amount):
+
+def set_user_cash(db, user_id, amount):
     cursor = db.cursor()
     cursor.execute("""
         INSERT INTO user_cash (user_id, cash)
         VALUES (%s, %s)
-        ON DUPLICATE KEY UPDATE cash = VALUES(cash)
+        ON DUPLICATE KEY UPDATE
+            cash = VALUES(cash)
     """, (user_id, amount))
     db.commit()
     cursor.close()
+
+
 
 # ============================================================
 #  GAMBLE LOG
