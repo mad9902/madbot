@@ -210,9 +210,9 @@ class GambleCog(commands.Cog):
             return await ctx.send("❌ Bet minimal 1.")
         if cash < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
-
+        
         # ============================================================
-        # TAMPILKAN ANIMASI AWAL (flip.gif)
+        # ANIMASI AWAL — flip.gif
         # ============================================================
         flip_embed = discord.Embed(
             title="🪙 Coinflip",
@@ -225,7 +225,10 @@ class GambleCog(commands.Cog):
 
         msg = await ctx.send(embed=flip_embed, file=flip_file)
 
-        await asyncio.sleep(1.2)
+        # Discord butuh waktu buat load GIF (tergantung koneksi)
+        # delay optimal 1.8 - 2.2 detik
+        await asyncio.sleep(2.2)
+
 
         # ============================================================
         # HASIL SEBENARNYA
