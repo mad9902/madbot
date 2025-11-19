@@ -1090,6 +1090,124 @@ class StreakCog(commands.Cog):
 
         await ctx.send(embed=embed)
 
+    # ----- mstreak myinfo -----
+    @streak_group.command(name="myinfo")
+    async def streak_myinfo(self, ctx: commands.Context):
+        """Info personal: siapa yang belum nyalain api, pending request, dan pasangan aktif."""
+        guild_id = ctx.guild.id
+        me = ctx.author
+
+        wib = pytz.timezone("Asia/Jakarta")
+        today = datetime.now(wib).date()
+
+        # Ambil semua pasangan aktif di server
+        all_pairs = get_active_streaks(guild_id, limit=5000, offset=0)
+
+        # ======================================================
+        #  PAGE 1 — PASANGAN AKTIF YANG BELUM NYALAIN API HARI INI
+        # ======================================================
+        emb1 = discord.Embed(
+            title="🔥 Belum Nyalain Api Hari Ini",
+            colour=discord.Colour.orange()
+        )
+
+        pending_today = []
+        for p in all_pairs:
+            if me.id not in (p["user1_id"], p["user2_id"]):
+                continue  # skip pasangan yang bukan milik kita
+
+            pair = ensure_restore_cycle(p)
+            last = pair["last_update_date"]
+
+            if isinstance(last, str):
+                try:
+                    last = datetime.strptime(last, "%Y-%m-%d").date()
+                except:
+                    last = today
+
+            if last != today:  # BELUM nyala
+                other_id = pair["user1_id"] if pair["user2_id"] == me.id else pair["user2_id"]
+                emoji = get_display_emoji(self.bot, guild_id, pair["current_streak"])
+                pending_today.append(
+                    f"{emoji} Dengan <@{other_id}> (last: `{pair['last_update_date']}`)"
+                )
+
+        if not pending_today:
+            emb1.description = "🎉 Kamu sudah menyalakan api dengan semua pasangan hari ini!"
+        else:
+            emb1.description = "\n".join(pending_today)
+
+        # ======================================================
+        #  PAGE 2 — PENDING REQUEST YANG MELIBATKAN KITA
+        # ======================================================
+        pendings = get_pending_streak_requests(
+            guild_id=guild_id,
+            target_user_id=me.id,
+            limit=50,
+            offset=0
+        )
+
+        emb2 = discord.Embed(
+            title="⏳ Pending Streak Kamu",
+            colour=discord.Colour.orange()
+        )
+
+        if not pendings:
+            emb2.description = "Tidak ada pending request."
+        else:
+            lines = []
+            for row in pendings:
+                u1 = row["user1_id"]
+                u2 = row["user2_id"]
+                initiator = row["initiator_id"]
+
+                other_id = u1 if me.id == u2 else u2
+
+                lines.append(
+                    f"- Dengan <@{other_id}> (initiator: <@{initiator}>)"
+                )
+            emb2.description = "\n".join(lines)
+
+        # ======================================================
+        #  PAGE 3 — SEMUA PASANGAN AKTIF KITA
+        # ======================================================
+        emb3 = discord.Embed(
+            title="💞 Pasangan Streak Kamu",
+            colour=discord.Colour.orange()
+        )
+
+        lines = []
+        for p in all_pairs:
+            if me.id not in (p["user1_id"], p["user2_id"]):
+                continue
+
+            pair = ensure_restore_cycle(p)
+            streak = pair["current_streak"]
+            emoji = get_display_emoji(self.bot, guild_id, streak)
+
+            other_id = pair["user1_id"] if pair["user2_id"] == me.id else pair["user2_id"]
+
+            status = "ACTIVE"
+            if pair.get("needs_restore", 0) == 1:
+                status = f"⚠️ RESTORE (deadline {pair['restore_deadline']})"
+
+            lines.append(
+                f"{emoji} <@{other_id}> — `{streak}x` ({status})"
+            )
+
+        if not lines:
+            emb3.description = "Kamu belum punya pasangan streak."
+        else:
+            emb3.description = "\n".join(lines)
+
+        # ======================================================
+        #  SEND PAGINATION
+        # ======================================================
+        pages = [emb1, emb2, emb3]
+        view = InfoPagination(pages)
+
+        await ctx.send(embed=pages[0], view=view)
+
     # ----- mstreakinfo -----
     @streak_group.command(name="info")
     async def streak_info(self, ctx: commands.Context):
@@ -1636,6 +1754,8 @@ class StreakCog(commands.Cog):
                 f"• `{prefix}streak setchannel command #ch` — set channel.\n"
                 f"• `{prefix}streak setchannel log #ch` — set channel log.\n"
                 f"• `{prefix}streak tiers ...` — pengaturan emoji tier."
+                f"• `{prefix}streak info` — lihat daftar streak server."
+                f"• `{prefix}streak myinfo` — lihat daftar streak pribadi."
             ),
             inline=False,
         )
