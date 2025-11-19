@@ -176,6 +176,9 @@ class GambleCog(commands.Cog):
     @commands.command(name="give")
     async def mgive(self, ctx, user: discord.Member, amount: str):
         # Validasi nominal
+        if ctx.author.id not in [416234104317804544]:
+            return await ctx.send("❌ Kamu tidak punya izin menggunakan command ini.")
+        
         if amount.lower() == "all":
             return await ctx.send("❌ Nominal tidak boleh 'all' untuk mgive.")
 
