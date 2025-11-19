@@ -1,7 +1,33 @@
 # utils/gamble_utils.py
+
 import discord
 from functools import wraps
 from database import get_gamble_setting
+import time
+
+
+# =====================================================
+#   GLOBAL GAMBLE COOLDOWN
+# =====================================================
+GAMBLE_COOLDOWN_SEC = 3
+_last_gamble = {}   # (guild_id, user_id) → timestamp
+
+
+def global_gamble_cooldown(guild_id, user_id):
+    """
+    Return None = boleh main
+    Return float = sisa cooldown detik
+    """
+    now = time.time()
+    key = (guild_id, user_id)
+
+    if key in _last_gamble:
+        diff = now - _last_gamble[key]
+        if diff < GAMBLE_COOLDOWN_SEC:
+            return round(GAMBLE_COOLDOWN_SEC - diff, 1)
+
+    _last_gamble[key] = now
+    return None
 
 
 # =====================================================
@@ -10,7 +36,10 @@ from database import get_gamble_setting
 def check_gamble_channel(db, ctx):
     ch = get_gamble_setting(db, ctx.guild.id, "gamble_ch")
     if not ch:
-        return f"❌ Channel gamble belum diset.\nGunakan: `setgamblech #channel`"
+        return (
+            "❌ Channel gamble belum diset.\n"
+            "Gunakan: `setgamblech #channel`"
+        )
 
     ch = int(ch)
     if ctx.channel.id != ch:
@@ -26,13 +55,13 @@ def gamble_only():
         @wraps(func)
         async def inner(self, ctx, *args, **kwargs):
 
-            # cek channel
+            # cek channel dulu
             err = check_gamble_channel(self.db, ctx)
             if err:
                 return await ctx.send(err)
 
-            # cek cooldown local
-            cd = self.gamble_on_cooldown(ctx)
+            # cek global cooldown (fix utama)
+            cd = global_gamble_cooldown(ctx.guild.id, ctx.author.id)
             if cd:
                 return await ctx.send(f"⏳ Tunggu **{cd}s** dulu.")
 
