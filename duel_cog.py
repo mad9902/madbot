@@ -136,10 +136,12 @@ class DuelCog(commands.Cog):
         set_user_cash(self.db, loser, cashL - bet)
 
         # log per-guild
-        log_gamble(self.db, guild_id, challenger_id, "duel", bet,
-                   "WIN" if winner == challenger_id else "LOSE")
-        log_gamble(self.db, guild_id, target_id, "duel", bet,
-                   "WIN" if winner == target_id else "LOSE")
+        log_gamble(self.db, ctx.guild.id, challenger_id, "duel", bet,
+                "WIN" if winner == challenger_id else "LOSE")
+
+        log_gamble(self.db, ctx.guild.id, target_id, "duel", bet,
+                "WIN" if winner == target_id else "LOSE")
+
 
         delete_duel_request(self.db, guild_id, challenger_id)
 

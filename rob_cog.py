@@ -83,6 +83,19 @@ class RobCog(commands.Cog):
         guild_id = ctx.guild.id
         user_id = ctx.author.id
 
+        # ============================================================
+        #  AUTO-REMOVE PROTECTION WHEN USER TRIES TO ROB
+        # ============================================================
+        now_ts = int(time.time())
+
+        # Remove 2h shield
+        if get_rob_victim_protect(self.db, user_id) > now_ts:
+            set_rob_victim_protect(self.db, user_id, 0)
+
+        # Remove 24h shop protection
+        if get_user_protection(self.db, user_id) > now_ts:
+            set_user_protection(self.db, user_id, 0)
+
         # rob enabled?
         enabled = get_gamble_setting(self.db, guild_id, "rob_enabled")
         if enabled == "0":
@@ -171,6 +184,19 @@ untuk melanjutkan.
         user_id = ctx.author.id
         key = (guild_id, user_id)
 
+        # ============================================================
+        #  AUTO-REMOVE PROTECTION WHEN USER CONFIRMS ROB
+        # ============================================================
+        now_ts = int(time.time())
+
+        # Remove 2h shield
+        if get_rob_victim_protect(self.db, user_id) > now_ts:
+            set_rob_victim_protect(self.db, user_id, 0)
+
+        # Remove 24h shop protection
+        if get_user_protection(self.db, user_id) > now_ts:
+            set_user_protection(self.db, user_id, 0)
+
         if key not in self.pending_rob:
             return await ctx.send("❌ Tidak ada rob pending.")
 
@@ -212,8 +238,8 @@ untuk melanjutkan.
             # 2h shield (GLOBAL)
             set_rob_victim_protect(self.db, target.id, now_ts + 7200)
 
-            log_gamble(self.db, guild_id, user_id, "rob_success", steal, "WIN")
-            log_gamble(self.db, guild_id, target.id, "rob_stolen", steal, "LOSE")
+            log_gamble(self.db, ctx.guild.id, user_id, "rob_success", steal, "WIN")
+            log_gamble(self.db, ctx.guild.id, target.id, "rob_stolen", steal, "LOSE")
 
             emb = self.nice_embed(
                 "🟢 Rob Berhasil!",
@@ -239,8 +265,8 @@ untuk melanjutkan.
         set_user_cash(self.db, user_id, new_r)
         set_user_cash(self.db, target.id, new_v)
 
-        log_gamble(self.db, guild_id, user_id, "rob_fail", penalty, "LOSE")
-        log_gamble(self.db, guild_id, target.id, "rob_bonus", penalty, "WIN")
+        log_gamble(self.db, ctx.guild.id, user_id, "rob_fail", penalty, "LOSE")
+        log_gamble(self.db, ctx.guild.id, target.id, "rob_bonus", penalty, "WIN")
 
         emb = self.nice_embed(
             "🔴 Rob Gagal!",

@@ -110,7 +110,7 @@ class DailyCog(commands.Cog):
         set_daily_data(self.db, user_id, today_daily, streak)
 
         # Log (opsional tetap pakai guild_id biar leaderboard per guild)
-        log_gamble(self.db, user_id, "daily", reward, "WIN")
+        log_gamble(self.db, ctx.guild.id, user_id, "daily", reward, "WIN")
 
         # =======================================================
         # EMBED RESULT

@@ -169,7 +169,7 @@ class GambleCog(commands.Cog):
             msg = f"🔴 KALAH! -{comma(bet)}"
 
         set_user_cash(self.db, ctx.author.id, cash)
-        log_gamble(self.db, ctx.author.id, "coinflip", bet, result)
+        log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, result)
 
         await ctx.send(f"{ctx.author.mention} {msg}\n💰 Saldo: **{comma(cash)}**")
 
@@ -250,7 +250,7 @@ class GambleCog(commands.Cog):
             status = "LOSE"
 
         set_user_cash(self.db, ctx.author.id, cash)
-        log_gamble(self.db, ctx.author.id, "slots", bet, status)
+        log_gamble(self.db, ctx.guild.id, ctx.author.id, "slots", bet, status)
 
         result = discord.Embed(
             title="🎰 Slots Result",

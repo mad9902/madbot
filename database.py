@@ -1703,35 +1703,50 @@ def set_user_cash(db, user_id, amount):
 # ============================================================
 def log_gamble(db, *args):
     """
-    Supported formats:
+    AUTO-DETECT ARG PATTERN
+    Patterns supported:
 
-    6 args → (guild_id, user_id, type, amount, result)
-    5 args → (user_id, type, amount, result)
-    4 args → (guild_id?, type, amount, result)  <-- auto-fix
+    6 args → db, guild_id, user_id, type, amount, result
+    5 args → db, user_id, type, amount, result
+    4 args → db, x, type, amount, result
+    3 args → db, type, amount, result        <-- fallback
     """
+
+    # Minimal args: db + 3 lainnya
+    if len(args) < 4:
+        print("log_gamble WARNING: invalid call", args)
+        return
 
     cursor = db.cursor()
 
-    # --- Format lama: 6 args ---
+    # ========================
+    # FORMAT: 6 ARGS
+    # ========================
     if len(args) == 6:
-        guild_id, user_id, gamble_type, amount, result = args[1:]
+        _, guild_id, user_id, gamble_type, amount, result = args
 
-    # --- Format baru: 5 args ---
+    # ========================
+    # FORMAT: 5 ARGS
+    # ========================
     elif len(args) == 5:
-        user_id, gamble_type, amount, result = args[1:]
-        guild_id = 0  # global
-
-    # --- Format salah (4 args) → auto-fix ---
-    elif len(args) == 4:
-        # interpretasi:
-        # (guild_or_user, type, amount, result)
-        guild_or_user, gamble_type, amount, result = args[1:]
-
+        _, user_id, gamble_type, amount, result = args
         guild_id = 0
-        user_id = guild_or_user  # fallback agar tidak error
 
-    else:
-        raise ValueError(f"log_gamble() invalid args: {args}")
+    # ========================
+    # FORMAT: 4 ARGS
+    # ========================
+    elif len(args) == 4:
+        _, maybe_user, gamble_type, amount, result = args
+        guild_id = 0
+        user_id = maybe_user
+
+    # ========================
+    # FORMAT: 3 ARGS  (LAST RESORT)
+    # ========================
+    elif len(args) == 3:
+        _, gamble_type, amount, result = args
+        guild_id = 0
+        user_id = 0
 
     cursor.execute("""
         INSERT INTO gamble_log (guild_id, user_id, gamble_type, amount, result)
@@ -1740,6 +1755,7 @@ def log_gamble(db, *args):
 
     db.commit()
     cursor.close()
+
 
 # ============================================================
 #  CHANNEL SETTINGS

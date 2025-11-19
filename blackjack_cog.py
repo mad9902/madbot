@@ -205,7 +205,7 @@ class BlackjackCog(commands.Cog):
                 if self.hand_value(player) > 21:
                     new_cash = cash - bet
                     set_user_cash(self.db, user_id, new_cash)
-                    log_gamble(self.db, guild_id, user_id, "blackjack", bet, "LOSE")
+                    log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "LOSE")
                     del self.active_games[key]
 
                     return await msg.edit(embed=discord.Embed(
@@ -223,7 +223,7 @@ class BlackjackCog(commands.Cog):
                 loss = bet // 2
                 new_cash = cash - loss
                 set_user_cash(self.db, user_id, new_cash)
-                log_gamble(self.db, guild_id, user_id, "blackjack", loss, "LOSE")
+                log_gamble(self.db, ctx.guild.id, user_id, "blackjack", loss, "LOSE")
                 del self.active_games[key]
 
                 return await msg.edit(embed=discord.Embed(
@@ -262,7 +262,7 @@ class BlackjackCog(commands.Cog):
 
             new_cash = cash + win
             set_user_cash(self.db, user_id, new_cash)
-            log_gamble(self.db, guild_id, user_id, "blackjack", bet, "WIN")
+            log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "WIN")
 
             result = f"🟢 Menang **+{comma(win)}**"
             color = discord.Color.green()
@@ -270,7 +270,8 @@ class BlackjackCog(commands.Cog):
         elif d_val > p_val:
             new_cash = cash - bet
             set_user_cash(self.db, user_id, new_cash)
-            log_gamble(self.db, guild_id, user_id, "blackjack", bet, "LOSE")
+            log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "WIN")
+
 
             result = f"🔴 Kalah **-{comma(bet)}**"
             color = discord.Color.red()
