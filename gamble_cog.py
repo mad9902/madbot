@@ -274,6 +274,43 @@ class GambleCog(commands.Cog):
         await msg.edit(embed=final_embed, attachments=[res_file])
 
     # =====================================================
+    # MGIVE (ADMIN GIVE CASH)
+    # =====================================================
+    @commands.command(name="give")
+    async def mgive(self, ctx, user: discord.Member, amount: str):
+        # if ctx.author.id not in [ctx.guild.owner_id, 416234104317804544]:
+        #     return await ctx.send("❌ Kamu tidak punya izin menggunakan command ini.")
+
+        # Validasi nominal
+        if amount.lower() == "all":
+            return await ctx.send("❌ Nominal tidak boleh 'all' untuk mgive.")
+
+        if not amount.isdigit():
+            return await ctx.send("❌ Nominal tidak valid.")
+
+        amount = int(amount)
+        if amount < 1:
+            return await ctx.send("❌ Nominal harus lebih dari 0.")
+
+        # Update cash user
+        cash = get_user_cash(self.db, user.id)
+        new_cash = cash + amount
+        set_user_cash(self.db, user.id, new_cash)
+
+        # Kirim embed notifikasi
+        embed = discord.Embed(
+            title="💸 Cash Given",
+            description=(
+                f"{ctx.author.mention} memberikan **{comma(amount)} coins** kepada {user.mention}!\n\n"
+                f"💰 Saldo baru {user.mention}: **{comma(new_cash)}**"
+            ),
+            color=discord.Color.green()
+        )
+
+        await ctx.send(embed=embed)
+
+
+    # =====================================================
     # SLOTS
     # =====================================================
     @commands.command(name="slots")
