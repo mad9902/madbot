@@ -1225,7 +1225,7 @@ class StreakCog(commands.Cog):
         if pair["status"] == "PENDING":
             await ctx.send(
                 f"Permintaan streak dibuat: {format_pair_mention(pair)}\n"
-                f"{member.mention}, ketik `mstreak accept {ctx.author.mention}` untuk menerima."
+                f"{member.mention}, ketik `mstreak accept` {ctx.author.mention} untuk menerima."
             )
         elif pair["status"] == "ACTIVE":
             await ctx.send(
