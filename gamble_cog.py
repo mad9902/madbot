@@ -57,13 +57,23 @@ class ConfirmGive(View):
 
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: Button):
+
+        cancel_embed = discord.Embed(
+            title="❌ Transfer Dibatalkan",
+            description=(
+                f"Transfer ke {self.target.mention} telah **dibatalkan** oleh {self.giver.mention}."
+            ),
+            color=discord.Color.red()
+        )
+
         await interaction.response.edit_message(
-            content="❌ **Dibatalkan.**",
-            embed=None,
+            embed=cancel_embed,
             view=None
         )
+
         self.value = False
         self.stop()
+
 
 class GambleCog(commands.Cog):
     def __init__(self, bot):
@@ -256,7 +266,7 @@ class GambleCog(commands.Cog):
                 guess = valid_guess[arg2.lower()]
 
         if not guess:
-            guess = "HEAD"  # default tebakan
+            guess = "HEAD"  # default
 
         if not amount_str:
             return await ctx.send("❌ Kamu belum memasukkan nominal bet.")
@@ -269,49 +279,35 @@ class GambleCog(commands.Cog):
         if cash < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
 
-
         # ============================
-        # PATH GAMBAR
-        # (ga gue ubah, ikut directory kamu)
+        # PATH GAMBAR — pake flip.gif
         # ============================
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         COIN_DIR = os.path.join(BASE_DIR, "media")
 
-        fast_flip = os.path.join(COIN_DIR, "flip_fast.webp")
-        slow_flip = os.path.join(COIN_DIR, "flip_slow.webp")
-        head_img = os.path.join(COIN_DIR, "head_small.png")
-        tail_img = os.path.join(COIN_DIR, "tail_small.png")
+        flip_gif = os.path.join(COIN_DIR, "flip.gif")
+        head_img = os.path.join(COIN_DIR, "head.png")
+        tail_img = os.path.join(COIN_DIR, "tail.png")
 
         # ============================
-        # STEP 1 — FAST FLIP
+        # STEP 1 — Flip GIF (utama)
         # ============================
-        fast_embed = discord.Embed(
+        flip_embed = discord.Embed(
             title="🪙 Coinflip",
-            description=f"{ctx.author.mention} melempar koin...\n\n**Berputar cepat...**",
+            description=f"{ctx.author.mention} melempar koin...\n\n**Berputar...**",
             color=discord.Color.blurple()
         )
-        fast_file = discord.File(fast_flip, filename="fast.webp")
-        fast_embed.set_image(url="attachment://fast.webp")
 
-        msg = await ctx.send(embed=fast_embed, file=fast_file)
-        await asyncio.sleep(0.7)
+        flip_file = discord.File(flip_gif, filename="flip.gif")
+        flip_embed.set_image(url="attachment://flip.gif")
 
-        # ============================
-        # STEP 2 — SLOW FLIP
-        # ============================
-        slow_embed = discord.Embed(
-            title="🪙 Coinflip",
-            description=f"**Melambat...**",
-            color=discord.Color.blurple()
-        )
-        slow_file = discord.File(slow_flip, filename="slow.webp")
-        slow_embed.set_image(url="attachment://slow.webp")
+        msg = await ctx.send(embed=flip_embed, file=flip_file)
 
-        await msg.edit(embed=slow_embed, attachments=[slow_file])
-        await asyncio.sleep(0.8)
+        # biar GIF kebaca
+        await asyncio.sleep(2.0)
 
         # ============================
-        # STEP 3 — RESULT
+        # STEP 2 — RESULT
         # ============================
         actual = random.choice(["HEAD", "TAIL"])
         final_img = head_img if actual == "HEAD" else tail_img
@@ -330,9 +326,6 @@ class GambleCog(commands.Cog):
         set_user_cash(self.db, ctx.author.id, cash)
         log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, res_code)
 
-        # ============================
-        # FINAL EMBED
-        # ============================
         final_embed = discord.Embed(
             title="🪙 Coinflip Result",
             description=(
@@ -344,10 +337,10 @@ class GambleCog(commands.Cog):
             color=color
         )
 
-        final_file = discord.File(final_img, filename="final.png")
+        result_file = discord.File(final_img, filename="final.png")
         final_embed.set_image(url="attachment://final.png")
 
-        await msg.edit(embed=final_embed, attachments=[final_file])
+        await msg.edit(embed=final_embed, attachments=[result_file])
 
     # =====================================================
     # SLOTS
