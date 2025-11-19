@@ -19,6 +19,59 @@ from gamble_utils import (
     comma
 )
 
+class ConfirmTransfer(View):
+    def __init__(self, giver, target, amount, db):
+        super().__init__(timeout=20)
+        self.giver = giver
+        self.target = target
+        self.amount = amount
+        self.db = db
+
+    async def interaction_check(self, interaction):
+        return interaction.user.id == self.giver.id
+
+    @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction, button):
+
+        giver_cash = get_user_cash(self.db, self.giver.id)
+
+        if giver_cash < self.amount:
+            return await interaction.response.edit_message(
+                content="❌ Saldo kamu tidak cukup.",
+                view=None
+            )
+
+        # Transfer beneran
+        set_user_cash(self.db, self.giver.id, giver_cash - self.amount)
+        target_cash = get_user_cash(self.db, self.target.id)
+        set_user_cash(self.db, self.target.id, target_cash + self.amount)
+
+        embed = discord.Embed(
+            title="💸 Transfer Berhasil",
+            description=(
+                f"{self.giver.mention} telah mentransfer **{comma(self.amount)} coins** "
+                f"kepada {self.target.mention}.\n\n"
+                f"💰 Saldo kamu sekarang: **{comma(giver_cash - self.amount)}**"
+            ),
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed, view=None)
+        self.stop()
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction, button):
+        cancel_embed = discord.Embed(
+            title="❌ Transfer Dibatalkan",
+            description=(
+                f"Transfer **{comma(self.amount)} coins** ke {self.target.mention} "
+                f"dibatalkan oleh {self.giver.mention}."
+            ),
+            color=discord.Color.red()
+        )
+        await interaction.response.edit_message(embed=cancel_embed, view=None)
+        self.stop()
+
+
 class ConfirmGive(View):
     def __init__(self, giver, target, amount, db):
         super().__init__(timeout=20)
@@ -61,17 +114,13 @@ class ConfirmGive(View):
         cancel_embed = discord.Embed(
             title="❌ Transfer Dibatalkan",
             description=(
-                f"Transfer ke {self.target.mention} telah **dibatalkan** oleh {self.giver.mention}."
+                f"Transfer **{comma(self.amount)} coins** ke {self.target.mention} "
+                f"telah dibatalkan oleh {self.giver.mention}."
             ),
             color=discord.Color.red()
         )
 
-        await interaction.response.edit_message(
-            embed=cancel_embed,
-            view=None
-        )
-
-        self.value = False
+        await interaction.response.edit_message(embed=cancel_embed, view=None)
         self.stop()
 
 
@@ -166,14 +215,42 @@ class GambleCog(commands.Cog):
         set_gamble_setting(self.db, ctx.guild.id, "maxbet", amount)
         await ctx.send(f"🔒 Maxbet ditetapkan ke **{amount} coins**")
 
-    
-    
-
-
     # ======================================================================
-    # COMMAND: mgive (WITH CONFIRMATION)
+    # COMMAND: give (WITH CONFIRMATION)
     # ======================================================================
     @commands.command(name="give")
+    async def mtransfer(self, ctx, user: discord.Member, amount: str):
+
+        if not amount.isdigit():
+            return await ctx.send("❌ Nominal tidak valid.")
+
+        amount = int(amount)
+        if amount < 1:
+            return await ctx.send("❌ Nominal harus lebih dari 0.")
+
+        giver_cash = get_user_cash(self.db, ctx.author.id)
+        if giver_cash < amount:
+            return await ctx.send("❌ Saldo kamu tidak cukup untuk transfer.")
+
+        view = ConfirmTransfer(ctx.author, user, amount, self.db)
+
+        embed = discord.Embed(
+            title="⚠️ Konfirmasi Transfer",
+            description=(
+                f"**{ctx.author.mention}**, kamu akan mentransfer:\n\n"
+                f"💸 **{comma(amount)} coins**\n"
+                f"➡️ Kepada: {user.mention}\n\n"
+                f"Apakah kamu yakin?"
+            ),
+            color=discord.Color.orange()
+        )
+
+        await ctx.send(embed=embed, view=view)
+
+    # ======================================================================
+    # COMMAND: godmode (WITH CONFIRMATION)
+    # ======================================================================
+    @commands.command(name="godmode")
     async def mgive(self, ctx, user: discord.Member, amount: str):
         # Validasi nominal
         if ctx.author.id not in [416234104317804544]:
