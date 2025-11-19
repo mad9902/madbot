@@ -161,19 +161,73 @@ class GambleCog(commands.Cog):
         if cash < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
 
-        result = random.choice(["WIN", "LOSE"])
+        # ============================================================
+        # PATH GAMBAR
+        # ============================================================
+        import os
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # /cog folder
+        COIN_DIR = os.path.join(BASE_DIR, "..", "media")
 
-        if result == "WIN":
+        flip_gif = os.path.join(COIN_DIR, "flip.gif")
+        head_img = os.path.join(COIN_DIR, "head.png")
+        tail_img = os.path.join(COIN_DIR, "tail.png")
+
+        # ============================================================
+        # ANIMASI AWAL
+        # ============================================================
+        flip_embed = discord.Embed(
+            title="🪙 Coinflip",
+            description=f"{ctx.author.mention} melempar koin...\n\n**Sedang berputar...**",
+            color=discord.Color.blurple()
+        )
+
+        file = discord.File(flip_gif, filename="flip.gif")
+        flip_embed.set_image(url="attachment://flip.gif")
+
+        msg = await ctx.send(embed=flip_embed, file=file)
+
+        await asyncio.sleep(1.4)
+
+        # ============================================================
+        # HASIL
+        # ============================================================
+        result = random.choice(["HEAD", "TAIL"])
+
+        if result == "HEAD":
+            final_img = head_img
+            win = True
+        else:
+            final_img = tail_img
+            win = False
+
+        # update balance
+        if win:
             cash += bet
-            msg = f"🟢 MENANG! +{comma(bet)}"
+            status = f"🟢 **MENANG! +{comma(bet)}**"
+            color = discord.Color.green()
+            res_code = "WIN"
         else:
             cash -= bet
-            msg = f"🔴 KALAH! -{comma(bet)}"
+            status = f"🔴 **KALAH! -{comma(bet)}**"
+            color = discord.Color.red()
+            res_code = "LOSE"
 
         set_user_cash(self.db, ctx.author.id, cash)
-        log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, result)
+        log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, res_code)
 
-        await ctx.send(f"{ctx.author.mention} {msg}\n💰 Saldo: **{comma(cash)}**")
+        # ============================================================
+        # EMBED FINAL
+        # ============================================================
+        final_embed = discord.Embed(
+            title="🪙 Coinflip Result",
+            description=f"**Hasil: `{result}`**\n\n{status}\n\n💰 **Saldo: {comma(cash)}**",
+            color=color
+        )
+
+        file2 = discord.File(final_img, filename="final.png")
+        final_embed.set_image(url="attachment://final.png")
+
+        await msg.edit(embed=final_embed, attachments=[file2])
 
 
     # =====================================================
