@@ -23,10 +23,13 @@ confession_map.json
 *.png
 *.gif
 
-# IZINKAN gambar spesifik
+# IZINKAN folder media dulu
+!media/
+media/*
 !media/ultahkos.png
 !media/confetti.png
 !media/balloon.png
 !media/head.png
 !media/tail.png
 !media/flip.gif
+
