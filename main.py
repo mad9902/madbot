@@ -233,6 +233,11 @@ async def safe_respond(inter: discord.Interaction, **kwargs):
 
 @bot.event
 async def on_command_error(ctx, error):
+
+    # cegah double trigger kalau pesan sudah lewat on_message bannedwords
+    if getattr(ctx.message, "_from_bannedwords", False):
+        return
+
     if isinstance(error, commands.CommandNotFound):
         attempted = ctx.message.content[len(ctx.prefix):].split()[0]
         command_names = [c.name for c in bot.commands]
@@ -246,7 +251,6 @@ async def on_command_error(ctx, error):
                 return
 
     elif isinstance(error, commands.CheckFailure):
-        # biasanya karena channel disabled — jangan spam
         return
 
     else:
