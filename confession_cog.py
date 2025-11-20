@@ -638,24 +638,16 @@ class ConfessionCog(commands.Cog):
 # ======================================================
 
 async def setup(bot):
-    print("[ConfessionCog] setup() dipanggil, mulai init cog + views + restore")
 
     await bot.add_cog(ConfessionCog(bot))
-    print("[ConfessionCog] Cog ditambahkan")
 
     bot.add_view(ConfessionView(bot))
-    print("[ConfessionCog] ConfessionView global terdaftar (persistent)")
 
     bot.add_dynamic_items(
         "confess_reply_",
         lambda cid: ReplyToConfessionButton.from_custom_id(bot, cid)
     )
-    print("[ConfessionCog] dynamic_items untuk confess_reply_ terdaftar")
 
-    print("[ConfessionCog] Panggil restore_reply_buttons...")
     await restore_reply_buttons(bot)
 
-    print("[ConfessionCog] Panggil cleanup_confession_map...")
     cleanup_confession_map()
-    print("[ConfessionCog] setup() selesai")
-
