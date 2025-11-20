@@ -244,6 +244,15 @@ class SubmitImageConfessionButton(discord.ui.Button):
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
         await sent.edit(view=view)
 
+        save_confession(
+            self.bot.db,
+            interaction.guild_id,
+            interaction.user.id,
+            confession_id,
+            caption
+        )
+
+
         await dm.send("✅ Confession berhasil dikirim!")
 
 
