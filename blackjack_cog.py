@@ -136,7 +136,19 @@ class BlackjackCog(commands.Cog):
         # ============================================================
         # EMBED BUILDER
         # ============================================================
-        async def build_embed(title="🃏 Blackjack — MadBot Casino", reveal=False):
+        async def build_embed(reveal=False):
+            p_val = self.hand_value(player)
+            d_val = self.hand_value(dealer) if reveal else "?"
+            d_cards = (
+                render_hand(dealer) if reveal
+                else f"{render_card(dealer[0])} {render_card(CARD_BACK)}"
+            )
+
+            emb = discord.Embed(
+                title=f"🃏 Blackjack — {ctx.author.display_name}",
+                color=discord.Color.gold()
+            )
+
             p_val = self.hand_value(player)
             d_val = self.hand_value(dealer) if reveal else "?"
             d_cards = (
@@ -193,6 +205,12 @@ class BlackjackCog(commands.Cog):
                 ))
 
             emoji = str(reaction.emoji)
+            # Auto unreact biar ga numpuk (🟩 x2, 🟥 x3, dll)
+            try:
+                await msg.remove_reaction(emoji, user)
+            except:
+                pass
+
 
             # ------------------------------
             # HIT
@@ -270,7 +288,7 @@ class BlackjackCog(commands.Cog):
         elif d_val > p_val:
             new_cash = cash - bet
             set_user_cash(self.db, user_id, new_cash)
-            log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "WIN")
+            log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "LOSE")
 
 
             result = f"🔴 Kalah **-{comma(bet)}**"

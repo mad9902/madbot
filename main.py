@@ -55,15 +55,11 @@ def get_prefix(bot, message):
     if message.guild and message.guild.id in DISABLED_GUILDS:
         if message.content.strip().lower().startswith(("mad boton", "md boton", "mboton")):
             return ['mad', 'm', 'k', 'kos ']
-        commands.when_mentioned(bot, message)
+        return commands.when_mentioned(bot, message)
 
 
     # Prioritas prefix panjang → pendek
-    return commands.when_mentioned_or(
-        "kos ", "mad ", "kos", "mad", "m", "k"
-    )(bot, message)
-
-
+    return commands.when_mentioned_or("mad", "m", "k", "kos ")(bot, message)
 
 # ======================================================
 # BOT CLASS
@@ -75,6 +71,12 @@ class MadBot(commands.Bot):
         self.db = None
         self.command_manager = None
         self.channel_manager = None
+
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+        await self.process_commands(message)
+
 
     async def setup_hook(self):
         self.remove_command("help")
@@ -236,6 +238,10 @@ async def safe_respond(inter: discord.Interaction, **kwargs):
 
 @bot.event
 async def on_command_error(ctx, error):
+
+    if getattr(ctx, "_error_handled", False):
+        return
+    ctx._error_handled = True
 
     # cegah double trigger kalau pesan sudah lewat on_message bannedwords
     if getattr(ctx.message, "_from_bannedwords", False):
