@@ -55,13 +55,11 @@ class DuelCog(commands.Cog):
         if target_id == challenger_id:
             return await ctx.send("❌ Tidak bisa duel dengan diri sendiri.")
 
-        # CASH GLOBAL !!!
+        # Ambil cash GLOBAL
         cashA = get_user_cash(self.db, challenger_id)
         cashB = get_user_cash(self.db, target_id)
 
         bet = self.parse_bet(ctx, amount, cashA)
-        bet_f = f"{bet:,}".replace(",", ".")
-
         if bet is None:
             return await ctx.send("❌ Nominal tidak valid.")
         if bet < 1:
@@ -71,21 +69,24 @@ class DuelCog(commands.Cog):
         if cashB < bet:
             return await ctx.send("❌ Target tidak punya saldo cukup untuk duel.")
 
+        bet_f = f"{bet:,}".replace(",", ".")
+
         # ======================
         # Duel pending check
         # ======================
         if get_duel_request(self.db, guild_id, target_id):
             return await ctx.send("❌ Target sedang punya duel pending.")
-
         if get_duel_request(self.db, guild_id, challenger_id):
             return await ctx.send("❌ Kamu sudah membuat duel lain.")
 
         # ======================
-        # Save duel request
+        # Simpan duel request
         # ======================
         create_duel_request(self.db, guild_id, challenger_id, target_id, bet)
 
-        # Embed challenge
+        # ======================
+        # Kirim challenge embed
+        # ======================
         challenge_embed = discord.Embed(
             title="⚔️ Duel Challenge!",
             description=(
@@ -98,12 +99,13 @@ class DuelCog(commands.Cog):
         )
         challenge_embed.set_footer(text="Duel menggunakan global cash")
 
-        msg = await ctx.send(embed=challenge_embed)
+        await ctx.send(embed=challenge_embed)
 
+        # Tunggu jawaban target
         def check(m: discord.Message):
             return (
-                m.author.id == target_id
-                and m.channel.id == ctx.channel.id
+                m.author.id == target_id 
+                and m.channel.id == ctx.channel.id 
                 and m.content.lower() in ["accept", "decline"]
             )
 
@@ -118,9 +120,7 @@ class DuelCog(commands.Cog):
             )
             return await ctx.send(embed=timeout_embed)
 
-        # ======================
-        # DECLINE
-        # ======================
+        # Declined
         if reply.content.lower() == "decline":
             delete_duel_request(self.db, guild_id, challenger_id)
             declined = discord.Embed(
@@ -131,43 +131,40 @@ class DuelCog(commands.Cog):
             return await ctx.send(embed=declined)
 
         # ======================
-        # START DUEL (ANIMASI)
+        # START DUEL (GIF ANIMATION)
         # ======================
+
+        # STEP 1 — Embed awal
         start_embed = discord.Embed(
             title="🎲 Duel Dimulai!",
             description=(
                 f"{challenger.mention} vs {target.mention}\n\n"
-                f"Taruhan: **{bet} coins**\n\n"
-                "Mengocok dadu..."
+                f"Taruhan: **{bet_f} coins**\n\n"
+                "**Mengocok dadu...**"
             ),
             color=discord.Color.blurple()
         )
+
         start_msg = await ctx.send(embed=start_embed)
+        await asyncio.sleep(1)
 
-        # Animasi roll: edit beberapa kali
-        dice_faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
-        anim_steps = 5
+        # STEP 2 — GIF rolling
+        rolling_embed = discord.Embed(
+            title="🎲 Mengocok Dadu...",
+            description="Dadu sedang diputar...\n\n**Tunggu sebentar!**",
+            color=discord.Color.blurple()
+        )
 
-        rollA = rollB = None
+        rolling_file = discord.File("media/dice-game.gif", filename="dice.gif")
+        rolling_embed.set_image(url="attachment://dice.gif")
 
-        for _ in range(anim_steps):
-            rollA = random.randint(1, 6)
-            rollB = random.randint(1, 6)
+        await start_msg.edit(embed=rolling_embed, attachments=[rolling_file])
+        await asyncio.sleep(2)
 
-            anim_embed = discord.Embed(
-                title="🎲 Mengocok Dadu...",
-                description=(
-                    f"{challenger.mention}: {dice_faces[rollA - 1]} (`{rollA}`)\n"
-                    f"{target.mention}: {dice_faces[rollB - 1]} (`{rollB}`)\n\n"
-                    "Siapa yang akan menang...?"
-                ),
-                color=discord.Color.blurple()
-            )
+        # STEP 3 — Tentukan roll
+        rollA = random.randint(1, 6)
+        rollB = random.randint(1, 6)
 
-            await start_msg.edit(embed=anim_embed)
-            await asyncio.sleep(0.7)
-
-        # Kalau seri, ulang sampai beda (tanpa animasi panjang biar nggak kelamaan)
         while rollA == rollB:
             rollA = random.randint(1, 6)
             rollB = random.randint(1, 6)
@@ -176,7 +173,7 @@ class DuelCog(commands.Cog):
         loser = target_id if winner == challenger_id else challenger_id
 
         # ======================
-        # Money transfer (GLOBAL)
+        # MONEY TRANSFER
         # ======================
         cashW = get_user_cash(self.db, winner)
         cashL = get_user_cash(self.db, loser)
@@ -184,49 +181,70 @@ class DuelCog(commands.Cog):
         set_user_cash(self.db, winner, cashW + bet)
         set_user_cash(self.db, loser, cashL - bet)
 
-        # log per-guild
-        log_gamble(
-            self.db, ctx.guild.id, challenger_id, "duel", bet,
-            "WIN" if winner == challenger_id else "LOSE"
-        )
-        log_gamble(
-            self.db, ctx.guild.id, target_id, "duel", bet,
-            "WIN" if winner == target_id else "LOSE"
-        )
+        # Log
+        log_gamble(self.db, guild_id, challenger_id, "duel", bet,
+                   "WIN" if winner == challenger_id else "LOSE")
+        log_gamble(self.db, guild_id, target_id, "duel", bet,
+                   "WIN" if winner == target_id else "LOSE")
 
+        # Hapus duel request
         delete_duel_request(self.db, guild_id, challenger_id)
 
+        # ======================
+        # FINAL RESULT (PNG)
+        # ======================
         winner_member = ctx.guild.get_member(winner)
         loser_member = ctx.guild.get_member(loser)
 
-        result_embed = discord.Embed(
+        final_embed = discord.Embed(
             title="🏆 Hasil Duel!",
-            color=discord.Color.green()
-            if winner == challenger_id else discord.Color.gold()
+            description=(
+                f"{challenger.mention}: **{rollA}**\n"
+                f"{target.mention}: **{rollB}**\n\n"
+                f"🏆 **Pemenang: {winner_member.mention}!**"
+            ),
+            color=discord.Color.green() if winner == challenger_id else discord.Color.gold()
         )
-        result_embed.add_field(
-            name="🎲 Roll",
+
+        final_embed.add_field(
+            name="💰 Hadiah",
             value=(
-                f"{challenger.mention}: {dice_faces[rollA - 1]} (`{rollA}`)\n"
-                f"{target.mention}: {dice_faces[rollB - 1]} (`{rollB}`)"
+                f"**+{bet_f} coins** → {winner_member.mention}\n"
+                f"**-{bet_f} coins** → {loser_member.mention}"
             ),
             inline=False
         )
-        result_embed.add_field(
-            name="Pemenang",
-            value=f"🏆 {winner_member.mention}",
-            inline=False
-        )
-        result_embed.add_field(
-            name="Hadiah",
-            value=f"💰 **+{bet} coins** untuk {winner_member.mention}\n"
-                  f"💸 **-{bet} coins** untuk {loser_member.mention}",
-            inline=False
-        )
-        result_embed.set_footer(text="Duel menggunakan global cash")
 
-        await start_msg.edit(embed=result_embed)
+        fileA = discord.File(f"media/dice-{rollA}.png", filename="diceA.png")
+        fileB = discord.File(f"media/dice-{rollB}.png", filename="diceB.png")
 
+        final_embed.set_thumbnail(url="attachment://diceA.png")
+        final_embed.set_image(url="attachment://diceB.png")
+
+        await start_msg.edit(embed=final_embed, attachments=[fileA, fileB])
+
+        # =====================================================================
+    # ADMIN COMMAND — CLEAR DUEL
+    # =====================================================================
+    @commands.command(name="clearduel")
+    async def mclear_duel(self, ctx, target: discord.Member):
+
+        # Hanya admin / owner / ID spesifik
+        if not ctx.author.guild_permissions.manage_guild and ctx.author.id != 416234104317804544:
+            return await ctx.send("❌ Kamu tidak punya izin untuk menggunakan command ini.")
+
+        guild_id = ctx.guild.id
+        target_id = target.id
+
+        # Cek apakah user punya duel pending
+        pending = get_duel_request(self.db, guild_id, target_id)
+        if not pending:
+            return await ctx.send(f"ℹ️ {target.mention} **tidak memiliki duel pending.**")
+
+        # Hapus duel pending
+        delete_duel_request(self.db, guild_id, target_id)
+
+        await ctx.send(f"✅ Duel pending milik {target.mention} telah dibersihkan.")
 
 async def setup(bot):
     await bot.add_cog(DuelCog(bot))
