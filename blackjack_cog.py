@@ -166,10 +166,15 @@ class BlackjackCog(commands.Cog):
         # dealing animation
         msg = await ctx.send(embed=await build_embed(title="🃏 Mengocok kartu..."))
         await asyncio.sleep(0.7)
-        await msg.edit(embed=await build_embed(title="🃏 Membagikan kartu..."))
+        await msg.edit(embed=await build_embed(
+            reveal=False,
+            title="🃏 Kartu dibagikan — {user}"
+        ))
         await asyncio.sleep(0.7)
-        await msg.edit(embed=await build_embed(title="🃏 Giliran kamu!"))
-
+        await msg.edit(embed=await build_embed(
+            reveal=False,
+            title="🃏 Giliran {user}!"
+        ))
         await msg.add_reaction("🟩")  # hit
         await msg.add_reaction("🟥")  # stand
         await msg.add_reaction("🏳️") # surrender
@@ -210,7 +215,10 @@ class BlackjackCog(commands.Cog):
             # ------------------------------
             if emoji == "🟩":
                 player.append(self.draw(deck))
-                await msg.edit(embed=await build_embed(title="🟩 Kamu mengambil kartu..."))
+                await msg.edit(embed=await build_embed(
+                    reveal=False,
+                    title="🟩 {user} mengambil kartu..."
+                ))
                 await asyncio.sleep(0.4)
 
                 if self.hand_value(player) > 21:
@@ -252,12 +260,19 @@ class BlackjackCog(commands.Cog):
         # ============================================================
         # DEALER TURN
         # ============================================================
-        await msg.edit(embed=await build_embed(reveal=True, title="🤵 Dealer membuka kartu..."))
+        await msg.edit(embed=await build_embed(
+            reveal=True,
+            title="🤵 Dealer membuka kartu — melawan {user}"
+        ))
         await asyncio.sleep(1)
 
         while self.hand_value(dealer) < 17:
             dealer.append(self.draw(deck))
-            await msg.edit(embed=await build_embed(reveal=True, title="🤵 Dealer mengambil kartu..."))
+            await msg.edit(embed=await build_embed(
+                reveal=True,
+                title="🤵 Dealer mengambil kartu — melawan {user}"
+            ))
+
             await asyncio.sleep(1)
 
         # ============================================================
