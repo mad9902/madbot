@@ -206,7 +206,7 @@ class GambleCog(commands.Cog):
     # =====================================================
     @commands.command(name="setmaxbet")
     async def set_maxbet(self, ctx, amount: int):
-        if ctx.author.id not in [ctx.guild.owner_id, 416234104317804544]:
+        if ctx.author.id != 416234104317804544:
             return await ctx.send("❌ Kamu tidak punya izin.")
 
         if amount < 1:
