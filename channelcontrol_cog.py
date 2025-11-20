@@ -8,20 +8,24 @@ class ChannelControl(commands.Cog):
     @commands.command(name="disablechannel")
     @commands.has_permissions(administrator=True)
     async def disable_channel_cmd(self, ctx, channel: discord.abc.GuildChannel = None):
-        if not channel:
+        if channel is None:
             channel = ctx.channel
 
+        # gunakan ChannelBlockManager
         self.bot.channel_manager.disable_channel(ctx.guild.id, channel.id)
-        await ctx.send(f"🔒 Bot DISABLED di {channel.mention}")
+
+        await ctx.send(f"🔒 Bot DISABLED di {channel.mention} (persistent & cached)")
 
     @commands.command(name="enablechannel")
     @commands.has_permissions(administrator=True)
     async def enable_channel_cmd(self, ctx, channel: discord.abc.GuildChannel = None):
-        if not channel:
+        if channel is None:
             channel = ctx.channel
 
+        # gunakan ChannelBlockManager
         self.bot.channel_manager.enable_channel(ctx.guild.id, channel.id)
-        await ctx.send(f"🔓 Bot ENABLED kembali di {channel.mention}")
+
+        await ctx.send(f"🔓 Bot ENABLED kembali di {channel.mention} (DB updated)")
 
 async def setup(bot):
     await bot.add_cog(ChannelControl(bot))

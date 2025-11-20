@@ -622,6 +622,14 @@ def migrate(db):
         );
     """)
 
+    # cursor.execute("""
+    #     CREATE TABLE IF NOT EXISTS disabled_channels (
+    #         id INT AUTO_INCREMENT PRIMARY KEY,
+    #         guild_id BIGINT NOT NULL,
+    #         channel_id BIGINT NOT NULL
+    #     )
+    # """)
+
     db.commit()
     cursor.close()
     

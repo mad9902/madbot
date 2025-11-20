@@ -177,6 +177,7 @@ class CommandManager:
             return []
         finally:
             close_connection(conn)
+
 def set_feature_status(db, guild_id, feature_name, status):
     """Set status fitur untuk guild tertentu."""
     cursor = db.cursor()
