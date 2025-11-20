@@ -40,7 +40,7 @@ class DuelCog(commands.Cog):
     # =====================================================================
     @commands.command(name="duel")
     @gamble_only()
-    async def duel(self, ctx, amount: str, target: discord.Member):
+    async def duel(self, ctx, target: discord.Member, amount: str):
 
         guild_id = ctx.guild.id
         challenger = ctx.author
@@ -60,6 +60,8 @@ class DuelCog(commands.Cog):
         cashB = get_user_cash(self.db, target_id)
 
         bet = self.parse_bet(ctx, amount, cashA)
+        bet_f = f"{bet:,}".replace(",", ".")
+
         if bet is None:
             return await ctx.send("❌ Nominal tidak valid.")
         if bet < 1:
@@ -88,7 +90,7 @@ class DuelCog(commands.Cog):
             title="⚔️ Duel Challenge!",
             description=(
                 f"{target.mention}, kamu ditantang duel oleh {challenger.mention}!\n\n"
-                f"💰 **Taruhan:** `{bet}` coins\n\n"
+                f"💰 **Taruhan:** `{bet_f}` coins\n\n"
                 "Ketik **`accept`** untuk menerima atau **`decline`** untuk menolak "
                 "dalam waktu **30 detik**."
             ),
