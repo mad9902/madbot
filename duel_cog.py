@@ -16,7 +16,6 @@ class DuelCog(commands.Cog):
         self.bot = bot
         self.db = bot.db
 
-
     # =====================================================================
     # PARSE BET
     # =====================================================================
@@ -36,16 +35,16 @@ class DuelCog(commands.Cog):
 
         return bet
 
-
     # =====================================================================
-    # DUEL
+    # DUEL COMMAND
     # =====================================================================
     @commands.command(name="duel")
     @gamble_only()
     async def duel(self, ctx, amount: str, target: discord.Member):
 
         guild_id = ctx.guild.id
-        challenger_id = ctx.author.id
+        challenger = ctx.author
+        challenger_id = challenger.id
         target_id = target.id
 
         # ======================
@@ -84,47 +83,95 @@ class DuelCog(commands.Cog):
         # ======================
         create_duel_request(self.db, guild_id, challenger_id, target_id, bet)
 
-        msg = await ctx.send(
-            f"🎲 {target.mention}, kamu ditantang duel oleh {ctx.author.mention}!\n"
-            f"Taruhan: **{bet} coins**\n"
-            f"Ketik **accept** atau **decline** dalam 30 detik."
+        # Embed challenge
+        challenge_embed = discord.Embed(
+            title="⚔️ Duel Challenge!",
+            description=(
+                f"{target.mention}, kamu ditantang duel oleh {challenger.mention}!\n\n"
+                f"💰 **Taruhan:** `{bet}` coins\n\n"
+                "Ketik **`accept`** untuk menerima atau **`decline`** untuk menolak "
+                "dalam waktu **30 detik**."
+            ),
+            color=discord.Color.orange()
         )
+        challenge_embed.set_footer(text="Duel menggunakan global cash")
 
-        def check(m):
+        msg = await ctx.send(embed=challenge_embed)
+
+        def check(m: discord.Message):
             return (
-                m.author.id == target_id and
-                m.channel.id == ctx.channel.id and
-                m.content.lower() in ["accept", "decline"]
+                m.author.id == target_id
+                and m.channel.id == ctx.channel.id
+                and m.content.lower() in ["accept", "decline"]
             )
 
         try:
             reply = await self.bot.wait_for("message", timeout=30, check=check)
         except asyncio.TimeoutError:
             delete_duel_request(self.db, guild_id, challenger_id)
-            return await ctx.send(f"⏳ {target.mention} tidak merespon — duel dibatalkan.")
+            timeout_embed = discord.Embed(
+                title="⏳ Duel Expired",
+                description=f"{target.mention} tidak merespon tepat waktu.\nDuel dibatalkan.",
+                color=discord.Color.red()
+            )
+            return await ctx.send(embed=timeout_embed)
 
         # ======================
         # DECLINE
         # ======================
         if reply.content.lower() == "decline":
             delete_duel_request(self.db, guild_id, challenger_id)
-            return await ctx.send(f"❌ {target.mention} menolak duel.")
+            declined = discord.Embed(
+                title="❌ Duel Ditolak",
+                description=f"{target.mention} menolak duel dari {challenger.mention}.",
+                color=discord.Color.red()
+            )
+            return await ctx.send(embed=declined)
 
         # ======================
-        # START DUEL
+        # START DUEL (ANIMASI)
         # ======================
-        await ctx.send("🎲 Duel dimulai...")
+        start_embed = discord.Embed(
+            title="🎲 Duel Dimulai!",
+            description=(
+                f"{challenger.mention} vs {target.mention}\n\n"
+                f"Taruhan: **{bet} coins**\n\n"
+                "Mengocok dadu..."
+            ),
+            color=discord.Color.blurple()
+        )
+        start_msg = await ctx.send(embed=start_embed)
 
-        rollA = random.randint(1, 6)
-        rollB = random.randint(1, 6)
+        # Animasi roll: edit beberapa kali
+        dice_faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
+        anim_steps = 5
 
+        rollA = rollB = None
+
+        for _ in range(anim_steps):
+            rollA = random.randint(1, 6)
+            rollB = random.randint(1, 6)
+
+            anim_embed = discord.Embed(
+                title="🎲 Mengocok Dadu...",
+                description=(
+                    f"{challenger.mention}: {dice_faces[rollA - 1]} (`{rollA}`)\n"
+                    f"{target.mention}: {dice_faces[rollB - 1]} (`{rollB}`)\n\n"
+                    "Siapa yang akan menang...?"
+                ),
+                color=discord.Color.blurple()
+            )
+
+            await start_msg.edit(embed=anim_embed)
+            await asyncio.sleep(0.7)
+
+        # Kalau seri, ulang sampai beda (tanpa animasi panjang biar nggak kelamaan)
         while rollA == rollB:
-            await ctx.send("↪️ Seri! Roll ulang...")
             rollA = random.randint(1, 6)
             rollB = random.randint(1, 6)
 
         winner = challenger_id if rollA > rollB else target_id
-        loser  = target_id if winner == challenger_id else challenger_id
+        loser = target_id if winner == challenger_id else challenger_id
 
         # ======================
         # Money transfer (GLOBAL)
@@ -136,22 +183,47 @@ class DuelCog(commands.Cog):
         set_user_cash(self.db, loser, cashL - bet)
 
         # log per-guild
-        log_gamble(self.db, ctx.guild.id, challenger_id, "duel", bet,
-                "WIN" if winner == challenger_id else "LOSE")
-
-        log_gamble(self.db, ctx.guild.id, target_id, "duel", bet,
-                "WIN" if winner == target_id else "LOSE")
-
+        log_gamble(
+            self.db, ctx.guild.id, challenger_id, "duel", bet,
+            "WIN" if winner == challenger_id else "LOSE"
+        )
+        log_gamble(
+            self.db, ctx.guild.id, target_id, "duel", bet,
+            "WIN" if winner == target_id else "LOSE"
+        )
 
         delete_duel_request(self.db, guild_id, challenger_id)
 
-        await ctx.send(
-            f"🎲 **HASIL DUEL!**\n"
-            f"{ctx.author.mention}: 🎲 {rollA}\n"
-            f"{target.mention}: 🎲 {rollB}\n\n"
-            f"🏆 **Pemenang: {ctx.guild.get_member(winner).mention}!**\n"
-            f"💰 Mendapat: **{bet} coins**"
+        winner_member = ctx.guild.get_member(winner)
+        loser_member = ctx.guild.get_member(loser)
+
+        result_embed = discord.Embed(
+            title="🏆 Hasil Duel!",
+            color=discord.Color.green()
+            if winner == challenger_id else discord.Color.gold()
         )
+        result_embed.add_field(
+            name="🎲 Roll",
+            value=(
+                f"{challenger.mention}: {dice_faces[rollA - 1]} (`{rollA}`)\n"
+                f"{target.mention}: {dice_faces[rollB - 1]} (`{rollB}`)"
+            ),
+            inline=False
+        )
+        result_embed.add_field(
+            name="Pemenang",
+            value=f"🏆 {winner_member.mention}",
+            inline=False
+        )
+        result_embed.add_field(
+            name="Hadiah",
+            value=f"💰 **+{bet} coins** untuk {winner_member.mention}\n"
+                  f"💸 **-{bet} coins** untuk {loser_member.mention}",
+            inline=False
+        )
+        result_embed.set_footer(text="Duel menggunakan global cash")
+
+        await start_msg.edit(embed=result_embed)
 
 
 async def setup(bot):
