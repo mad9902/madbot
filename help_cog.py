@@ -14,11 +14,11 @@ class HelpCog(commands.Cog):
                 description="""
 Pilih kategori:
 
-🟢 `ghelp gamble`  
-🔵 `ghelp daily`  
-🟣 `ghelp duel`  
-🔴 `ghelp rob`  
-⚙️ `ghelp admin`
+🟢 `mghelp gamble`  
+🔵 `mghelp daily`  
+🟣 `mghelp duel`  
+🔴 `mghelp rob`  
+⚙️ `mghelp admin`
                 """,
                 color=discord.Color.blurple()
             )
