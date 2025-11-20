@@ -558,7 +558,7 @@ class Birthday(commands.Cog):
         )
 
         # format tanggal ulang tahun user
-        bday_str = birthdate.strftime("%d %B %Y")
+        bday_str = birthdate.strftime("%d %B")
         embed.add_field(name="📅 Tanggal Ulang Tahun", value=f"`{bday_str}`", inline=True)
 
         if wish:
