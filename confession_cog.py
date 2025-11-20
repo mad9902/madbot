@@ -86,96 +86,66 @@ def cleanup_confession_map():
 # ======================================================
 
 async def restore_reply_buttons(bot: commands.Bot):
-    print("====================================================")
-    print("[Restore] MULAI restore_reply_buttons")
-    print(f"[Restore] Total entry di CONFESSION_THREAD_MAP: {len(CONFESSION_THREAD_MAP)}")
-    print("====================================================")
-
     for message_id, data in CONFESSION_THREAD_MAP.items():
-        print("----------------------------------------------------")
-        print(f"[Restore] Proses message_id={message_id} | data={data}")
-
         try:
             # Validasi basic
             if not isinstance(data, dict):
-                print(f"[Restore] SKIP message_id={message_id} karena data bukan dict: {type(data)}")
                 continue
 
             channel_id = data.get("channel_id")
             thread_id = data.get("thread_id")
 
-            print(f"[Restore] channel_id={channel_id}, thread_id={thread_id}")
-
             if not channel_id:
-                print(f"[Restore] SKIP message_id={message_id} karena channel_id kosong / None")
                 continue
 
             # ====== FETCH PARENT CHANNEL ======
             try:
                 parent_ch = await bot.fetch_channel(channel_id)
-                print(f"[Restore] parent_ch fetched: {parent_ch} (type={type(parent_ch)})")
-            except Exception as e:
-                print(f"[Restore] GAGAL fetch_channel({channel_id}) → {repr(e)}")
+            except:
                 continue
 
             if not isinstance(parent_ch, discord.TextChannel):
-                print(f"[Restore] SKIP message_id={message_id} karena parent_ch bukan TextChannel (type={type(parent_ch)})")
                 continue
 
             # ====== FETCH PARENT MESSAGE ======
             try:
                 parent_msg = await parent_ch.fetch_message(int(message_id))
-                print(f"[Restore] parent_msg fetched: id={parent_msg.id}, content={parent_msg.content!r}")
-            except Exception as e:
-                print(f"[Restore] GAGAL fetch_message di channel {channel_id} untuk mid={message_id} → {repr(e)}")
+            except:
                 continue
 
             # ====== BUILD & REGISTER VIEW UNTUK PARENT ======
             try:
                 view = ConfessionView(bot)
-                # pastikan pakai int(message_id)
                 view.add_item(ReplyToConfessionButton(bot, int(message_id)))
                 bot.add_view(view)
-                print(f"[Restore] Berhasil add_view untuk parent message_id={message_id}")
-
                 await parent_msg.edit(view=view)
-                print(f"[Restore] Berhasil edit parent_msg id={message_id} (tambah view).")
-            except Exception as e:
-                print(f"[Restore] GAGAL set view pada parent_msg id={message_id} → {repr(e)}")
+            except:
+                pass
 
             # ====== RESTORE THREAD (JIKA ADA) ======
             if thread_id:
-                print(f"[Restore] Coba restore thread dengan thread_id={thread_id}")
                 try:
                     thread = await bot.fetch_channel(thread_id)
-                    print(f"[Restore] Thread fetched: {thread} (type={type(thread)})")
-                except Exception as e:
-                    print(f"[Restore] GAGAL fetch thread {thread_id} → {repr(e)}")
+                except:
                     continue
 
                 try:
                     async for msg in thread.history(limit=None):
                         if msg.author.id != bot.user.id:
                             continue
-                        print(f"[Restore] Tambah view ke thread msg id={msg.id}")
 
                         v = ThreadReplyView(bot, msg.id)
                         bot.add_view(v)
                         try:
                             await msg.edit(view=v)
-                            print(f"[Restore] Berhasil edit thread msg {msg.id}")
-                        except Exception as e_msg:
-                            print(f"[Restore] GAGAL edit thread msg {msg.id} → {repr(e_msg)}")
-                except Exception as e_hist:
-                    print(f"[Restore] ERROR saat iterasi history thread {thread_id} → {repr(e_hist)}")
+                        except:
+                            pass
 
-        except Exception as e:
-            # Ini last-resort kalau ada error di luar yang lain
-            print("[Restore Error] Exception tak terduga:", repr(e))
+                except:
+                    pass
 
-    print("====================================================")
-    print("[Restore] SELESAI restore_reply_buttons")
-    print("====================================================")
+        except:
+            pass
 
 # ======================================================
 # BUTTON — SUBMIT CONFESSION
