@@ -180,7 +180,72 @@ class SubmitImageConfessionButton(discord.ui.Button):
         if att.size > 5 * 1024 * 1024:
             return await dm.send("❌ File lebih dari 5MB.")
 
-        # (lanjutkan proses lama lu...)
+        # ========== LANJUTKAN PROSES ASLI ==========
+
+        caption = msg.content or " "
+        confession_id = str(uuid.uuid4())[:8]
+
+        # SAVE TEMP
+        tmp_dir = "/tmp" if os.name != "nt" else "temp"
+        os.makedirs(tmp_dir, exist_ok=True)
+        temp_path = os.path.join(tmp_dir, f"{uuid.uuid4().hex}_{att.filename}")
+
+        # Download file
+        async with aiohttp.ClientSession() as session:
+            async with session.get(att.url) as resp:
+                if resp.status != 200:
+                    return await dm.send("❌ Gagal download file.")
+                with open(temp_path, "wb") as f:
+                    f.write(await resp.read())
+
+        # GET TARGET CHANNEL
+        db = connect_db()
+        channel_id = get_channel_settings(db, interaction.guild_id, "confession")
+        db.close()
+
+        target_ch = interaction.guild.get_channel(int(channel_id))
+
+        # BUILD EMBED
+        embed = discord.Embed(
+            title=f"Anonymous Confession (#{confession_id})",
+            description=f'"{caption}"',
+            color=discord.Color.dark_gray()
+        )
+
+        file = discord.File(temp_path, filename=att.filename)
+
+        if att.filename.lower().endswith((".mp4", ".mov", ".webm", ".mkv", ".gif")):
+            sent = await target_ch.send(embed=embed, file=file)
+        else:
+            embed.set_image(url=f"attachment://{att.filename}")
+            sent = await target_ch.send(embed=embed, file=file)
+
+        try:
+            os.remove(temp_path)
+        except:
+            pass
+
+        # SAVE DB
+        db2 = connect_db()
+        save_confession_db(
+            db2,
+            sent.id,
+            interaction.guild_id,
+            target_ch.id,
+            None,
+            None,
+            confession_id,
+            True
+        )
+        db2.close()
+
+        # BUTTONS
+        view = ConfessionView(self.bot)
+        view.add_item(ReplyToConfessionButton(self.bot, sent.id))
+        await sent.edit(view=view)
+
+        await dm.send("✅ Confession berhasil dikirim!")
+
 
 
 # ======================================================
