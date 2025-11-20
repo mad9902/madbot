@@ -55,8 +55,24 @@ class BlackjackCog(commands.Cog):
         random.shuffle(deck)
         return deck
 
-    def draw(self, deck):
+    def draw(self, deck, bias_high=False):
+        if bias_high:
+            # cari kartu tinggi
+            for i, c in enumerate(deck):
+                r = c[:-1]
+                if r in ["10","J","Q","K","A"]:
+                    return deck.pop(i)
         return deck.pop()
+    
+    def smart_dealer_draw(self, deck, dealer_hand, player_val):
+        # pilih kartu yang bikin dealer menang tapi ga bust
+        for i, c in enumerate(deck):
+            test = dealer_hand + [c]
+            v = self.hand_value(test)
+            if 17 <= v <= 21 and v >= player_val:
+                return deck.pop(i)
+        return deck.pop()  # fallback normal
+
 
     # ============================================================
     # HAND VALUE
@@ -214,7 +230,7 @@ class BlackjackCog(commands.Cog):
             # HIT
             # ------------------------------
             if emoji == "🟩":
-                player.append(self.draw(deck))
+                player.append(self.draw(deck, bias_high=True))
                 await msg.edit(embed=await build_embed(
                     reveal=False,
                     title="🟩 {user} mengambil kartu..."
@@ -260,6 +276,8 @@ class BlackjackCog(commands.Cog):
         # ============================================================
         # DEALER TURN
         # ============================================================
+        p_val = self.hand_value(player)
+
         await msg.edit(embed=await build_embed(
             reveal=True,
             title="🤵 Dealer membuka kartu — melawan {user}"
@@ -267,13 +285,13 @@ class BlackjackCog(commands.Cog):
         await asyncio.sleep(1)
 
         while self.hand_value(dealer) < 17:
-            dealer.append(self.draw(deck))
+            dealer.append(self.smart_dealer_draw(deck, dealer, p_val))
             await msg.edit(embed=await build_embed(
                 reveal=True,
                 title="🤵 Dealer mengambil kartu — melawan {user}"
             ))
-
             await asyncio.sleep(1)
+
 
         # ============================================================
         # RESULT
@@ -283,8 +301,9 @@ class BlackjackCog(commands.Cog):
 
         if d_val > 21 or p_val > d_val:
             win = bet
-            if p_val == 21 and len(player) == 2:  # natural blackjack
-                win = int(bet * 1.5)
+            if p_val == 21 and len(player) == 2:
+                win = int(bet * 1)  # atau 1x bet biar lebih parah
+
 
             new_cash = cash + win
             set_user_cash(self.db, user_id, new_cash)
