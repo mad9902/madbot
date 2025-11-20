@@ -525,7 +525,7 @@ class Birthday(commands.Cog):
         # =========================================================
     # COMMAND: Late Birthday (Manual Trigger)
     # =========================================================
-    @commands.command(name="mlatebirthday")
+    @commands.command(name="latebirthday")
     async def late_birthday(self, ctx, user: discord.Member):
         # ====== PERMISSION CHECK ======
         allowed = [ctx.guild.owner_id, 416234104317804544]
@@ -557,8 +557,9 @@ class Birthday(commands.Cog):
             color=discord.Color.gold()
         )
 
-        today_str = datetime.now(JAKARTA_TZ).strftime("%d %B %Y")
-        embed.add_field(name="📅 Tanggal", value=f"`{today_str}`", inline=True)
+        # format tanggal ulang tahun user
+        bday_str = birthdate.strftime("%d %B %Y")
+        embed.add_field(name="📅 Tanggal Ulang Tahun", value=f"`{bday_str}`", inline=True)
 
         if wish:
             embed.add_field(name="💌 Wish", value=f"_{wish}_", inline=False)
@@ -572,7 +573,7 @@ class Birthday(commands.Cog):
 
         # ====== SEND MESSAGE ======
         await ctx.send(
-            content=f"🎉 (Manual) Selamat ulang tahun {user.mention}!! 🎂",
+            content=f"🎉Selamat ulang tahun {user.mention}!! 🎂",
             file=file,
             embed=embed,
             allowed_mentions=discord.AllowedMentions(
