@@ -243,8 +243,17 @@ async def safe_respond(inter: discord.Interaction, **kwargs):
 # ======================================================
 @bot.event
 async def on_command_error(ctx, error):
+    # ====== SUPER FIX: cegah error handler dipanggil >1 kali untuk pesan yg sama ======
+    if getattr(bot, "_last_error_msg", None) == ctx.message.id:
+        return
+    bot._last_error_msg = ctx.message.id
+    # ================================================================================
 
-    # cegah double trigger kalau pesan sudah lewat on_message bannedwords
+    # block kalau channel disabled
+    if ctx.guild and bot.channel_manager.is_channel_disabled(ctx.guild.id, ctx.channel.id):
+        return
+
+    # bannedwords bypass
     if getattr(ctx.message, "_from_bannedwords", False):
         return
 
