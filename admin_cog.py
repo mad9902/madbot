@@ -31,7 +31,6 @@ class AdminCog(commands.Cog):
 
             "streak_pairs",
             "streak_logs",
-            "streak_emoji_map",
 
             "discord_logs",
             "user_last_active",

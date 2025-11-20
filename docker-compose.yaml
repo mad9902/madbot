@@ -14,7 +14,7 @@ services:
     # ports:
     #   - "8000:8000"
     volumes:
-      - .:/app
+      - ./data:/app/data
       - /tmp:/tmp
     # command: python main.py
 

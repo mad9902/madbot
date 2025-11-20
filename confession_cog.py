@@ -13,7 +13,15 @@ from database import (
 )
 
 CONFESSION_THREAD_MAP = {}
-MAP_FILE = "confession_map.json"
+
+# =========================
+#  PERSISTENT STORAGE PATH
+# =========================
+MAP_DIR = "/app/data"
+os.makedirs(MAP_DIR, exist_ok=True)
+
+MAP_FILE = os.path.join(MAP_DIR, "confession_map.json")
+
 
 # ======================================================
 #  STORAGE
