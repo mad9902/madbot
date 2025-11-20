@@ -514,6 +514,7 @@ def save_confession(db, guild_id, user_id, confession_id, content):
         VALUES (%s, %s, %s, %s)
     """, (guild_id, user_id, confession_id, content))
     db.commit()
+    
 # ==================== GAME CORE ====================
 def create_new_game(guild_id, channel_id):
     conn = connect_db()

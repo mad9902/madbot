@@ -488,12 +488,18 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
             await sent.edit(view=ThreadReplyView(self.bot, sent.id))
 
+            save_confession(
+                self.bot.db,
+                interaction.guild_id,
+                interaction.user.id,
+                confession_id,
+                content
+            )
+
             return await interaction.followup.send(
                 "✅ Balasan kamu sudah dikirim!",
                 ephemeral=True
             )
-
-
 
             # # ============================
             # # BUILD JUMP LINK
