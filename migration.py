@@ -630,6 +630,24 @@ def migrate(db):
     #     )
     # """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS confession_messages (
+            id BIGINT PRIMARY KEY,                -- Discord message ID
+            guild_id BIGINT NOT NULL,
+            channel_id BIGINT NOT NULL,           -- tempat parent message berada
+            thread_id BIGINT NULL,                -- kalau sudah punya thread
+            parent_id BIGINT NULL,                -- parent dari reply
+            confession_id VARCHAR(16) NOT NULL,   -- kode #random
+            is_parent BOOLEAN NOT NULL DEFAULT 0, -- apakah ini confession utama
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+            INDEX(guild_id),
+            INDEX(channel_id),
+            INDEX(thread_id),
+            INDEX(parent_id)
+        );
+    """)
+
     db.commit()
     cursor.close()
     
