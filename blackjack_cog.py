@@ -136,7 +136,7 @@ class BlackjackCog(commands.Cog):
         # ============================================================
         # EMBED BUILDER
         # ============================================================
-        async def build_embed(reveal=False):
+        async def build_embed(reveal=False, title="🃏 Blackjack — {user}"):
             p_val = self.hand_value(player)
             d_val = self.hand_value(dealer) if reveal else "?"
             d_cards = (
@@ -145,18 +145,10 @@ class BlackjackCog(commands.Cog):
             )
 
             emb = discord.Embed(
-                title=f"🃏 Blackjack — {ctx.author.display_name}",
+                title=title.format(user=ctx.author.display_name),
                 color=discord.Color.gold()
             )
 
-            p_val = self.hand_value(player)
-            d_val = self.hand_value(dealer) if reveal else "?"
-            d_cards = (
-                render_hand(dealer) if reveal
-                else f"{render_card(dealer[0])} {render_card(CARD_BACK)}"
-            )
-
-            emb = discord.Embed(title=title, color=discord.Color.gold())
             emb.add_field(
                 name="🧑 Pemain",
                 value=f"{render_hand(player)}\n**Total: {p_val}**",
@@ -168,14 +160,15 @@ class BlackjackCog(commands.Cog):
                 inline=False
             )
             emb.set_footer(text="HIT = 🟩 | STAND = 🟥 | SURRENDER = 🏳️")
-            return emb
 
+            return emb
+        
         # dealing animation
-        msg = await ctx.send(embed=await build_embed("🃏 Mengocok kartu..."))
+        msg = await ctx.send(embed=await build_embed(title="🃏 Mengocok kartu..."))
         await asyncio.sleep(0.7)
-        await msg.edit(embed=await build_embed("🃏 Membagikan kartu..."))
+        await msg.edit(embed=await build_embed(title="🃏 Membagikan kartu..."))
         await asyncio.sleep(0.7)
-        await msg.edit(embed=await build_embed("🃏 Giliran kamu!"))
+        await msg.edit(embed=await build_embed(title="🃏 Giliran kamu!"))
 
         await msg.add_reaction("🟩")  # hit
         await msg.add_reaction("🟥")  # stand
@@ -217,7 +210,7 @@ class BlackjackCog(commands.Cog):
             # ------------------------------
             if emoji == "🟩":
                 player.append(self.draw(deck))
-                await msg.edit(embed=await build_embed("🟩 Kamu mengambil kartu..."))
+                await msg.edit(embed=await build_embed(title="🟩 Kamu mengambil kartu..."))
                 await asyncio.sleep(0.4)
 
                 if self.hand_value(player) > 21:
@@ -259,12 +252,12 @@ class BlackjackCog(commands.Cog):
         # ============================================================
         # DEALER TURN
         # ============================================================
-        await msg.edit(embed=await build_embed("🤵 Dealer membuka kartu...", reveal=True))
+        await msg.edit(embed=await build_embed(reveal=True, title="🤵 Dealer membuka kartu..."))
         await asyncio.sleep(1)
 
         while self.hand_value(dealer) < 17:
             dealer.append(self.draw(deck))
-            await msg.edit(embed=await build_embed("🤵 Dealer mengambil kartu...", reveal=True))
+            await msg.edit(embed=await build_embed(reveal=True, title="🤵 Dealer mengambil kartu..."))
             await asyncio.sleep(1)
 
         # ============================================================
