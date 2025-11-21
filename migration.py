@@ -667,6 +667,21 @@ def migrate(db):
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS role_select_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            guild_id BIGINT NOT NULL,
+            channel_id BIGINT NOT NULL,
+            message_id BIGINT NOT NULL,
+            title VARCHAR(255),
+            description TEXT,
+            roles_json TEXT,
+            single_mode TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+
     db.commit()
     cursor.close()
     

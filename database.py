@@ -1980,3 +1980,21 @@ def get_all_confession_messages(db):
     cursor.close()
     return rows
 
+def save_role_message(db, mode, guild_id, channel_id, message_id, title, desc, roles_map):
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO role_select_messages (guild_id, channel_id, message_id, title, description, roles_json, single_mode)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (
+        guild_id, channel_id, message_id,
+        title, desc,
+        json.dumps({str(r.id): e for r, e in roles_map.items()}),
+        1 if mode == "single" else 0
+    ))
+    db.commit()
+
+
+def load_all_role_messages(db):
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM role_select_messages")
+    return cursor.fetchall()
