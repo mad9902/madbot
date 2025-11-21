@@ -16,6 +16,17 @@ class DuelCog(commands.Cog):
         self.bot = bot
         self.db = bot.db
 
+    # HOLD SYSTEM
+    def hold_amount(self, uid, amt):
+        self.bot.hold_balance[uid] = self.bot.hold_balance.get(uid, 0) + amt
+
+    def release_amount(self, uid, amt):
+        if uid in self.bot.hold_balance:
+            self.bot.hold_balance[uid] = max(0, self.bot.hold_balance[uid] - amt)
+
+    def get_available(self, uid):
+        return get_user_cash(self.db, uid) - self.bot.hold_balance.get(uid, 0)
+
     # =====================================================================
     # PARSE BET
     # =====================================================================
@@ -56,8 +67,8 @@ class DuelCog(commands.Cog):
             return await ctx.send("❌ Tidak bisa duel dengan diri sendiri.")
 
         # Ambil cash GLOBAL
-        cashA = get_user_cash(self.db, challenger_id)
-        cashB = get_user_cash(self.db, target_id)
+        cashA = self.get_available(challenger_id)
+        cashB = self.get_available(target_id)
 
         bet = self.parse_bet(ctx, amount, cashA)
         if bet is None:
@@ -83,6 +94,9 @@ class DuelCog(commands.Cog):
         # Simpan duel request
         # ======================
         create_duel_request(self.db, guild_id, challenger_id, target_id, bet)
+        self.hold_amount(challenger_id, bet)
+        self.hold_amount(target_id, bet)
+
 
         # ======================
         # Kirim challenge embed
@@ -118,6 +132,9 @@ class DuelCog(commands.Cog):
                 description=f"{target.mention} tidak merespon tepat waktu.\nDuel dibatalkan.",
                 color=discord.Color.red()
             )
+            self.release_amount(challenger_id, bet)
+            self.release_amount(target_id, bet)
+
             return await ctx.send(embed=timeout_embed)
 
         # Declined
@@ -128,6 +145,9 @@ class DuelCog(commands.Cog):
                 description=f"{target.mention} menolak duel dari {challenger.mention}.",
                 color=discord.Color.red()
             )
+            self.release_amount(challenger_id, bet)
+            self.release_amount(target_id, bet)
+
             return await ctx.send(embed=declined)
 
         # ======================
@@ -189,6 +209,9 @@ class DuelCog(commands.Cog):
 
         # Hapus duel request
         delete_duel_request(self.db, guild_id, challenger_id)
+        self.release_amount(challenger_id, bet)
+        self.release_amount(target_id, bet)
+
 
         # ======================
         # FINAL RESULT (PNG)

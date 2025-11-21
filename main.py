@@ -51,6 +51,7 @@ intents.members = True
 intents.guild_reactions = True
 intents.reactions = True
 
+
 # Prefix logic
 def get_prefix(bot, message):
     if message.guild and message.guild.id in DISABLED_GUILDS:
@@ -130,7 +131,6 @@ class MadBot(commands.Bot):
 
         # Load cache semua guild
 
-
         # tombol global tetap hidup
         self.add_view(ConfessionView(self))
         self.channel_manager.load_all_guilds(self.guilds)
@@ -139,6 +139,7 @@ class MadBot(commands.Bot):
 
 # BOT INSTANCE
 bot = MadBot(command_prefix=get_prefix, intents=intents)
+bot.hold_balance = {}
 
 
 # ======================================================

@@ -33,25 +33,26 @@ class ConfirmTransfer(View):
     @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.green)
     async def confirm(self, interaction, button):
 
-        giver_cash = get_user_cash(self.db, self.giver.id)
+        current_giver = get_user_cash(self.db, self.giver.id)
 
-        if giver_cash < self.amount:
+        if current_giver < self.amount:
             return await interaction.response.edit_message(
                 content="❌ Saldo kamu tidak cukup.",
                 view=None
             )
 
         # Transfer beneran
-        set_user_cash(self.db, self.giver.id, giver_cash - self.amount)
-        target_cash = get_user_cash(self.db, self.target.id)
-        set_user_cash(self.db, self.target.id, target_cash + self.amount)
+        set_user_cash(self.db, self.giver.id, current_giver - self.amount)
+
+        current_target = get_user_cash(self.db, self.target.id)
+        set_user_cash(self.db, self.target.id, current_target + self.amount)
 
         embed = discord.Embed(
             title="💸 Transfer Berhasil",
             description=(
                 f"{self.giver.mention} telah mentransfer **{comma(self.amount)} coins** "
                 f"kepada {self.target.mention}.\n\n"
-                f"💰 Saldo kamu sekarang: **{comma(giver_cash - self.amount)}**"
+                f"💰 Saldo kamu sekarang: **{comma(current_giver - self.amount)}**"
             ),
             color=discord.Color.green()
         )
@@ -91,9 +92,10 @@ class ConfirmGive(View):
     @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: Button):
         # Update cash
-        cash = get_user_cash(self.db, self.target.id)
-        new_cash = cash + self.amount
+        current = get_user_cash(self.db, self.target.id)
+        new_cash = current + self.amount
         set_user_cash(self.db, self.target.id, new_cash)
+
 
         embed = discord.Embed(
             title="💸 Cash Given",
@@ -139,6 +141,37 @@ class GambleCog(commands.Cog):
 
 
     # =====================================================
+    # HOLD BALANCE SYSTEM
+    # =====================================================
+    def get_available(self, user_id):
+        """
+        Saldo yang BISA dipakai user (cash real - hold).
+        """
+        real = get_user_cash(self.db, user_id)
+        hold = self.bot.hold_balance.get(user_id, 0)
+        return real - hold
+
+    def hold_amount(self, user_id, amount):
+        """
+        Lock saldo sejumlah amount.
+        """
+        self.bot.hold_balance[user_id] = self.bot.hold_balance.get(user_id, 0) + amount
+
+    def release_amount(self, user_id, amount):
+        """
+        Lepaskan hold tanpa mengubah cash.
+        """
+        if user_id in self.bot.hold_balance:
+            self.bot.hold_balance[user_id] = max(0, self.bot.hold_balance[user_id] - amount)
+
+    def clear_hold(self, user_id):
+        """
+        Hapus semua hold user.
+        """
+        if user_id in self.bot.hold_balance:
+            del self.bot.hold_balance[user_id]
+
+    # =====================================================
     # AUTO EARN SYSTEM (GLOBAL CASH)
     # =====================================================
     @commands.Cog.listener()
@@ -169,8 +202,9 @@ class GambleCog(commands.Cog):
         # reward calculation
         gain = 3 + min(len(content) // 30, 7)
 
-        cash = get_user_cash(self.db, user)
-        set_user_cash(self.db, user, cash + gain)
+        current = get_user_cash(self.db, user)
+        set_user_cash(self.db, user, current + gain)
+
 
 
     # =====================================================
@@ -300,12 +334,16 @@ class GambleCog(commands.Cog):
         user = ctx.author.id
         guild = ctx.guild.id
 
-        cash = get_user_cash(self.db, user)
+        # selalu reload saldo terbaru
+        cash = self.get_available(user)
+
 
         maxbet = get_gamble_setting(self.db, guild, "maxbet")
         maxbet = int(maxbet) if maxbet else None
 
         if amount_str.lower() == "all":
+            # reload lagi untuk antisipasi race condition
+            cash = get_user_cash(self.db, user)
             bet = cash if not maxbet else min(cash, maxbet)
             return bet, cash, maxbet
 
@@ -352,12 +390,17 @@ class GambleCog(commands.Cog):
             return await ctx.send("❌ Kamu belum memasukkan nominal bet.")
 
         bet, cash, maxbet = self.parse_bet(ctx, amount_str)
+        avail = self.get_available(ctx.author.id)
         if bet is None:
             return await ctx.send("❌ Nominal tidak valid.")
         if bet < 1:
             return await ctx.send("❌ Bet minimal 1.")
-        if cash < bet:
+        if avail < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
+        
+        # HOLD BET
+        self.hold_amount(ctx.author.id, bet)
+
 
         # ============================
         # PATH GAMBAR — pake flip.gif
@@ -391,19 +434,21 @@ class GambleCog(commands.Cog):
         # ============================
         actual = random.choice(["HEAD", "TAIL"])
         final_img = head_img if actual == "HEAD" else tail_img
+        current = get_user_cash(self.db, ctx.author.id)
+        self.release_amount(ctx.author.id, bet)
 
         if guess == actual:
-            cash += bet
+            new_cash = current + bet
             status = f"🟢 **Kamu menang! +{comma(bet)}**"
             color = discord.Color.green()
             res_code = "WIN"
         else:
-            cash -= bet
+            new_cash = current - bet
             status = f"🔴 **Kamu kalah! -{comma(bet)}**"
             color = discord.Color.red()
             res_code = "LOSE"
 
-        set_user_cash(self.db, ctx.author.id, cash)
+        set_user_cash(self.db, ctx.author.id, new_cash)
         log_gamble(self.db, ctx.guild.id, ctx.author.id, "coinflip", bet, res_code)
 
         final_embed = discord.Embed(
@@ -412,7 +457,7 @@ class GambleCog(commands.Cog):
                 f"Tebakan kamu: **{guess}**\n"
                 f"Hasil koin: **{actual}**\n\n"
                 f"{status}\n\n"
-                f"💰 **Saldo sekarang: {comma(cash)}**"
+                f"💰 **Saldo sekarang: {comma(new_cash)}**"
             ),
             color=color
         )
@@ -430,12 +475,16 @@ class GambleCog(commands.Cog):
     async def slots(self, ctx, amount: str):
 
         bet, cash, maxbet = self.parse_bet(ctx, amount)
+        avail = self.get_available(ctx.author.id)
         if bet is None:
             return await ctx.send("❌ Nominal tidak valid.")
         if bet < 1:
             return await ctx.send("❌ Bet minimal 1.")
-        if cash < bet:
+        if avail < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
+        
+        # HOLD BET
+        self.hold_amount(ctx.author.id, bet)
 
         # ================================
         # PROBABILITY TABLE
@@ -501,7 +550,10 @@ class GambleCog(commands.Cog):
         if is_win:
             multi = multipliers[r1]
             win_amount = bet * multi
-            cash += win_amount
+            current = get_user_cash(self.db, ctx.author.id)
+            self.release_amount(ctx.author.id, bet)
+
+            new_cash = current + win_amount
 
             desc = (
                 f"🟢 **MENANG!** {r1*3}\n"
@@ -511,19 +563,24 @@ class GambleCog(commands.Cog):
             color = discord.Color.green()
             status = "WIN"
         else:
-            cash -= bet
+            current = get_user_cash(self.db, ctx.author.id)
+            self.release_amount(ctx.author.id, bet)  # <— WAJIB DITAMBAH
+
+            new_cash = current - bet
+            set_user_cash(self.db, ctx.author.id, new_cash)
+
             desc = f"🔴 **KALAH! -{comma(bet)} coins**"
             color = discord.Color.red()
             status = "LOSE"
 
         # Save
-        set_user_cash(self.db, ctx.author.id, cash)
+        set_user_cash(self.db, ctx.author.id, new_cash)
         log_gamble(self.db, ctx.guild.id, ctx.author.id, "slots", bet, status)
 
         # Final embed
         result = discord.Embed(
             title="🎰 Slots Result",
-            description=f"{final}\n\n{desc}\n\n💰 **Saldo: {comma(cash)}**",
+            description=f"{final}\n\n{desc}\n\n💰 **Saldo: {comma(new_cash)}**",
             color=color
         )
         await msg.edit(embed=result)

@@ -25,6 +25,11 @@ def render_hand(cards):
 
 
 class BlackjackCog(commands.Cog):
+    # alias cepat
+    hold_amount   = lambda self, uid, amt: self.bot.hold_balance.__setitem__(uid, self.bot.hold_balance.get(uid, 0) + amt)
+    release_amount = lambda self, uid, amt: self.bot.hold_balance.__setitem__(uid, max(0, self.bot.hold_balance.get(uid, 0) - amt))
+    get_available  = lambda self, uid: get_user_cash(self.db, uid) - self.bot.hold_balance.get(uid, 0)
+
     def __init__(self, bot):
         self.bot = bot
         self.db = bot.db
@@ -138,12 +143,12 @@ class BlackjackCog(commands.Cog):
             return await ctx.send("❌ Kamu masih dalam permainan blackjack.")
 
         # parse bet (GLOBAL CASH)
-        cash = get_user_cash(self.db, user_id)
+        avail = self.get_available(user_id)
         maxbet = get_gamble_setting(self.db, guild_id, "maxbet")
         maxbet = int(maxbet) if maxbet else None
 
         if bet.lower() == "all":
-            bet = cash if maxbet is None else min(cash, maxbet)
+            bet = avail if maxbet is None else min(avail, maxbet)
         elif bet.isdigit():
             bet = int(bet)
             if maxbet and bet > maxbet:
@@ -153,8 +158,13 @@ class BlackjackCog(commands.Cog):
 
         if bet < 1:
             return await ctx.send("❌ Minimal bet 1.")
-        if cash < bet:
+        if avail  < bet:
             return await ctx.send("❌ Saldo tidak cukup.")
+        # HOLD BET
+        self.hold_amount(user_id, bet)
+
+        # 🔥 refresh biar pake saldo terbaru (anti desync)
+        cash = get_user_cash(self.db, user_id)
 
         # init game
         deck = self.new_deck()
@@ -231,6 +241,9 @@ class BlackjackCog(commands.Cog):
                     "reaction_add", timeout=45, check=check
                 )
             except asyncio.TimeoutError:
+                # === FIX: lepas hold saat timeout ===
+                self.release_amount(user_id, bet)
+
                 del self.active_games[key]
                 return await msg.edit(embed=discord.Embed(
                     title="⏳ Timeout",
@@ -258,7 +271,9 @@ class BlackjackCog(commands.Cog):
                 await asyncio.sleep(0.4)
 
                 if self.hand_value(player) > 21:
-                    new_cash = cash - bet
+                    self.release_amount(user_id, bet)
+                    current = get_user_cash(self.db, user_id)
+                    new_cash = current - bet
                     set_user_cash(self.db, user_id, new_cash)
                     log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "LOSE")
                     del self.active_games[key]
@@ -276,7 +291,11 @@ class BlackjackCog(commands.Cog):
             # ------------------------------
             if emoji == "🏳️":
                 loss = bet // 2
-                new_cash = cash - loss
+                self.release_amount(user_id, bet)
+                
+                current = get_user_cash(self.db, user_id)
+                new_cash = current - loss
+
                 set_user_cash(self.db, user_id, new_cash)
                 log_gamble(self.db, ctx.guild.id, user_id, "blackjack", loss, "LOSE")
                 del self.active_games[key]
@@ -325,8 +344,10 @@ class BlackjackCog(commands.Cog):
             if p_val == 21 and len(player) == 2:
                 win = int(bet * 1)  # atau 1x bet biar lebih parah
 
+            self.release_amount(user_id, bet)
+            current = get_user_cash(self.db, user_id)
+            new_cash = current + win
 
-            new_cash = cash + win
             set_user_cash(self.db, user_id, new_cash)
             log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "WIN")
 
@@ -334,7 +355,10 @@ class BlackjackCog(commands.Cog):
             color = discord.Color.green()
 
         elif d_val > p_val:
-            new_cash = cash - bet
+            self.release_amount(user_id, bet)
+            current = get_user_cash(self.db, user_id)
+            new_cash = current - bet
+
             set_user_cash(self.db, user_id, new_cash)
             log_gamble(self.db, ctx.guild.id, user_id, "blackjack", bet, "LOSE")
 
@@ -343,6 +367,7 @@ class BlackjackCog(commands.Cog):
             color = discord.Color.red()
 
         else:
+            self.release_amount(user_id, bet)
             result = "⚪ Seri (push)"
             color = discord.Color.greyple()
 
