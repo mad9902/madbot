@@ -9,6 +9,26 @@ from database import (
     load_all_role_messages,
 )
 
+EMBED_TEMPLATES = {
+    "game": {
+        "color": discord.Color.orange(),
+        "image": "media/game.gif"
+    },
+    "gender": {
+        "color": discord.Color.pink(),
+        "image": "media/gender.gif"
+    },
+    "hobby": {
+        "color": discord.Color.green(),
+        "image": "media/hobby.png"
+    },
+    "notif": {
+        "color": discord.Color.blue(),
+        "image": "media/notif.png"
+    },
+}
+
+
 # ============================
 # SELECT MENU
 # ============================
@@ -151,23 +171,35 @@ class RoleSelectCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def selectrole(self, ctx, *, args):
         """
-        selectrole single/multi | title | message | @role emoji, ...
+        Format:
+        selectrole <single/multi> | <type> | <title> | <message> | @role emoji, ...
         """
 
+        # =====================================
+        # 1. Parse mode, type, title, message
+        # =====================================
         try:
-            mode, title, desc, roles_raw = [x.strip() for x in args.split("|")]
+            mode, type_name, title, desc, roles_raw = [x.strip() for x in args.split("|")]
             mode = mode.lower()
+            type_name = type_name.lower()
+
             if mode not in ["single", "multi"]:
                 return await ctx.send("❌ Mode harus `single` atau `multi`.")
+
+            if type_name not in EMBED_TEMPLATES:
+                return await ctx.send(f"❌ Tipe `{type_name}` tidak ditemukan. Tambah dulu di EMBED_TEMPLATES.")
         except ValueError:
             return await ctx.send("❌ Format salah!")
 
+        # =====================================
+        # 2. Parse roles
+        # =====================================
         parts = [x.strip() for x in roles_raw.replace("\n", " ").split(",")]
         roles_map = {}
 
         for part in parts:
             if not part:
-                continue  # skip kosong akibat koma ganda atau newline
+                continue
 
             tokens = part.split(" ")
             if len(tokens) < 2:
@@ -176,7 +208,6 @@ class RoleSelectCog(commands.Cog):
             emoji = tokens[-1]
             role_part = " ".join(tokens[:-1]).strip()
 
-            # cari role mention dari message
             role = None
             for rm in ctx.message.role_mentions:
                 if f"<@&{rm.id}>" in role_part:
@@ -188,30 +219,61 @@ class RoleSelectCog(commands.Cog):
 
             roles_map[role] = emoji
 
-
+        # =====================================
+        # 3. Build embed dari TEMPLATE
+        # =====================================
+        template = EMBED_TEMPLATES[type_name]
 
         embed = discord.Embed(
             title=title,
             description=desc,
-            color=discord.Color.orange()
+            color=template["color"]
         )
 
+        if template["image"]:
+            embed.set_image(url=template["image"])
+
+        # role list
         for role, emoji in roles_map.items():
             embed.add_field(
-                name=f"{emoji} {role.name}",
+                name=f"{emoji} | {role.name}",
                 value=role.mention,
                 inline=False
             )
 
-        # create dummy first to get message_id
+        # =====================================
+        # 4. Send message & register persistent view
+        # =====================================
+        template = EMBED_TEMPLATES[type_name]
+
+        embed = discord.Embed(
+            title=title,
+            description=desc,
+            color=template["color"]
+        )
+
+        file = None
+        image_path = template["image"]
+
+        if image_path:
+            try:
+                filename = image_path.split("/")[-1]
+                file = discord.File(image_path, filename=filename)
+                embed.set_image(url=f"attachment://{filename}")
+            except Exception:
+                file = None  # kalau file ga ada, skip
         dummy_msg = await ctx.send("⏳ Membuat menu…")
 
         custom_id = f"selectrole_{dummy_msg.id}"
         view = RoleSelectView(roles_map, mode == "single", custom_id)
 
-        await dummy_msg.edit(content=None, embed=embed, view=view)
+        if file:
+            await dummy_msg.edit(content=None, embed=embed, attachments=[file], view=view)
+        else:
+            await dummy_msg.edit(content=None, embed=embed, view=view)
 
-        # save to DB
+
+        # save DB
         save_role_message(
             self.db,
             mode,
