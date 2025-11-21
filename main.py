@@ -21,7 +21,7 @@ from level_cog import LevelCog
 from game_cog import SambungKataMultiplayer
 from afk_cog import AFK
 from birthday_cog import Birthday
-from welcome_cog import WelcomeMessageConfig
+from welcome_cog import MemberGreetingConfig
 from timedwords_cog import TimedWordsCog
 from bannedwords_cog import BannedWordsCog
 from broadcast_cog import MassDM
@@ -110,7 +110,7 @@ class MadBot(commands.Bot):
         birthday_cog = Birthday(self)
         await self.add_cog(birthday_cog)
 
-        await self.add_cog(WelcomeMessageConfig(self))
+        await self.add_cog(MemberGreetingConfig(self))
         await self.add_cog(BannedWordsCog(self))
         await self.add_cog(TimedWordsCog(self))
         await self.add_cog(ConfessionCog(self))

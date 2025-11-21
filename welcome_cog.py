@@ -1,5 +1,7 @@
 from discord.ext import commands
 import discord
+from datetime import datetime
+
 from database import (
     connect_db,
     set_channel_settings,
@@ -10,7 +12,7 @@ from database import (
     set_feature_status
 )
 
-# ✅ Check hanya untuk owner server atau dev ID kamu
+# Permission check
 def is_owner_or_dev():
     async def predicate(ctx):
         return (
@@ -20,123 +22,291 @@ def is_owner_or_dev():
         )
     return commands.check(predicate)
 
-class WelcomeMessageConfig(commands.Cog):
+
+class MemberGreetingConfig(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # ✅ Set pesan welcome ke database
-    @commands.command(name="togglewelcome", help="Aktif/nonaktifkan pesan welcome.")
+    # ====================================================
+    #   🟩 WELCOME CONFIG
+    # ====================================================
+    @commands.command(name="togglewelcome")
     @is_owner_or_dev()
     async def toggle_welcome(self, ctx, status: str):
         status = status.lower()
         if status not in ["on", "off"]:
-            return await ctx.send("❌ Gunakan `on` atau `off`. Contoh: `mtogglewelcome on`")
+            return await ctx.send("❌ Gunakan `on` atau `off`.")
 
         db = connect_db()
         set_feature_status(db, ctx.guild.id, "welcome_message", status == "on")
         db.close()
-
-        await ctx.send(f"✅ Fitur welcome_message telah {'diaktifkan' if status == 'on' else 'dinonaktifkan'}.")
-
-    @commands.command(name="welcomestatus", help="Cek status fitur welcome_message.")
-    async def welcome_status(self, ctx):
-        db = connect_db()
-        status = get_feature_status(db, ctx.guild.id, "welcome_message")
-        db.close()
-        await ctx.send(f"📣 Fitur welcome_message saat ini: {'Aktif ✅' if status else 'Nonaktif ❌'}")
-
+        await ctx.send(f"✅ Welcome message {'enabled' if status == 'on' else 'disabled'}.")
 
     @commands.command(name="setwelcomemsg")
     @is_owner_or_dev()
     async def set_welcome_msg(self, ctx, *, message: str):
         db = connect_db()
-        set_welcome_message(db, ctx.guild.id, message.replace("\\n", "\n"))
+        set_welcome_message(db, ctx.guild.id, "welcome", message)
         db.close()
-        await ctx.send("✅ Pesan welcome berhasil disimpan ke database.")
+        await ctx.send("✅ Pesan welcome disimpan.")
 
-    # ✅ Set channel khusus welcome
-    @commands.command(name="setchwelcome", help="Set channel khusus untuk pesan welcome.")
+    @commands.command(name="setchwelcome")
     @is_owner_or_dev()
     async def set_welcome_channel(self, ctx, channel: discord.TextChannel):
         db = connect_db()
         set_channel_settings(db, ctx.guild.id, "welcome", channel.id)
         db.close()
-        await ctx.send(f"✅ Channel welcome disetel ke {channel.mention}")
+        await ctx.send(f"✅ Welcome channel → {channel.mention}")
 
-    # ✅ Command tes kirim welcome
     @commands.command(name="testwelcome")
     @is_owner_or_dev()
     async def test_welcome(self, ctx):
         db = connect_db()
-        message = get_welcome_message(db, ctx.guild.id)
+        message = get_welcome_message(db, ctx.guild.id, "welcome")
         ch_id = get_channel_settings(db, ctx.guild.id, "welcome")
         db.close()
 
         if not message:
-            return await ctx.send("⚠️ Belum ada pesan welcome disetel. Gunakan `msetwelcomemsg`.")
+            return await ctx.send("⚠ Belum ada pesan welcome.")
 
-        try:
-            channel = await self.bot.fetch_channel(ch_id) if ch_id else ctx.guild.system_channel or ctx.channel
-        except discord.DiscordException:
-            return await ctx.send("❌ Gagal mendapatkan channel.")
+        channel = await self.bot.fetch_channel(ch_id) if ch_id else ctx.channel
+
+        humans = [m for m in ctx.guild.members if not m.bot]
+        human_count = len(humans)
 
         embed = discord.Embed(
-            title=f"Welcome to {ctx.guild.name}!",
+            title="• WELCOME •",
             description=message.replace("{guild}", ctx.guild.name),
-            color=discord.Color(int("C9DFEC", 16))  # Warna pastel biru muda
+            color=0xFFAE00
         )
-        embed.set_author(
-            name=ctx.guild.name,
-            icon_url=ctx.guild.icon.url if ctx.guild.icon else None
-        )
-        embed.set_thumbnail(
-            url=ctx.author.avatar.url if ctx.author.avatar else None
-        )
-        embed.set_footer(text="Enjoy your time!")
+        embed.set_author(name=f"Tester! (you're the {human_count} members)",
+                         icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
+        embed.set_footer(text="Have Fun!!")
 
-        await channel.send(content=f"(Test) Welcome {ctx.author.mention} to **{ctx.guild.name}**!", embed=embed)
+        file = discord.File("media/welcome.png", filename="welcome.png")
+        embed.set_image(url="attachment://welcome.png")
 
-    # ✅ Event listener ketika member join
+        await channel.send(
+            content=f"(Test) Welcome {ctx.author.mention}!",
+            embed=embed,
+            file=file
+        )
+
+        await self.send_join_log(ctx.author, is_test=True)
+
+    # ====================================================
+    #   LOG CHANNEL CONFIG
+    # ====================================================
+    @commands.command(name="setgreetsch")
+    @is_owner_or_dev()
+    async def set_log_channel(self, ctx, channel: discord.TextChannel):
+        db = connect_db()
+        set_channel_settings(db, ctx.guild.id, "member_log", channel.id)
+        db.close()
+        await ctx.send(f"📝 Log join/leave disetel ke {channel.mention}")
+
+    # REAL MEMBER JOIN
     @commands.Cog.listener()
     async def on_member_join(self, member):
         db = connect_db()
-        
-        # ✅ Cek apakah welcome_message di-nonaktifkan
-        if not await get_feature_status(db, member.guild.id, 'welcome_message'):
+        if not await get_feature_status(db, member.guild.id, "welcome_message"):
             db.close()
             return
 
-        message = get_welcome_message(db, member.guild.id)
+        message = get_welcome_message(db, member.guild.id, "welcome")
         ch_id = get_channel_settings(db, member.guild.id, "welcome")
         db.close()
 
         if not message:
             return
 
-        try:
-            channel = await self.bot.fetch_channel(ch_id) if ch_id else member.guild.system_channel
-        except discord.DiscordException:
-            return
+        channel = await self.bot.fetch_channel(ch_id) if ch_id else member.guild.system_channel
 
-        if channel is None:
-            return
+        humans = [m for m in member.guild.members if not m.bot]
+        human_count = len(humans)
 
         embed = discord.Embed(
-            title=f"Welcome to {member.guild.name}!",
+            title="• WELCOME •",
             description=message.replace("{guild}", member.guild.name),
-            color=discord.Color(int("C9DFEC", 16))
+            color=0xFFAE00
         )
-        embed.set_author(
-            name=member.guild.name,
-            icon_url=member.guild.icon.url if member.guild.icon else None
-        )
-        embed.set_thumbnail(
-            url=member.avatar.url if member.avatar else None
-        )
-        embed.set_footer(text="Enjoy your time!")
+        embed.set_author(name=f"You are the {human_count} member!",
+                         icon_url=member.guild.icon.url if member.guild.icon else None)
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
+        embed.set_footer(text="Have Fun!!")
 
-        await channel.send(content=f"Welcome {member.mention} to **{member.guild.name}**!", embed=embed)
+        file = discord.File("media/welcome.png", filename="welcome.png")
+        embed.set_image(url="attachment://welcome.png")
 
-# ✅ Setup function
+        await channel.send(
+            content=f"Welcome {member.mention}!",
+            embed=embed,
+            file=file
+        )
+
+        await self.send_join_log(member)
+
+
+    # ====================================================
+    #   🟥 GOODBYE CONFIG
+    # ====================================================
+    @commands.command(name="togglegoodbye")
+    @is_owner_or_dev()
+    async def toggle_goodbye(self, ctx, status: str):
+        status = status.lower()
+        if status not in ["on", "off"]:
+            return await ctx.send("❌ Gunakan `on` atau `off`.")
+
+        db = connect_db()
+        set_feature_status(db, ctx.guild.id, "goodbye_message", status == "on")
+        db.close()
+        await ctx.send(f"👋 Goodbye message {'enabled' if status == 'on' else 'disabled'}.")
+
+    @commands.command(name="setgoodbyemsg")
+    @is_owner_or_dev()
+    async def set_goodbye_msg(self, ctx, *, message: str):
+        db = connect_db()
+        set_welcome_message(db, ctx.guild.id, "goodbye", message)
+        db.close()
+        await ctx.send("✅ Pesan goodbye disimpan.")
+
+    @commands.command(name="setchgoodbye")
+    @is_owner_or_dev()
+    async def set_goodbye_channel(self, ctx, channel: discord.TextChannel):
+        db = connect_db()
+        set_channel_settings(db, ctx.guild.id, "goodbye", channel.id)
+        db.close()
+        await ctx.send(f"👋 Goodbye channel → {channel.mention}")
+
+    @commands.command(name="testgoodbye")
+    @is_owner_or_dev()
+    async def test_goodbye(self, ctx):
+        db = connect_db()
+        message = get_welcome_message(db, ctx.guild.id, "goodbye")
+        ch_id = get_channel_settings(db, ctx.guild.id, "goodbye")
+        db.close()
+
+        if not message:
+            return await ctx.send("⚠ Belum ada pesan goodbye.")
+
+        channel = await self.bot.fetch_channel(ch_id) if ch_id else ctx.channel
+
+        embed = discord.Embed(
+            description=message.replace("{guild}", ctx.guild.name),
+            color=0xFFAE00
+        )
+        embed.set_author(icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
+        embed.set_footer(text="We will miss you :(")
+
+        file = discord.File("media/goodbye.png", filename="goodbye.png")
+        embed.set_image(url="attachment://goodbye.png")
+
+        await channel.send(
+            content=f"Goodbye {ctx.author.mention}!",
+            embed=embed,
+            file=file
+        )
+
+        await self.send_leave_log(ctx.author, is_test=True)
+
+    # REAL MEMBER LEAVE
+    @commands.Cog.listener()
+    async def on_member_remove(self, member):
+        db = connect_db()
+        if not await get_feature_status(db, member.guild.id, "goodbye_message"):
+            db.close()
+            return
+
+        message = get_welcome_message(db, member.guild.id, "goodbye")
+        ch_id = get_channel_settings(db, member.guild.id, "goodbye")
+        db.close()
+
+        if not message:
+            return
+
+        channel = await self.bot.fetch_channel(ch_id)
+
+        embed = discord.Embed(
+            description=message.replace("{guild}", member.guild.name),
+            color=0xFFAE00
+        )
+        embed.set_author(icon_url=member.guild.icon.url if member.guild.icon else None)
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
+        embed.set_footer(text="We will miss you :(")
+
+        file = discord.File("media/goodbye.png", filename="goodbye.png")
+        embed.set_image(url="attachment://goodbye.png")
+
+        await channel.send(
+            content=f"Goodbye {member.mention}",
+            embed=embed,
+            file=file
+        )
+
+        await self.send_leave_log(member)
+
+
+    # ====================================================
+    #   LOGGING HELPERS
+    # ====================================================
+    async def send_join_log(self, member, is_test=False):
+        db = connect_db()
+        log_ch_id = get_channel_settings(db, member.guild.id, "member_log")
+        db.close()
+
+        if not log_ch_id:
+            return
+        
+        try:
+            log_channel = await self.bot.fetch_channel(log_ch_id)
+        except:
+            return
+
+        title = f"[TEST] {member.name} joined the server" if is_test else f"{member.name} joined the server"
+
+        embed = discord.Embed(title=title, color=0x2ECC71)
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
+        embed.add_field(name="User", value=member.mention, inline=True)
+        embed.add_field(name="Account creation",
+                        value=member.created_at.strftime("%B %d, %Y %I:%M %p"),
+                        inline=True)
+        embed.set_footer(text=f"{member.guild.name} • Today at {datetime.now().strftime('%I:%M %p')}")
+
+        await log_channel.send(embed=embed)
+
+    async def send_leave_log(self, member, is_test=False):
+        db = connect_db()
+        log_ch_id = get_channel_settings(db, member.guild.id, "member_log")
+        db.close()
+
+        if not log_ch_id:
+            return
+
+        try:
+            log_channel = await self.bot.fetch_channel(log_ch_id)
+        except:
+            return
+
+        title = f"[TEST] {member.name} left the server" if is_test else f"{member.name} left the server"
+
+        embed = discord.Embed(title=title, color=0xE74C3C)
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
+        embed.add_field(name="User", value=member.mention, inline=True)
+        embed.add_field(name="Joined date",
+                        value=member.joined_at.strftime("%B %d, %Y %I:%M %p") if member.joined_at else "-",
+                        inline=True)
+
+        roles = [r.mention for r in member.roles if r.name != "@everyone"]
+        embed.add_field(name="Roles",
+                        value=" ".join(roles) if roles else "No roles",
+                        inline=False)
+
+        embed.set_footer(text=f"{member.guild.name} • Today at {datetime.now().strftime('%I:%M %p')}")
+
+        await log_channel.send(embed=embed)
+
+
 async def setup(bot):
-    await bot.add_cog(WelcomeMessageConfig(bot))
+    await bot.add_cog(MemberGreetingConfig(bot))

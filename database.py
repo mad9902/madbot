@@ -467,20 +467,25 @@ def remove_banned_word(db, guild_id, word):
     cursor.close()
 
 
-def set_welcome_message(db, guild_id: int, message: str):
+def set_welcome_message(db, guild_id: int, msg_type: str, message: str):
     cursor = db.cursor()
     cursor.execute("""
-        INSERT INTO welcome_messages (guild_id, message)
-        VALUES (%s, %s)
+        INSERT INTO welcome_messages (guild_id, type, message)
+        VALUES (%s, %s, %s)
         ON DUPLICATE KEY UPDATE message = VALUES(message)
-    """, (guild_id, message))
+    """, (guild_id, msg_type, message))
     db.commit()
 
-def get_welcome_message(db, guild_id: int) -> str | None:
+
+def get_welcome_message(db, guild_id: int, msg_type: str) -> str | None:
     cursor = db.cursor()
-    cursor.execute("SELECT message FROM welcome_messages WHERE guild_id = %s", (guild_id,))
-    result = cursor.fetchone()
-    return result[0] if result else None
+    cursor.execute("""
+        SELECT message FROM welcome_messages
+        WHERE guild_id = %s AND type = %s
+    """, (guild_id, msg_type))
+    row = cursor.fetchone()
+    return row[0] if row else None
+
 
 def add_timed_word(db, guild_id, title, content, interval=30):
     cursor = db.cursor()

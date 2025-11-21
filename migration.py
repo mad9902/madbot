@@ -121,12 +121,31 @@ def migrate(db):
     """)
 
 
+    # 🔧 Tambah kolom `type` + perbaiki primary key jika belum ada
+
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS welcome_messages (
-        guild_id BIGINT PRIMARY KEY,
-        message TEXT NOT NULL
-    );
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = 'welcome_messages'
+        AND COLUMN_NAME = 'type';
     """)
+    has_type = cursor.fetchone()[0]
+
+    if has_type == 0:
+        cursor.execute("ALTER TABLE welcome_messages DROP PRIMARY KEY;")
+
+        cursor.execute("""
+            ALTER TABLE welcome_messages
+            ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'welcome' AFTER guild_id;
+        """)
+
+        cursor.execute("UPDATE welcome_messages SET type = 'welcome';")
+
+        cursor.execute("""
+            ALTER TABLE welcome_messages
+            ADD PRIMARY KEY (guild_id, type);
+        """)
+
     
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS timed_words (
