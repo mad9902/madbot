@@ -196,7 +196,10 @@ class MemberGreetingConfig(commands.Cog):
             description=message.replace("{guild}", ctx.guild.name),
             color=0xFFAE00
         )
-        embed.set_author(icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_author(
+            name="",
+            icon_url=ctx.guild.icon.url if ctx.guild.icon else None
+        )
         embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
         embed.set_footer(text="We will miss you :(")
 
@@ -232,7 +235,10 @@ class MemberGreetingConfig(commands.Cog):
             description=message.replace("{guild}", member.guild.name),
             color=0xFFAE00
         )
-        embed.set_author(icon_url=member.guild.icon.url if member.guild.icon else None)
+        embed.set_author(
+            name="",
+            icon_url=member.guild.icon.url if member.guild.icon else None
+        )
         embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
         embed.set_footer(text="We will miss you :(")
 
