@@ -24,8 +24,8 @@ confession_map.json
 # *.gif
 
 # Track media folder
-!media/
 media/*
+!media/.gitkeep
 !media/ultahkos.png
 !media/confetti.png
 !media/balloon.png
@@ -39,5 +39,6 @@ media/*
 !media/dice-5.png
 !media/dice-6.png
 !media/dice-game.gif
+
 
 
