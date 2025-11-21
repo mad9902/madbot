@@ -12,6 +12,8 @@ from database import (
     set_feature_status
 )
 
+INVISIBLE = "\u200b" 
+
 # Permission check
 def is_owner_or_dev():
     async def predicate(ctx):
@@ -197,7 +199,7 @@ class MemberGreetingConfig(commands.Cog):
             color=0xFFAE00
         )
         embed.set_author(
-            name=" ",
+            name=INVISIBLE,
             icon_url=ctx.guild.icon.url if ctx.guild.icon else None
         )
         embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
@@ -236,7 +238,7 @@ class MemberGreetingConfig(commands.Cog):
             color=0xFFAE00
         )
         embed.set_author(
-            name=" ",
+            name=INVISIBLE,
             icon_url=member.guild.icon.url if member.guild.icon else None
         )
         embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
