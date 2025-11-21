@@ -441,7 +441,7 @@ class GambleCog(commands.Cog):
         # PROBABILITY TABLE
         # ================================
         symbols = ["🍆", "💖", "🍒", "💵", "🔵"]
-        weights = [8, 3, 2, 1.2, 0.8]
+        weights = [10, 8, 6, 5, 2]
         multipliers = {
             "🍆": 1,
             "💖": 2,
@@ -454,7 +454,7 @@ class GambleCog(commands.Cog):
         # DETERMINE WIN OR LOSS
         # ================================
         roll = random.random() * 100
-        is_win = roll < 15.0  
+        is_win = roll < 31.0 
 
         # ================================
         # GENERATE RESULT

@@ -65,13 +65,33 @@ class BlackjackCog(commands.Cog):
         return deck.pop()
     
     def smart_dealer_draw(self, deck, dealer_hand, player_val):
-        # pilih kartu yang bikin dealer menang tapi ga bust
+        """
+        Dealer fair:
+        - 70% ambil kartu terbaik (semi-smart)
+        - 30% draw acak (natural)
+        Ini bikin dealer tidak selalu menang tapi tetap ada edge.
+        """
+        # 30% chance draw normal
+        if random.random() < 0.30:
+            return deck.pop()
+
+        # 70% semi-smart
+        best = None
+        best_val = -1
+
         for i, c in enumerate(deck):
             test = dealer_hand + [c]
             v = self.hand_value(test)
-            if 17 <= v <= 21 and v >= player_val:
-                return deck.pop(i)
-        return deck.pop()  # fallback normal
+            if 17 <= v <= 21:
+                if v > best_val:
+                    best_val = v
+                    best = i
+
+        if best is not None:
+            return deck.pop(best)
+
+        return deck.pop()
+
 
 
     # ============================================================
@@ -230,7 +250,7 @@ class BlackjackCog(commands.Cog):
             # HIT
             # ------------------------------
             if emoji == "🟩":
-                player.append(self.draw(deck, bias_high=True))
+                player.append(self.draw(deck))
                 await msg.edit(embed=await build_embed(
                     reveal=False,
                     title="🟩 {user} mengambil kartu..."
@@ -286,6 +306,7 @@ class BlackjackCog(commands.Cog):
 
         while self.hand_value(dealer) < 17:
             dealer.append(self.smart_dealer_draw(deck, dealer, p_val))
+            await asyncio.sleep(0.6)  # biar UX smooth
             await msg.edit(embed=await build_embed(
                 reveal=True,
                 title="🤵 Dealer mengambil kartu — melawan {user}"
