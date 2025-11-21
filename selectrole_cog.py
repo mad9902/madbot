@@ -220,7 +220,7 @@ class RoleSelectCog(commands.Cog):
             roles_map[role] = emoji
 
         # =====================================
-        # 3. Build embed dari TEMPLATE
+        # 3. Build embed dari TEMPLATE + local file
         # =====================================
         template = EMBED_TEMPLATES[type_name]
 
@@ -230,10 +230,7 @@ class RoleSelectCog(commands.Cog):
             color=template["color"]
         )
 
-        if template["image"]:
-            embed.set_image(url=template["image"])
-
-        # role list
+        # ADD ROLE LIST (INI PENTING!)
         for role, emoji in roles_map.items():
             embed.add_field(
                 name=f"{emoji} | {role.name}",
@@ -241,17 +238,7 @@ class RoleSelectCog(commands.Cog):
                 inline=False
             )
 
-        # =====================================
-        # 4. Send message & register persistent view
-        # =====================================
-        template = EMBED_TEMPLATES[type_name]
-
-        embed = discord.Embed(
-            title=title,
-            description=desc,
-            color=template["color"]
-        )
-
+        # ADD IMAGE (LOCAL FILE)
         file = None
         image_path = template["image"]
 
@@ -261,7 +248,7 @@ class RoleSelectCog(commands.Cog):
                 file = discord.File(image_path, filename=filename)
                 embed.set_image(url=f"attachment://{filename}")
             except Exception:
-                file = None  # kalau file ga ada, skip
+                file = None
         dummy_msg = await ctx.send("⏳ Membuat menu…")
 
         custom_id = f"selectrole_{dummy_msg.id}"
