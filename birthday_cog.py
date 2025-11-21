@@ -520,6 +520,70 @@ class Birthday(commands.Cog):
         )
 
     # =========================================================
+    # COMMAND: Late Birthday
+    # =========================================================
+        # =========================================================
+    # COMMAND: Late Birthday (Manual Trigger)
+    # =========================================================
+    @commands.command(name="latebirthday")
+    async def late_birthday(self, ctx, user: discord.Member):
+        # ====== PERMISSION CHECK ======
+        allowed = [ctx.guild.owner_id, 416234104317804544]
+        if ctx.author.id not in allowed:
+            return await ctx.send("❌ Kamu tidak punya izin.")
+
+        # ====== FETCH DATA ======
+        db = connect_db()
+        result = get_birthday(db, user.id, ctx.guild.id)
+        db.close()
+
+        if not result:
+            return await ctx.send("❌ User ini belum menyimpan tanggal ulang tahun.")
+
+        birthdate, display_name, wish, template_url = result
+
+        # update display name real-time
+        display_name = user.display_name
+
+        # ====== GENERATE IMAGE ======
+        img_path = await generate_birthday_image(display_name, template_url)
+        unique = f"birthday_{int(datetime.now().timestamp())}.png"
+        file = discord.File(img_path, filename=unique)
+
+        # ====== EMBED ======
+        embed = discord.Embed(
+            title="🎉 Selamat Ulang Tahun! Lebih baik telat daripada tidak sama sekali 🎂",
+            description=f"{user.mention}",
+            color=discord.Color.gold()
+        )
+
+        # format tanggal ulang tahun user
+        bday_str = birthdate.strftime("%d %B")
+        embed.add_field(name="📅 Tanggal Ulang Tahun", value=f"`{bday_str}`", inline=True)
+
+        if wish:
+            embed.add_field(name="💌 Wish", value=f"_{wish}_", inline=False)
+
+        if user.avatar:
+            embed.set_thumbnail(url=user.avatar.url)
+
+        embed.set_image(url=f"attachment://{unique}")
+        embed.set_footer(text=f"Manual dipicu oleh {ctx.author.display_name}")
+        embed.timestamp = datetime.utcnow()
+
+        # ====== SEND MESSAGE ======
+        await ctx.send(
+            content=f"🎉Selamat ulang tahun {user.mention}!! 🎂",
+            file=file,
+            embed=embed,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,
+                roles=False,
+                everyone=True,
+                replied_user=True
+            )
+        )
+    # =========================================================
     # COMMAND: Test Birthday (DEBUG)
     # =========================================================
     @commands.command(name="testbirthday")
@@ -580,7 +644,7 @@ class Birthday(commands.Cog):
         embed.add_field(name="📅 Tanggal", value=f"`{today_str}`", inline=True)
 
         if wish:
-            embed.add_field(name="💌 Pesan Spesial", value=f"_{wish}_", inline=False)
+            embed.add_field(name="💌 Wish", value=f"_{wish}_", inline=False)
 
         if member and member.avatar:
             embed.set_thumbnail(url=member.avatar.url)

@@ -177,6 +177,7 @@ class CommandManager:
             return []
         finally:
             close_connection(conn)
+
 def set_feature_status(db, guild_id, feature_name, status):
     """Set status fitur untuk guild tertentu."""
     cursor = db.cursor()
@@ -1946,3 +1947,31 @@ def ensure_gamble_channel(self, ctx):
     if ch and ctx.channel.id != int(ch):
         return f"🎰 Gunakan command ini di <#{ch}>."
     return None
+
+
+def save_confession_db(db, message_id, guild_id, channel_id, thread_id, parent_id, confession_id, is_parent):
+    cursor = db.cursor()
+    cursor.execute("""
+        REPLACE INTO confession_messages
+        (id, guild_id, channel_id, thread_id, parent_id, confession_id, is_parent)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (message_id, guild_id, channel_id, thread_id, parent_id, confession_id, is_parent))
+    db.commit()
+    cursor.close()
+
+
+def get_confession_by_message(db, message_id):
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM confession_messages WHERE id = %s", (message_id,))
+    row = cursor.fetchone()
+    cursor.close()
+    return row
+
+
+def get_all_confession_messages(db):
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM confession_messages")
+    rows = cursor.fetchall()
+    cursor.close()
+    return rows
+

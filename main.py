@@ -4,6 +4,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from rapidfuzz import process, fuzz
+from collections import defaultdict
 
 # Database dan migrasi
 from database import connect_db, ensure_database_exists, CommandManager, ChannelBlockManager
@@ -42,7 +43,7 @@ from bot_state import DISABLED_GUILDS, OWNER_ID
 
 # Load env
 load_dotenv()
-
+ERROR_LOCK = defaultdict(bool)
 # Intents
 intents = discord.Intents.default()
 intents.message_content = True
@@ -162,16 +163,15 @@ async def block_disabled_channels(ctx):
     if not ctx.guild:
         return True
 
-    # whitelist admin & owner
+    # === OWNER SELALU BOLEH ===
     if ctx.author.id == OWNER_ID:
         return True
-    if ctx.author.guild_permissions.administrator:
-        return True
 
-    # block normal user
-    return not bot.channel_manager.is_channel_disabled(ctx.guild.id, ctx.channel.id)
+    # === Jika channel disabled → tolak semua orang ===
+    if bot.channel_manager.is_channel_disabled(ctx.guild.id, ctx.channel.id):
+        return False
 
-
+    return True
 
 # ======================================================
 # CHECK 3: Block individual disabled command
@@ -218,6 +218,12 @@ async def on_interaction(interaction: discord.Interaction):
     return
 
 
+@bot.event
+async def on_ready():
+    print("🌐 Loading disabled channel cache...")
+    bot.channel_manager.load_all_guilds(bot.guilds)
+    print("✅ Loaded disabled channels:", bot.channel_manager.cache)
+
 # ======================================================
 # SAFE RESPOND UTILITY
 # ======================================================
@@ -235,15 +241,19 @@ async def safe_respond(inter: discord.Interaction, **kwargs):
 # ======================================================
 # ERROR HANDLER
 # ======================================================
-
 @bot.event
 async def on_command_error(ctx, error):
-
-    if getattr(ctx, "_error_handled", False):
+    # ====== SUPER FIX: cegah error handler dipanggil >1 kali untuk pesan yg sama ======
+    if getattr(bot, "_last_error_msg", None) == ctx.message.id:
         return
-    ctx._error_handled = True
+    bot._last_error_msg = ctx.message.id
+    # ================================================================================
 
-    # cegah double trigger kalau pesan sudah lewat on_message bannedwords
+    # block kalau channel disabled
+    if ctx.guild and bot.channel_manager.is_channel_disabled(ctx.guild.id, ctx.channel.id):
+        return
+
+    # bannedwords bypass
     if getattr(ctx.message, "_from_bannedwords", False):
         return
 
@@ -252,18 +262,23 @@ async def on_command_error(ctx, error):
         command_names = [c.name for c in bot.commands]
 
         result = process.extractOne(attempted, command_names, scorer=fuzz.ratio)
-
         if result:
             match, score, _ = result
             if score >= 70:
-                await ctx.reply(f"❓ Apakah maksudmu `{ctx.prefix}{match}`?", delete_after=5)
+                try:
+                    await ctx.reply(f"❓ Apakah maksudmu `{ctx.prefix}{match}`?", delete_after=5)
+                except:
+                    pass
                 return
 
     elif isinstance(error, commands.CheckFailure):
         return
 
     else:
-        await ctx.send(f"❌ Error: {error}", delete_after=5)
+        try:
+            await ctx.send(f"❌ Error: {error}", delete_after=5)
+        except:
+            pass
 
 
 # ======================================================
