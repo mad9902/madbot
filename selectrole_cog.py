@@ -234,12 +234,16 @@ class RoleSelectCog(commands.Cog):
 
         for row in rows:
             guild = self.bot.get_guild(row["guild_id"])
-            channel = guild.get_channel(row["channel_id"])
-            single_mode = bool(row["single_mode"])
-
-            if not guild or not channel:
+            if not guild:
                 continue
 
+            channel = guild.get_channel(row["channel_id"])
+            if not channel:
+                continue
+
+            single_mode = bool(row["single_mode"])
+
+            # LOAD ROLES JSON
             roles_data = json.loads(row["roles_json"])
             roles_map = {
                 guild.get_role(int(rid)): emoji
@@ -250,11 +254,12 @@ class RoleSelectCog(commands.Cog):
             custom_id = f"selectrole_{row['message_id']}"
             view = RoleSelectView(roles_map, single_mode, custom_id)
 
-            # try:
-            #     self.bot.add_view(view, message_id=row["message_id"])
-            #     print(f"[RESTORE] SelectRole restored for {row['message_id']}")
-            # except Exception as e:
-            #     print("Restore error:", e)
+            # Register view tanpa print, tanpa error spam
+            try:
+                self.bot.add_view(view, message_id=row["message_id"])
+            except:
+                pass  # silent
+
 
 
 async def setup(bot):
