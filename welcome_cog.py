@@ -197,7 +197,7 @@ class MemberGreetingConfig(commands.Cog):
             color=0xFFAE00
         )
         embed.set_author(
-            name="",
+            name=" ",
             icon_url=ctx.guild.icon.url if ctx.guild.icon else None
         )
         embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
@@ -236,7 +236,7 @@ class MemberGreetingConfig(commands.Cog):
             color=0xFFAE00
         )
         embed.set_author(
-            name="",
+            name=" ",
             icon_url=member.guild.icon.url if member.guild.icon else None
         )
         embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
