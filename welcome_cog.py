@@ -112,7 +112,7 @@ class MemberGreetingConfig(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member):
         db = connect_db()
-        if not await get_feature_status(db, member.guild.id, "welcome_message"):
+        if not get_feature_status(db, member.guild.id, "welcome_message"):
             db.close()
             return
 
@@ -220,7 +220,7 @@ class MemberGreetingConfig(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member):
         db = connect_db()
-        if not await get_feature_status(db, member.guild.id, "goodbye_message"):
+        if not get_feature_status(db, member.guild.id, "goodbye_message"):
             db.close()
             return
 
