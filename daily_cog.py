@@ -96,8 +96,8 @@ class DailyCog(commands.Cog):
         # =======================================================
         # HITUNG REWARD
         # =======================================================
-        base = 20
-        bonus = streak * 5
+        base = 1000
+        bonus = streak * 500
         reward = base + bonus
 
         cash_now = get_user_cash(self.db, user_id)
