@@ -33,13 +33,15 @@ async def restore_reply_buttons(bot: commands.Bot):
         if row["is_parent"]:
             view = ConfessionView(bot)
             view.add_item(ReplyToConfessionButton(bot, msg_id))
-            bot.add_view(view, message_id=0)
+            bot.add_view(view, message_id=msg_id)
+
 
         # Kalau reply → register ThreadReplyView
         else:
             view = ThreadReplyView()
             view.add_item(ReplyToConfessionButton(bot, msg_id))
-            bot.add_view(view, message_id=0)
+            bot.add_view(view, message_id=msg_id)
+
 
 # ======================================================
 # BUTTON — SUBMIT CONFESSION
@@ -217,7 +219,7 @@ class SubmitImageConfessionButton(discord.ui.Button):
         # BUTTONS
         view = ConfessionView(self.bot)
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
-        await sent.edit(view=view)
+        # await sent.edit(view=view)
 
         save_confession(
             self.bot.db,
@@ -390,7 +392,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
             view = ThreadReplyView()
             view.add_item(ReplyToConfessionButton(self.bot, sent.id))
-            await sent.edit(view=view)
+            # await sent.edit(view=view)
 
 
 
@@ -436,7 +438,7 @@ class ConfessionModal(discord.ui.Modal, title=f"Anonymous Confession"):
 
         view = ConfessionView(self.bot)
         view.add_item(ReplyToConfessionButton(self.bot, sent.id))
-        await sent.edit(view=view)
+        # await sent.edit(view=view)
 
 
 
