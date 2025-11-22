@@ -28,43 +28,18 @@ async def restore_reply_buttons(bot: commands.Bot):
 
     for row in rows:
         msg_id = row["id"]
-        channel_id = row["channel_id"]
-        thread_id = row["thread_id"]
-        parent_id = row["parent_id"]
-        is_parent = row["is_parent"]
+        
+        # Kalau parent → register view ConfessionView
+        if row["is_parent"]:
+            view = ConfessionView(bot)
+            view.add_item(ReplyToConfessionButton(bot, msg_id))
+            bot.add_view(view)
 
-        try:
-            channel = await bot.fetch_channel(channel_id)
-        except:
-            continue
-
-        # ====== restore parent (punya tombol reply) ======
-        if is_parent:
-            try:
-                msg = await channel.fetch_message(msg_id)
-
-                # gunakan view asli — ini yang DISCORD ingat
-                view = ConfessionView(bot)
-                view.add_item(ReplyToConfessionButton(bot, msg_id))
-                bot.add_view(view)
-                await msg.edit(view=view)
-
-
-            except:
-                pass
-
-        # ====== restore reply messages (ThreadReplyView) ======
-        if thread_id:
-            try:
-                thread = await bot.fetch_channel(thread_id)
-                msg = await thread.fetch_message(msg_id)
-                view = ThreadReplyView()
-                view.add_item(ReplyToConfessionButton(bot, msg_id))
-                bot.add_view(view)
-                await msg.edit(view=view)
-
-            except:
-                pass
+        # Kalau reply → register ThreadReplyView
+        else:
+            view = ThreadReplyView()
+            view.add_item(ReplyToConfessionButton(bot, msg_id))
+            bot.add_view(view)
 
 # ======================================================
 # BUTTON — SUBMIT CONFESSION
