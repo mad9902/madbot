@@ -18,9 +18,9 @@ EMBED_TEMPLATES = {
         "color": discord.Color.pink(),
         "image": "media/gender.gif"
     },
-    "hobby": {
+    "colors": {
         "color": discord.Color.green(),
-        "image": "media/hobby.png"
+        "image": "media/colors.gif"
     },
     "notif": {
         "color": discord.Color.blue(),
