@@ -11,13 +11,11 @@ services:
       - madbot-db
     env_file:
       - .env
+    volumes:
+      - ./data:/app/data          # Hanya data internal bot (safe)
     # ports:
     #   - "8000:8000"
-    volumes:
-      - ./data:/app/data
-      - /tmp:/tmp
     # command: python main.py
-
 
   madbot-db:
     image: mysql:8.0
@@ -30,7 +28,6 @@ services:
       - "3306:3306"
     volumes:
       - db_volume:/var/lib/mysql
-
 
 volumes:
   db_volume:
