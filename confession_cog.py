@@ -33,13 +33,13 @@ async def restore_reply_buttons(bot: commands.Bot):
         if row["is_parent"]:
             view = ConfessionView(bot)
             view.add_item(ReplyToConfessionButton(bot, msg_id))
-            bot.add_view(view)
+            bot.add_view(view, message_id=0)
 
         # Kalau reply → register ThreadReplyView
         else:
             view = ThreadReplyView()
             view.add_item(ReplyToConfessionButton(bot, msg_id))
-            bot.add_view(view)
+            bot.add_view(view, message_id=0)
 
 # ======================================================
 # BUTTON — SUBMIT CONFESSION

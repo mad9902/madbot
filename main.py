@@ -134,7 +134,7 @@ class MadBot(commands.Bot):
         # Load cache semua guild
 
         # tombol global tetap hidup
-        self.add_view(ConfessionView(self))
+        self.add_view(ConfessionView(self), message_id=0)
         self.channel_manager.load_all_guilds(self.guilds)
         await restore_reply_buttons(self)
 
