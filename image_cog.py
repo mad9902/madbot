@@ -191,7 +191,7 @@ class image_cog(commands.Cog):
             await ctx.send("Gagal mendownload emoji dengan ID tersebut.")
 
 
-    @commands.command(name="sticker", help="Download sticker dari ID atau dari pesan yang di-reply")
+    @commands.command(name="stickersteal", help="Download sticker dari ID atau dari pesan yang di-reply")
     async def sticker(self, ctx, sticker_id: int | None = None):
         try:
             if sticker_id is None:
@@ -327,114 +327,47 @@ class image_cog(commands.Cog):
             print(f"[ERROR] {e}")
             await ctx.send(f"❌ Terjadi kesalahan: `{e}`")
 
-
-    # ============================
-#  ADD EMOJI
-# ============================
-@commands.command(name="addemoji", help="Tambah emoji ke server secara otomatis")
-@commands.has_permissions(manage_emojis=True)
-async def addemoji(self, ctx, *, name: str | None = None):
-    # Ambil sumber gambar
-    image = await extract_image_attachment(ctx)
-
-    url = None
-    if image:
-        # Dari attachment
-        buf = BytesIO()
-        await image.save(buf)
-        buf.seek(0)
-        raw_bytes = buf.read()
-    else:
-        # Cek reply
-        if ctx.message.reference:
-            replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            # Cek kalau reply emoji custom
-            if replied.content:
-                match = re.match(r'<(a)?:\w+:(\d+)>', replied.content)
-                if match:
-                    emoji_id = match.group(2)
-                    # auto detect ext
-                    urls = [
-                        f"https://cdn.discordapp.com/emojis/{emoji_id}.gif",
-                        f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
-                    ]
-                    for u in urls:
-                        async with aiohttp.ClientSession() as s:
-                            async with s.get(u) as r:
-                                if r.status == 200:
-                                    raw_bytes = await r.read()
-                                    ext = u.split(".")[-1]
-                                    break
-                else:
-                    raw_bytes = None
-
-            # Cek reply mempunyai attachment
-            if not image and replied.attachments:
-                att = replied.attachments[0]
-                raw_bytes = await att.read()
-
-        # Cek kalau input URL
-        if not image and not raw_bytes:
-            # Mungkin user memasukkan URL
-            url_match = re.findall(r'(https?://\S+)', ctx.message.content)
-            if url_match:
-                url = url_match[0]
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(url) as r:
-                        if r.status == 200:
-                            raw_bytes = await r.read()
-
-    if not raw_bytes:
-        return await ctx.send("❌ Tidak ada gambar/emoji valid. Kirim gambar, reply, atau masukkan URL.")
-
-    # Tentukan nama emoji
-    if not name:
-        name = f"emoji_{datetime.now().strftime('%H%M%S')}"
-
-    # Upload emoji ke server
-    try:
-        emoji = await ctx.guild.create_custom_emoji(name=name, image=raw_bytes)
-        await ctx.send(f"✅ Emoji berhasil ditambahkan: <:{emoji.name}:{emoji.id}>")
-    except discord.HTTPException as e:
-        await ctx.send(f"❌ Gagal menambahkan emoji: {e}")
-
-
-    # ============================
-    #  ADD STICKER
-    # ============================
-    @commands.command(name="addsticker", help="Tambah sticker ke server otomatis")
+    # ==========================================
+    #  ADD EMOJI OTOMATIS
+    # ==========================================
+    @commands.command(name="emojiadd", help="Tambah emoji ke server otomatis")
     @commands.has_permissions(manage_emojis=True)
-    async def addsticker(self, ctx, *, name: str | None = None):
+    async def addemoji(self, ctx, *, name: str | None = None):
         raw_bytes = None
-        sticker_format = "png"
 
-        # Ambil attachment / reply
+        # Ambil attachment
         image = await extract_image_attachment(ctx)
-
         if image:
             buf = BytesIO()
             await image.save(buf)
             buf.seek(0)
             raw_bytes = buf.read()
         else:
-            # reply sticker Discord
+            # Cek reply
             if ctx.message.reference:
-                msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+                replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
 
-                if msg.stickers:
-                    sticker = msg.stickers[0]
-                    url = f"https://cdn.discordapp.com/stickers/{sticker.id}.png"
-                    async with aiohttp.ClientSession() as s:
-                        async with s.get(url) as r:
-                            if r.status == 200:
-                                raw_bytes = await r.read()
-                                sticker_format = "png"
+                # Jika reply emoji <:a:x>
+                if replied.content:
+                    match = re.match(r'<(a)?:\w+:(\d+)>', replied.content)
+                    if match:
+                        emoji_id = match.group(2)
+                        urls = [
+                            f"https://cdn.discordapp.com/emojis/{emoji_id}.gif",
+                            f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
+                        ]
+                        for u in urls:
+                            async with aiohttp.ClientSession() as s:
+                                async with s.get(u) as r:
+                                    if r.status == 200:
+                                        raw_bytes = await r.read()
+                                        break
 
-                # reply attachment biasa
-                if msg.attachments and not raw_bytes:
-                    raw_bytes = await msg.attachments[0].read()
+                # Attachment gambar
+                if not raw_bytes and replied.attachments:
+                    raw_bytes = await replied.attachments[0].read()
 
-            # Cek URL
+            # URL
             if not raw_bytes:
                 urls = re.findall(r'(https?://\S+)', ctx.message.content)
                 if urls:
@@ -444,13 +377,67 @@ async def addemoji(self, ctx, *, name: str | None = None):
                                 raw_bytes = await r.read()
 
         if not raw_bytes:
-            return await ctx.send("❌ Tidak ada sticker/gambar valid untuk ditambahkan.")
+            return await ctx.send("❌ Tidak ada gambar/emoji valid.")
 
-        # Pastikan format sticker PNG/APNG/WEBP
+        if not name:
+            name = f"emoji_{datetime.now().strftime('%H%M%S')}"
+
+        try:
+            emoji = await ctx.guild.create_custom_emoji(name=name, image=raw_bytes)
+            await ctx.send(f"✅ Emoji berhasil ditambahkan: <:{emoji.name}:{emoji.id}>")
+        except discord.HTTPException as e:
+            await ctx.send(f"❌ Gagal menambahkan emoji: `{e}`")
+
+
+    # ==========================================
+    #  ADD STICKER OTOMATIS
+    # ==========================================
+    @commands.command(name="stickeradd", help="Tambah sticker ke server otomatis")
+    @commands.has_permissions(manage_emojis=True)
+    async def addsticker(self, ctx, *, name: str | None = None):
+        raw_bytes = None
+        sticker_format = "png"
+
+        # Ambil attachment
+        image = await extract_image_attachment(ctx)
+        if image:
+            buf = BytesIO()
+            await image.save(buf)
+            buf.seek(0)
+            raw_bytes = buf.read()
+        else:
+            # Reply
+            if ctx.message.reference:
+                msg = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+
+                # Stiker Discord asli
+                if msg.stickers:
+                    sticker = msg.stickers[0]
+                    url = f"https://cdn.discordapp.com/stickers/{sticker.id}.png"
+                    async with aiohttp.ClientSession() as s:
+                        async with s.get(url) as r:
+                            if r.status == 200:
+                                raw_bytes = await r.read()
+
+                if not raw_bytes and msg.attachments:
+                    raw_bytes = await msg.attachments[0].read()
+
+            # URL
+            if not raw_bytes:
+                urls = re.findall(r'(https?://\S+)', ctx.message.content)
+                if urls:
+                    async with aiohttp.ClientSession() as s:
+                        async with s.get(urls[0]) as r:
+                            if r.status == 200:
+                                raw_bytes = await r.read()
+
+        if not raw_bytes:
+            return await ctx.send("❌ Tidak ada sticker/gambar valid.")
+
+        # Pastikan format PNG/WEBP/APNG
         try:
             img = Image.open(BytesIO(raw_bytes))
             if img.format.lower() not in ["png", "apng", "webp"]:
-                # convert ke PNG
                 buf = BytesIO()
                 img.save(buf, format="PNG")
                 raw_bytes = buf.getvalue()
@@ -461,7 +448,6 @@ async def addemoji(self, ctx, *, name: str | None = None):
         if not name:
             name = f"sticker_{datetime.now().strftime('%H%M%S')}"
 
-        # Upload sticker ke server
         try:
             await ctx.guild.create_sticker(
                 name=name,
@@ -471,7 +457,7 @@ async def addemoji(self, ctx, *, name: str | None = None):
             )
             await ctx.send(f"✅ Sticker **{name}** berhasil ditambahkan!")
         except discord.HTTPException as e:
-            await ctx.send(f"❌ Gagal menambahkan sticker: {e}")
+            await ctx.send(f"❌ Gagal menambahkan sticker: `{e}`")
 
 
     @commands.command(name="caption", help="Berikan caption pada gambar yang kamu kirim")
