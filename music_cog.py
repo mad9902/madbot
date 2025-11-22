@@ -704,20 +704,37 @@ class music_cog(commands.Cog):
         self.progress_task = asyncio.create_task(runner())
 
     async def update_progress_embed(self):
-        """
-        Edit embed Now Playing dengan progress bar terbaru.
-        """
+        # kalau message hilang / None → STOP UPDATER
+        if not self.vc or not self.vc.is_connected():
+            return
+
         if not self.now_playing_message:
+            self.is_playing = False
+            if self.progress_task:
+                self.progress_task.cancel()
+                self.progress_task = None
             return
 
         try:
             embed = self.build_now_playing_embed()
             if not embed:
                 return
+
             await self.now_playing_message.edit(embed=embed)
-        except Exception:
-            # kalau message hilang / tidak bisa diedit, diamkan saja
-            pass
+
+        except discord.NotFound:
+            # message sudah terhapus → stop updater
+            self.now_playing_message = None
+            if self.progress_task:
+                self.progress_task.cancel()
+                self.progress_task = None
+
+        except discord.HTTPException as e:
+            # jika rate limit / cannot edit → stop saja biar ga spam
+            self.now_playing_message = None
+            if self.progress_task:
+                self.progress_task.cancel()
+                self.progress_task = None
 
 
 
