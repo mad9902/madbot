@@ -29,15 +29,12 @@ async def restore_reply_buttons(bot: commands.Bot):
     for row in rows:
         msg_id = row["id"]
 
-        # register handler for parent message buttons
+        # parent → view utama, tidak ada edit
         if row["is_parent"]:
             bot.add_view(ConfessionView(bot))
-            bot.add_view(ReplyToConfessionButton(bot, msg_id))
 
-        # register handler for reply buttons
-        else:
-            bot.add_view(ThreadReplyView())
-            bot.add_view(ReplyToConfessionButton(bot, msg_id))
+        # tombol reply (semua pesan punya tombol ini)
+        bot.add_view(SingleReplyView(bot, msg_id))
 
 
 # ======================================================
@@ -67,6 +64,11 @@ class SubmitConfessionButton(discord.ui.Button):
 # ======================================================
 # BUTTON — REPLY
 # ======================================================
+class SingleReplyView(discord.ui.View):
+    def __init__(self, bot, msg_id):
+        super().__init__(timeout=None)
+        self.add_item(ReplyToConfessionButton(bot, msg_id))
+
 
 class ReplyToConfessionButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot, message_id: int):
