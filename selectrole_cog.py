@@ -48,7 +48,7 @@ class RoleSelect(ui.Select):
 
         # MODE SETTINGS
         if single_mode:
-            min_v = 1
+            min_v = 0
             max_v = 1
         else:
             min_v = 0
@@ -85,6 +85,17 @@ class RoleSelect(ui.Select):
                 for rid in target_role_ids
                 if rid not in selected_role_ids and rid in current_roles
             ]
+
+            if self.single_mode and len(selected_role_ids) == 0:
+                # user unselect semua, hapus semua role target
+                for rid in target_role_ids:
+                    role = guild.get_role(rid)
+                    if role in user.roles:
+                        await user.remove_roles(role)
+                return await interaction.response.send_message(
+                    "❌ Kamu telah menghapus role.",
+                    ephemeral=True
+                )
 
             # SINGLE MODE
             if self.single_mode:
