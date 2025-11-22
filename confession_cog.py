@@ -28,19 +28,16 @@ async def restore_reply_buttons(bot: commands.Bot):
 
     for row in rows:
         msg_id = row["id"]
-        
-        # Kalau parent → register view ConfessionView
+
+        # register handler for parent message buttons
         if row["is_parent"]:
-            view = ConfessionView(bot)
-            view.add_item(ReplyToConfessionButton(bot, msg_id))
-            bot.add_view(view, message_id=msg_id)
+            bot.add_view(ConfessionView(bot))
+            bot.add_view(ReplyToConfessionButton(bot, msg_id))
 
-
-        # Kalau reply → register ThreadReplyView
+        # register handler for reply buttons
         else:
-            view = ThreadReplyView()
-            view.add_item(ReplyToConfessionButton(bot, msg_id))
-            bot.add_view(view, message_id=msg_id)
+            bot.add_view(ThreadReplyView())
+            bot.add_view(ReplyToConfessionButton(bot, msg_id))
 
 
 # ======================================================
