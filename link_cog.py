@@ -26,42 +26,68 @@ YOUTUBE_SHORTS_RE = re.compile(r"https?://(?:www\.)?youtube\.com/shorts/\S+")
 class link_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.media_folder = 'media'
-        os.makedirs(self.media_folder, exist_ok=True)
-        logger.info(f"Folder media tersedia: {self.media_folder}")
 
-    def convert_to_gif(self, video_path):
-        gif_path = os.path.join(self.media_folder, f"{uuid.uuid4().hex}.gif")
-        try:
-            subprocess.run([
-                'ffmpeg', '-i', video_path,
-                '-vf', 'fps=10,scale=320:-1:flags=lanczos',
-                '-t', '10',  # Optional: batasi durasi GIF 10 detik
-                gif_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return gif_path
-        except Exception as e:
-            logger.error(f"Gagal konversi ke GIF: {e}")
-            return None
+        # Folder khusus file sampah (download, attachment, convert)
+        self.temp_folder = 'temp_files'
+        os.makedirs(self.temp_folder, exist_ok=True)
 
+        # Bersihkan temp setiap start
+        for f in os.listdir(self.temp_folder):
+            try:
+                os.remove(os.path.join(self.temp_folder, f))
+            except:
+                pass
 
-    def clean_media_folder(self):
-        files = glob.glob(os.path.join(self.media_folder, '*'))
-        for f in files:
+        logger.info(f"Temp folder tersedia: {self.temp_folder}")
+
+    # ============================================================
+    # Utility: Clear temp folder
+    # ============================================================
+    def clear_temp(self):
+        for f in glob.glob(os.path.join(self.temp_folder, '*')):
             try:
                 os.remove(f)
-                logger.debug(f"File dihapus: {f}")
             except Exception as e:
                 logger.error(f"Gagal hapus {f}: {e}")
 
+    # Alias lama agar tetap backward compatible
+    def clean_media_folder(self):
+        return self.clear_temp()
+
+
+    def convert_to_mp3(self, video_path):
+        mp3_path = os.path.join(self.temp_folder, f"{uuid.uuid4().hex}.mp3")
+        try:
+            subprocess.run([
+                'ffmpeg', '-i', video_path, '-vn', '-acodec', 'libmp3lame', '-ab', '192k', '-ar', '44100', mp3_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return mp3_path
+        except Exception as e:
+            logger.error(f"Gagal konversi ke MP3: {e}")
+            return None
+
+    def compress_video(self, input_path):
+        output_path = os.path.join(self.temp_folder, f"{uuid.uuid4().hex}.mp4")
+        try:
+            subprocess.run([
+                'ffmpeg', '-i', input_path, '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast', output_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return output_path
+        except Exception as e:
+            logger.error(f"Gagal kompres video: {e}")
+            return None
+
+    # ============================================================
+    # Download via yt-dlp
+    # ============================================================
     def download_media_yt_dlp(self, url, audio_only=False):
-        self.clean_media_folder()
+        self.clear_temp()
 
         if url.startswith("mmp3 "):
             url = url.replace("mmp3 ", "", 1).strip()
 
         ydl_opts = {
-            'outtmpl': os.path.join(self.media_folder, '%(id)s.%(ext)s'),
+            'outtmpl': os.path.join(self.temp_folder, '%(id)s.%(ext)s'),
             'quiet': True,
             'noplaylist': True,
             'no_warnings': True,
@@ -87,11 +113,11 @@ class link_cog(commands.Cog):
                 info = ydl.extract_info(url, download=True)
                 if not info:
                     return None
-            except yt_dlp.utils.DownloadError as e:
+            except Exception as e:
                 logger.error(f"DownloadError: {e}")
                 return None
 
-        files = glob.glob(os.path.join(self.media_folder, '*'))
+        files = glob.glob(os.path.join(self.temp_folder, '*'))
         if not files:
             return None
 
@@ -99,29 +125,9 @@ class link_cog(commands.Cog):
         logger.info(f"File hasil download: {latest_file}")
         return latest_file
 
-    def convert_to_mp3(self, video_path):
-        mp3_path = os.path.join(self.media_folder, f"{uuid.uuid4().hex}.mp3")
-        try:
-            subprocess.run([
-                'ffmpeg', '-i', video_path, '-vn', '-acodec', 'libmp3lame',
-                '-ab', '192k', '-ar', '44100', mp3_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return mp3_path
-        except Exception as e:
-            logger.error(f"Gagal konversi ke mp3: {e}")
-            return None
-
-    def compress_video(self, input_path):
-        output_path = os.path.join(self.media_folder, f"{uuid.uuid4().hex}.mp4")
-        try:
-            subprocess.run([
-                'ffmpeg', '-i', input_path, '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast', output_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return output_path
-        except Exception as e:
-            logger.error(f"Gagal kompres video: {e}")
-            return None
-
+    # ============================================================
+    # Event Listener
+    # ============================================================
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -139,12 +145,12 @@ class link_cog(commands.Cog):
                 file_path = await loop.run_in_executor(None, self.download_media_yt_dlp, message.content, False)
 
                 if not file_path:
-                    await message.channel.send("Gagal mengunduh video.", delete_after=5)
+                    await message.channel.send("Gagal mengunduh video.")
                     return
 
                 if not file_path.lower().endswith(('.mp4', '.mov', '.webm', '.mkv')):
                     os.remove(file_path)
-                    await message.channel.send("File yang didownload bukan video.", delete_after=5)
+                    await message.channel.send("File yang didownload bukan video.")
                     return
 
                 size_mb = os.path.getsize(file_path) / (1024 * 1024)
@@ -154,7 +160,7 @@ class link_cog(commands.Cog):
                         await message.channel.send(file=discord.File(compressed, filename="video_compressed.mp4"))
                         os.remove(compressed)
                     else:
-                        await message.channel.send(f"File terlalu besar ({size_mb:.2f} MB), tidak bisa diupload.", delete_after=5)
+                        await message.channel.send(f"File terlalu besar ({size_mb:.2f} MB)")
                     os.remove(file_path)
                     return
 
@@ -163,37 +169,28 @@ class link_cog(commands.Cog):
 
             except Exception as e:
                 logger.error(f"Error saat proses video: {e}")
-                await message.channel.send("Gagal memproses video.", delete_after=5)
+                await message.channel.send("Gagal memproses video.")
 
+    # ============================================================
+    # GIF Command
+    # ============================================================
     @commands.command(name="gif")
     async def gif_command(self, ctx, *, url: str = None):
         await ctx.typing()
-
         try:
             video_path = None
 
-            # Dari URL
             if url and (url.startswith("http://") or url.startswith("https://")):
                 loop = asyncio.get_running_loop()
                 video_path = await loop.run_in_executor(None, self.download_media_yt_dlp, url, False)
 
-            # Dari attachment langsung
-            elif ctx.message.attachments:
-                for attachment in ctx.message.attachments:
-                    if attachment.filename.lower().endswith(('.mp4', '.mov', '.webm', '.mkv')):
-                        unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
-                        video_path = os.path.join(self.media_folder, unique_name)
-                        await attachment.save(video_path)
-                        break
-
-            # Dari reply ke pesan yang berisi attachment video
             elif ctx.message.reference:
                 try:
                     replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
                     for attachment in replied.attachments:
                         if attachment.filename.lower().endswith(('.mp4', '.mov', '.webm', '.mkv')):
                             unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
-                            video_path = os.path.join(self.media_folder, unique_name)
+                            video_path = os.path.join('temp_files', unique_name)
                             await attachment.save(video_path)
                             break
                 except Exception as e:
@@ -206,12 +203,14 @@ class link_cog(commands.Cog):
             gif_path = self.convert_to_gif(video_path)
             if gif_path and os.path.getsize(gif_path) < 8 * 1024 * 1024:
                 await ctx.send(file=discord.File(gif_path, filename="output.gif"))
+                self.clear_temp()
             else:
                 await ctx.send("Gagal membuat GIF atau ukuran terlalu besar.", delete_after=5)
 
             os.remove(video_path)
             if gif_path and os.path.exists(gif_path):
                 os.remove(gif_path)
+                self.clear_temp()
 
         except Exception as e:
             logger.error(f"Gagal proses GIF: {e}")
@@ -247,17 +246,19 @@ class link_cog(commands.Cog):
 
                 await ctx.send(file=discord.File(file_path, filename="audio.mp3"))
                 os.remove(file_path)
+                self.clear_temp()
 
             elif ctx.message.attachments:
                 for attachment in ctx.message.attachments:
                     if attachment.filename.lower().endswith(('.mp4', '.mov', '.webm', '.mkv')):
                         unique_name = f"{uuid.uuid4().hex}_{attachment.filename}"
-                        video_path = os.path.join(self.media_folder, unique_name)
+                        video_path = os.path.join(self.temp_folder, unique_name)
                         await attachment.save(video_path)
                         mp3_path = self.convert_to_mp3(video_path)
                         if mp3_path:
                             await ctx.send(file=discord.File(mp3_path, filename="audio.mp3"))
                             os.remove(mp3_path)
+                            self.clear_temp()
                         os.remove(video_path)
                         return
 
@@ -279,7 +280,7 @@ class link_cog(commands.Cog):
             return
 
         voice_id = "TxGEqnHWrfWFTfGW9XjX"  # Antoni
-        output_path = os.path.join(self.media_folder, f"{uuid.uuid4().hex}.mp3")
+        output_path = os.path.join('temp_files', f"{uuid.uuid4().hex}.mp3")
 
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {
@@ -305,6 +306,7 @@ class link_cog(commands.Cog):
 
             await ctx.send(file=discord.File(output_path, filename="tts.mp3"))
             os.remove(output_path)
+            self.clear_temp()
 
         except Exception as e:
             logger.error(f"Gagal buat TTS ElevenLabs: {e}")
