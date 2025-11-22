@@ -174,7 +174,7 @@ class link_cog(commands.Cog):
     # ============================================================
     # GIF Command
     # ============================================================
-    @commands.command(name="gif")
+    @commands.command(name="gif", extras={"category": "Downloader"})
     async def gif_command(self, ctx, *, url: str = None):
         await ctx.typing()
         try:
@@ -218,7 +218,7 @@ class link_cog(commands.Cog):
 
 
 
-    @commands.command(name="mp3")
+    @commands.command(name="mp3", extras={"category": "Downloader"})
     async def mp3_command(self, ctx, *, url: str = None):
         if url and url.startswith("mmp3 "):
             url = url.replace("mmp3 ", "", 1).strip()
@@ -270,7 +270,7 @@ class link_cog(commands.Cog):
             logger.error(f"Gagal proses audio: {e}")
             await ctx.send("Gagal memproses audio.", delete_after=5)
 
-    @commands.command(name="tts")
+    @commands.command(name="tts", extras={"category": "Downloader"})
     async def voice_command(self, ctx, *, text: str):
         await ctx.typing()
 

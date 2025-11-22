@@ -1626,7 +1626,7 @@ class StreakCog(commands.Cog):
 
 
 
-    @commands.command(name="helpstreak")
+    @commands.command(name="helpstreak", extras={"category": "Streak"})
     async def helpstreak(self, ctx: commands.Context):
         """
         Help streak dengan pagination.

@@ -14,7 +14,7 @@ class MassDM(commands.Cog):
             discord.utils.get(ctx.author.roles, id=ALLOWED_ROLE_ID) is not None
         )
 
-    @commands.command(name="bc", help="DM semua member dengan role tertentu. Contoh: mbc @Role Pesan penting")
+    @commands.command(name="bc", help="DM semua member dengan role tertentu. Contoh: mbc @Role Pesan penting", extras={"category": "General"})
     async def mbc_command(self, ctx, role: discord.Role, *, message: str = None):
         if not self.is_allowed_user(ctx):
             return await ctx.send("❌ Kamu tidak diizinkan menggunakan perintah ini.")

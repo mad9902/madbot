@@ -5,7 +5,7 @@ class HelpCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="ghelp")
+    @commands.command(name="ghelp", extras={"category": "Economy"})
     async def help_category(self, ctx, category: str = None):
 
         if category is None:

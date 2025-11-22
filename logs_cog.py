@@ -151,7 +151,7 @@ class LogCog(commands.Cog):
     async def delete_old_voice_logs(self):
         delete_old_voice_logs(older_than_days=1)
 
-    @commands.command(name="setchlog")
+    @commands.command(name="setchlog", extras={"category": "Admin"})
     async def set_log_channel(self, ctx, channel: discord.TextChannel):
         is_owner = ctx.author.id == ctx.guild.owner_id or ctx.author.id == 416234104317804544
         if not is_owner:
@@ -161,7 +161,7 @@ class LogCog(commands.Cog):
         db.close()
         await ctx.send(f"✅ Channel log telah disetel ke {channel.mention}")
 
-    @commands.command(name="log")
+    @commands.command(name="log", extras={"category": "Admin"})
     async def show_logs(self, ctx):
         view = LogView(self.bot, ctx.guild.id, ctx.author)
         await ctx.send(embed=discord.Embed(title="Silahkan Pilih Category Log", color=discord.Color.blurple()), view=view)

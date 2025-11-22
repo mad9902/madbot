@@ -428,7 +428,7 @@ class Birthday(commands.Cog):
     # =========================================================
     # COMMAND: Set Birthday
     # =========================================================
-    @commands.command(name="setbirthday")
+    @commands.command(name="setbirthday", extras={"category": "Birthday"})
     async def set_birthday_cmd(self, ctx, *, arg: str = None):
         if not arg:
             return await ctx.send("❗ Format: `mad setbirthday @user 21-06 -wish text -img https://link.png`")
@@ -485,7 +485,7 @@ class Birthday(commands.Cog):
     # =========================================================
     # COMMAND: My Birthday
     # =========================================================
-    @commands.command(name="mybirthday")
+    @commands.command(name="mybirthday", extras={"category": "Birthday"})
     async def my_birthday(self, ctx):
         db = connect_db()
         result = get_birthday(db, ctx.author.id, ctx.guild.id)
@@ -506,7 +506,7 @@ class Birthday(commands.Cog):
     # =========================================================
     # COMMAND: Delete Birthday
     # =========================================================
-    @commands.command(name="deletebirthday")
+    @commands.command(name="deletebirthday", extras={"category": "Birthday"})
     async def delete_birthday_cmd(self, ctx, *, name: str = None):
         db = connect_db()
 
@@ -542,7 +542,7 @@ class Birthday(commands.Cog):
     # =========================================================
     # COMMAND: Birthday List
     # =========================================================
-    @commands.command(name="birthdaylist")
+    @commands.command(name="birthdaylist", extras={"category": "Birthday"})
     async def birthdaylist(self, ctx):
         db = connect_db()
         rows = get_all_birthdays(db, ctx.guild.id)
@@ -575,7 +575,7 @@ class Birthday(commands.Cog):
     # =========================================================
     # COMMAND: Nearest Birthday
     # =========================================================
-    @commands.command(name="nearestbirthday")
+    @commands.command(name="nearestbirthday", extras={"category": "Birthday"})
     async def nearest_birthday(self, ctx):
         db = connect_db()
         rows = get_all_birthdays(db, ctx.guild.id)
@@ -606,7 +606,7 @@ class Birthday(commands.Cog):
     # =========================================================
     # COMMAND: Test Birthday (DEBUG)
     # =========================================================
-    @commands.command(name="testbirthday")
+    @commands.command(name="testbirthday", extras={"category": "Birthday"})
     async def test_birthday(self, ctx):
         db = connect_db()
         rows = get_all_birthdays(db, ctx.guild.id)
@@ -690,7 +690,7 @@ class Birthday(commands.Cog):
     # COMMAND: Check Time
     # =========================================================
 
-    @commands.command(name="setbirthdaych")
+    @commands.command(name="setbirthdaych", extras={"category": "Birthday"})
     async def set_birthday_channel(self, ctx, channel: discord.TextChannel):
         if ctx.author.id not in [ctx.guild.owner_id, 416234104317804544]:
             return await ctx.send("❌ Kamu tidak punya izin.")
@@ -701,7 +701,7 @@ class Birthday(commands.Cog):
 
         await ctx.send(f"✅ Channel ulang tahun diset ke {channel.mention}")
 
-    @commands.command(name="testclock")
+    @commands.command(name="testclock", extras={"category": "Birthday"})
     async def test_clock(self, ctx):
         now = datetime.now(JAKARTA_TZ)
         await ctx.send(f"🕒 Waktu WIB sekarang: `{now.strftime('%Y-%m-%d %H:%M:%S')}`")

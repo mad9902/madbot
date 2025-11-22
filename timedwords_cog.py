@@ -20,7 +20,7 @@ class TimedWordsCog(commands.Cog):
         self.guild_data = {}
         self.send_timed_word.start()
 
-    @commands.command(name="timedwords", help="Tambah pesan rutin: timedwords [interval] Judul | Isi\nContoh: `timedwords 5 Reminder | Jangan spam!` atau `timedwords Reminder | Jangan spam!` (default 30 menit)")
+    @commands.command(name="timedwords", help="Tambah pesan rutin: timedwords [interval] Judul | Isi\nContoh: `timedwords 5 Reminder | Jangan spam!` atau `timedwords Reminder | Jangan spam!` (default 30 menit)", extras={"category": "TimedWords"})
     async def add_timed_word_cmd(self, ctx, *, arg: str = None):
         if not arg or "|" not in arg:
             return await ctx.send("❗ Format salah. Contoh: `timedwords [5] Reminder | Jangan spam!`")
@@ -64,7 +64,7 @@ class TimedWordsCog(commands.Cog):
         await ctx.send(f"✅ Pesan berkala ditambahkan setiap {interval} menit:\n**{title}**\n{content}")
 
 
-    @commands.command(name="setchtimedwords", help="Set channel untuk pengiriman timedwords otomatis.")
+    @commands.command(name="setchtimedwords", help="Set channel untuk pengiriman timedwords otomatis.", extras={"category": "TimedWords"})
     async def set_timedwords_channel(self, ctx, channel: discord.TextChannel):
         if ctx.author.id != ctx.guild.owner_id and ctx.author.id != ALLOWED_USER_ID:
             return await ctx.send("❌ Hanya pemilik server atau user tertentu yang dapat mengatur channel ini.")
@@ -124,7 +124,7 @@ class TimedWordsCog(commands.Cog):
                     "last_sent": None
                 }
 
-    @commands.command(name="listtimedwords", help="Menampilkan semua pesan berkala yang telah ditambahkan.")
+    @commands.command(name="listtimedwords", help="Menampilkan semua pesan berkala yang telah ditambahkan.", extras={"category": "TimedWords"})
     async def list_timedwords(self, ctx):
         db = connect_db()
         messages = get_timed_words(db, ctx.guild.id)
@@ -181,7 +181,7 @@ class TimedWordsCog(commands.Cog):
 
             await ctx.send(embed=pages[0], view=PaginationView(pages))
 
-    @commands.command(name="removetimedwords", help="Hapus pesan berkala berdasarkan judul.")
+    @commands.command(name="removetimedwords", help="Hapus pesan berkala berdasarkan judul.", extras={"category": "TimedWords"})
     async def remove_timedword(self, ctx, *, title: str = None):
         if not title:
             return await ctx.send("❗ Format salah. Contoh: `removetimedword Reminder`")

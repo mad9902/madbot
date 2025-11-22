@@ -457,7 +457,7 @@ class ConfessionCog(commands.Cog):
         self.bot = bot
         # load_confession_map()
 
-    @commands.command(name="sendconfessbutton")
+    @commands.command(name="sendconfessbutton", extras={"category": "Confession"})
     async def send_confess_button(self, ctx):
         if not ctx.author.guild_permissions.manage_guild \
            and ctx.author.id != 416234104317804544:
@@ -472,7 +472,7 @@ class ConfessionCog(commands.Cog):
 
         await ctx.send(embed=embed, view=view)
 
-    @commands.command(name="setconfessch")
+    @commands.command(name="setconfessch", extras={"category": "Confession"})
     async def set_confession_channel(self, ctx, channel: discord.TextChannel):
         if ctx.author.id != ctx.guild.owner_id \
            and ctx.author.id != 416234104317804544:

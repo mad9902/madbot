@@ -78,7 +78,7 @@ class image_cog(commands.Cog):
                     print(f"Imgur upload gagal, status: {resp.status}")
                     return None
 
-    @commands.command(name="upload", help="Upload gambar dari attachment atau reply ke Imgur")
+    @commands.command(name="upload", help="Upload gambar dari attachment atau reply ke Imgur", extras={"category": "Image"})
     async def upload(self, ctx):
         # Ambil attachment / reply
         image = await extract_image_attachment(ctx)
@@ -114,7 +114,7 @@ class image_cog(commands.Cog):
         else:
             await ctx.send("❌ Gagal mengupload gambar ke Imgur.")
 
-    @commands.command(name="avatar", help="Menampilkan avatar dan banner user (jika ada) dalam gaya profil Discord")
+    @commands.command(name="avatar", help="Menampilkan avatar dan banner user (jika ada) dalam gaya profil Discord", extras={"category": "Image"})
     async def avatar(self, ctx, member: discord.Member | None = None):
         member = member or ctx.author
         user_id = member.id
@@ -153,7 +153,7 @@ class image_cog(commands.Cog):
         await ctx.send(embed=embed)
 
 
-    @commands.command(name="emojisteal", help="Download emoji custom dengan ID atau mention")
+    @commands.command(name="emojisteal", help="Download emoji custom dengan ID atau mention", extras={"category": "Image"})
     async def emoji(self, ctx, emoji_input: str):
         import re
 
@@ -191,7 +191,7 @@ class image_cog(commands.Cog):
             await ctx.send("Gagal mendownload emoji dengan ID tersebut.")
 
 
-    @commands.command(name="stickersteal", help="Download sticker dari ID atau dari pesan yang di-reply")
+    @commands.command(name="stickersteal", help="Download sticker dari ID atau dari pesan yang di-reply", extras={"category": "Image"})
     async def sticker(self, ctx, sticker_id: int | None = None):
         try:
             if sticker_id is None:
@@ -330,7 +330,7 @@ class image_cog(commands.Cog):
     # ==========================================
     #  ADD EMOJI OTOMATIS
     # ==========================================
-    @commands.command(name="emojiadd", help="Tambah emoji ke server otomatis")
+    @commands.command(name="emojiadd", help="Tambah emoji ke server otomatis", extras={"category": "Image"})
     @commands.has_permissions(manage_emojis=True)
     async def addemoji(self, ctx, *, name: str | None = None):
         raw_bytes = None
@@ -392,7 +392,7 @@ class image_cog(commands.Cog):
     # ==========================================
     #  ADD STICKER OTOMATIS
     # ==========================================
-    @commands.command(name="stickeradd", help="Tambah sticker ke server otomatis")
+    @commands.command(name="stickeradd", help="Tambah sticker ke server otomatis", extras={"category": "Image"})
     @commands.has_permissions(manage_emojis=True)
     async def addsticker(self, ctx, *, name: str | None = None):
         raw_bytes = None
@@ -460,7 +460,7 @@ class image_cog(commands.Cog):
             await ctx.send(f"❌ Gagal menambahkan sticker: `{e}`")
 
 
-    @commands.command(name="caption", help="Berikan caption pada gambar yang kamu kirim")
+    @commands.command(name="caption", help="Berikan caption pada gambar yang kamu kirim", extras={"category": "Image"})
     async def caption(self, ctx, *, args: str = ""):
         if not args:
             await ctx.send("❌ Gunakan: `!caption --top --uppercase Teks kamu di sini`\nKirim gambar atau balas gambar.")

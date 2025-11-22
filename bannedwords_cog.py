@@ -37,7 +37,7 @@ class BannedWordsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="listreplywords", help="Menampilkan daftar kata yang disetel.")
+    @commands.command(name="listreplywords", help="Menampilkan daftar kata yang disetel." , extras={"category": "ReplyWords"})
     async def list_banned_words(self, ctx):
         db = connect_db()
         banned_words = get_all_banned_words(db, ctx.guild.id)
@@ -65,7 +65,7 @@ class BannedWordsCog(commands.Cog):
 
         await ctx.send(embed=pages[0], view=PaginationView(pages))
 
-    @commands.command(name="replywords", help="Tambah kata. Format: replywords <kata> | <respon> | <type (opsional)>")
+    @commands.command(name="replywords", help="Tambah kata. Format: replywords <kata> | <respon> | <type (opsional)>", extras={"category": "ReplyWords"})
     async def add_banned_word_cmd(self, ctx, *, arg: str = None):
         if not arg or "|" not in arg:
             return await ctx.send("❗ Format salah. Contoh: `replywords doxxing | Jangan lakukan doxxing! | pelanggaran`")
@@ -98,7 +98,7 @@ class BannedWordsCog(commands.Cog):
 
         await ctx.send(embed=embed)
 
-    @commands.command(name="removereplywords", help="Hapus kata. Format: delword <kata>")
+    @commands.command(name="removereplywords", help="Hapus kata. Format: delword <kata>", extras={"category": "ReplyWords"})
     async def delete_banned_word(self, ctx, *, word: str = None):
         if not word:
             return await ctx.send("❗ Format salah. Contoh: `delword spam`")
@@ -188,7 +188,7 @@ class BannedWordsCog(commands.Cog):
 
         await self.bot.process_commands(message)
 
-    @commands.command(name="togglereplywords", help="Aktif/nonaktifkan fitur auto reply kata.")
+    @commands.command(name="togglereplywords", help="Aktif/nonaktifkan fitur auto reply kata.", extras={"category": "ReplyWords"})
     @commands.has_permissions(administrator=True)
     async def toggle_reply_words(self, ctx, status: str):
         status = status.lower()
@@ -202,7 +202,7 @@ class BannedWordsCog(commands.Cog):
         await ctx.send(f"✅ Fitur reply_words telah {'diaktifkan' if status == 'on' else 'dinonaktifkan'}.")
 
         
-    @commands.command(name="replywordstatus", help="Cek status fitur reply_words.")
+    @commands.command(name="replywordstatus", help="Cek status fitur reply_words.", extras={"category": "ReplyWords"})
     async def reply_words_status(self, ctx):
         db = connect_db()
         status = get_feature_status(db, ctx.guild.id, "reply_words")

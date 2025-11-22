@@ -26,7 +26,7 @@ class CommandStatusCog(commands.Cog):
             raise commands.DisabledCommand(f"Command {ctx.command.name} dinonaktifkan")
         return True
 
-    @commands.command(name="disablecmd")
+    @commands.command(name="disablecmd", extras={"category": "Admin"})
     @commands.has_permissions(administrator=True)
     async def disable_command(self, ctx, command_name: str):
         command_name = command_name.lower()
@@ -45,7 +45,7 @@ class CommandStatusCog(commands.Cog):
         else:
             await ctx.send("❌ Gagal menonaktifkan command.")
 
-    @commands.command(name="enablecmd")
+    @commands.command(name="enablecmd", extras={"category": "Admin"})
     @commands.has_permissions(administrator=True)
     async def enable_command(self, ctx, command_name: str):
         command_name = command_name.lower()
@@ -61,7 +61,7 @@ class CommandStatusCog(commands.Cog):
         else:
             await ctx.send(f"⚠️ Command `{command_name}` tidak terdaftar sebagai dinonaktifkan.")
 
-    @commands.command(name="toggle_welcome")
+    @commands.command(name="toggle_welcome", extras={"category": "Admin"})
     @commands.has_permissions(administrator=True)
     async def toggle_welcome(self, ctx):
         db = connect_db()
@@ -72,7 +72,7 @@ class CommandStatusCog(commands.Cog):
 
         await ctx.send(f"✅ Fitur welcome message telah {'diaktifkan' if new_status else 'dinonaktifkan'}.")
 
-    @commands.command(name="toggle_reply_words")
+    @commands.command(name="toggle_reply_words", extras={"category": "Admin"})
     @commands.has_permissions(administrator=True)
     async def toggle_reply_words(self, ctx):
         db = connect_db()
@@ -83,7 +83,7 @@ class CommandStatusCog(commands.Cog):
 
         await ctx.send(f"✅ Fitur reply words telah {'diaktifkan' if new_status else 'dinonaktifkan'}.")
 
-    @commands.command(name="cmdstatus")
+    @commands.command(name="cmdstatus", extras={"category": "Admin"})
     async def command_status(self, ctx, command_name: str = None):
         if command_name:
             command_name = command_name.lower()

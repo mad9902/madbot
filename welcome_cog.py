@@ -32,7 +32,7 @@ class MemberGreetingConfig(commands.Cog):
     # ====================================================
     #   🟩 WELCOME CONFIG
     # ====================================================
-    @commands.command(name="togglewelcome")
+    @commands.command(name="togglewelcome", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def toggle_welcome(self, ctx, status: str):
         status = status.lower()
@@ -44,7 +44,7 @@ class MemberGreetingConfig(commands.Cog):
         db.close()
         await ctx.send(f"✅ Welcome message {'enabled' if status == 'on' else 'disabled'}.")
 
-    @commands.command(name="setwelcomemsg")
+    @commands.command(name="setwelcomemsg", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def set_welcome_msg(self, ctx, *, message: str):
         db = connect_db()
@@ -52,7 +52,7 @@ class MemberGreetingConfig(commands.Cog):
         db.close()
         await ctx.send("✅ Pesan welcome disimpan.")
 
-    @commands.command(name="setchwelcome")
+    @commands.command(name="setchwelcome", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def set_welcome_channel(self, ctx, channel: discord.TextChannel):
         db = connect_db()
@@ -60,7 +60,7 @@ class MemberGreetingConfig(commands.Cog):
         db.close()
         await ctx.send(f"✅ Welcome channel → {channel.mention}")
 
-    @commands.command(name="testwelcome")
+    @commands.command(name="testwelcome", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def test_welcome(self, ctx):
         db = connect_db()
@@ -100,7 +100,7 @@ class MemberGreetingConfig(commands.Cog):
     # ====================================================
     #   LOG CHANNEL CONFIG
     # ====================================================
-    @commands.command(name="setgreetsch")
+    @commands.command(name="setgreetsch", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def set_log_channel(self, ctx, channel: discord.TextChannel):
         db = connect_db()
@@ -153,7 +153,7 @@ class MemberGreetingConfig(commands.Cog):
     # ====================================================
     #   🟥 GOODBYE CONFIG
     # ====================================================
-    @commands.command(name="togglegoodbye")
+    @commands.command(name="togglegoodbye", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def toggle_goodbye(self, ctx, status: str):
         status = status.lower()
@@ -165,7 +165,7 @@ class MemberGreetingConfig(commands.Cog):
         db.close()
         await ctx.send(f"👋 Goodbye message {'enabled' if status == 'on' else 'disabled'}.")
 
-    @commands.command(name="setgoodbyemsg")
+    @commands.command(name="setgoodbyemsg", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def set_goodbye_msg(self, ctx, *, message: str):
         db = connect_db()
@@ -173,7 +173,7 @@ class MemberGreetingConfig(commands.Cog):
         db.close()
         await ctx.send("✅ Pesan goodbye disimpan.")
 
-    @commands.command(name="setchgoodbye")
+    @commands.command(name="setchgoodbye", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def set_goodbye_channel(self, ctx, channel: discord.TextChannel):
         db = connect_db()
@@ -181,7 +181,7 @@ class MemberGreetingConfig(commands.Cog):
         db.close()
         await ctx.send(f"👋 Goodbye channel → {channel.mention}")
 
-    @commands.command(name="testgoodbye")
+    @commands.command(name="testgoodbye", extras={"category": "Welcome"})
     @is_owner_or_dev()
     async def test_goodbye(self, ctx):
         db = connect_db()

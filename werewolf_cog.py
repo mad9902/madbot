@@ -298,7 +298,7 @@ class Werewolf(commands.Cog):
         )
 
 
-    @commands.command(name="startwerewolf")
+    @commands.command(name="startwerewolf", extras={"category": "Games"})
     async def startwerewolf_cmd(self, ctx):
         lock = self.guild_locks.setdefault(ctx.guild.id, asyncio.Lock())
 
@@ -417,7 +417,7 @@ class Werewolf(commands.Cog):
 
 
 
-    @commands.command(name="stopwerewolf")
+    @commands.command(name="stopwerewolf", extras={"category": "Games"})
     async def stopwerewolf_cmd(self, ctx):
         game = get_active_game(ctx.guild.id)
         if not game:

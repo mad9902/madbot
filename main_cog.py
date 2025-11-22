@@ -29,14 +29,14 @@ class main_cog(commands.Cog):
         await self.bot.process_commands(message)
 
 
-    @commands.command(name="botoff")
+    @commands.command(name="botoff", extras={"category": "Admin"})
     async def botoff(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
             return await ctx.send("❌ Hanya admin atau pemilik bot yang bisa menggunakan command ini.")
         DISABLED_GUILDS.add(ctx.guild.id)
         await ctx.send("🛑 Bot dinonaktifkan di server ini. Tidak akan merespons command.")
 
-    @commands.command(name="boton")
+    @commands.command(name="boton", extras={"category": "Admin"})
     async def boton(self, ctx):
         if not (ctx.author.guild_permissions.administrator or ctx.author.id == OWNER_ID):
             return await ctx.send("❌ Hanya admin atau pemilik bot yang bisa menggunakan command ini.")
@@ -48,158 +48,12 @@ class main_cog(commands.Cog):
         latency = round(self.bot.latency * 1000)
         await interaction.response.send_message(f"[SLASH] Pong! 🏓 Latensi: {latency}ms")
 
-    @commands.command(name="ping", help="Cek latensi bot.")
+    @commands.command(name="ping", help="Cek latensi bot.", extras={"category": "General"})
     async def prefix_ping(self, ctx):
         latency = round(self.bot.latency * 1000)
         await ctx.send(f"Pong! 🏓 Latensi: {latency}ms")
 
-    @commands.command(name="help", aliases=["h"], help="Displays all the available commands")
-    async def help(self, ctx):
-        embed = discord.Embed(
-            title="📜 MAD BOT HELP",
-            description="Daftar command yang tersedia:\nGunakan prefix `k, m, mad , kos ` sebelum command.\nContoh: `mad play | mplay`",
-            color=discord.Color.purple()
-        )
-
-        embed.add_field(
-            name="💬 General Commands",
-            value=(
-                "`help`                       - Tampilkan semua command\n"
-                "`clear / cl <amount>`        - Hapus pesan (owner only)\n"
-                "`pick <opsi1, opsi2>`        - Pilih acak dari beberapa opsi\n"
-                "`giveaway <hadiah> <durasi>` - Buat giveaway\n"
-                "`poll <pertanyaan>`          - Buat polling ya/tidak\n"
-                "`ping`                       - Cek Ping Bot\n"
-                "`tts <teks>`                 - Ubah teks jadi text-to-speech\n"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🖼️ Image Commands",
-            value=(
-                "`emojisteal <emoji or id>`   - Ambil emoji sebagai gambar\n"
-                "`sticker <reply or id>` - Ambil stiker sebagai gambar\n"
-                "`avatar <tag optional>` - Ambil avatar user\n"
-                "`upload <image>`        - Upload gambar ke link\n"
-                "`caption <reply image>` - add caption ke gambar (additional command --uppercase --lowercase --top --bottom)"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🤖 AI",
-            value=(
-                "`ai (question)`  - generate ai berdasarkan pertanyaan\n"
-                "`anomali (name)` - generate nama dan kisah anomali dari nama\n"
-                "`truth`          - memberikan pertanyaan untuk game (truth) or dare\n"
-                "`dare`           - memberikan pertanyaan untuk game truth or (dare)\n"
-                "`rank <topik>`   - memberikan rank untuk topik tertentu"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🕹️ Game",
-            value=(
-                "`sambungkata`    - game sambung kata multiplayer\n"
-                "`stopgame`       - stop game yang sudah dimulai (host only)"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🎵 Music Commands",
-            value=(
-                "`p / play <lagu>`          - Putar lagu dari YouTube\n"
-                "`q / queue`                - Lihat antrian lagu\n"
-                "`skip`                     - Lewati lagu saat ini\n"
-                "`setchmusic <id_channel>`  - Set channel musik (owner only)\n"
-                "`leave / disconnect / dc`  - Hentikan dan keluar voice\n"
-                "`shuffle`                  - Acak antrian\n"
-                "`loop current / queue`     - Loop lagu atau antrian\n"
-                "`song <lyrics>`            - Cari lagu berdasarkan lyrics"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="📌 Role Reaction (owner only)",
-            value=(
-                "`rolemenu <emoji> <nama role>`\n"
-                "Contoh: `mad rolemenu 🎮 Gamer, 🧱 Minecraft`"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🆙 XP System",
-            value=(
-                "`level`                           - Lihat level XP kamu\n"
-                "`leaderboard`                     - Lihat top 10 leaderboard XP\n"
-                "`setchlevel <id channel>`         - Set Channel kirim leveling info (owner only)\n"
-                "`setrolelvl <level> <id role>`    - Auto-role saat level tertentu\n"
-                "`removerolelvl <level>`           - Hapus auto-role"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🎂 Birthday",
-            value=(
-                "`setbirthday [@user|nama] <tanggal>` - Simpan ulang tahun kamu atau orang lain\n"
-                "`mybirthday`                         - Lihat ulang tahun kamu\n"
-                "`birthdaylist`                       - Daftar ulang tahun semua user\n"
-                "`nearestbirthday`                    - Ulang tahun terdekat\n"
-                "`deletebirthday [@user|nama]`        - Hapus ulang tahun (owner only)\n"
-                "`setbirthdaych <channel>`            - Set channel ucapan ulang tahun"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="😴 AFK",
-            value=(
-                "`afk <alasan>` - Tandai kamu AFK\n"
-                "AFK akan dihapus otomatis saat kamu kirim pesan"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🌐 Translate",
-            value=(
-                "`translate <teks> <kode_bahasa>` - Terjemahkan teks ke bahasa tertentu\n"
-                "Contoh: `mtranslate Aku suka kamu en`"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="📤 Download Video / Audio",
-            value=(
-                " Auto konversi link Instagram reels/video TikTok/Yt Shorts ke video saat kirim link\n"
-                "`mp3 <video>/<link>`         - ambil audio dari video/link\n"
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="ℹ️ Info",
-            value=(
-                "`serverinfo`     - Info server\n"
-                "`userinfo <tag>` - Info user"
-            ),
-            inline=False
-        )
-
-        embed.set_footer(text="Gunakan command dengan bijak ✨")
-
-        await ctx.send(embed=embed)
-
-
-
-    @commands.command(name="clear", aliases=["cl"], help="Clears a specified amount of messages")
+    @commands.command(name="clear", aliases=["cl"], help="Clears a specified amount of messages", extras={"category": "General"})
     async def clear(self, ctx, arg):
         # Cek apakah user adalah pemilik server atau user dengan ID tertentu
         if ctx.author.id != 416234104317804544 and ctx.author != ctx.guild.owner:
@@ -215,7 +69,7 @@ class main_cog(commands.Cog):
         await ctx.send(f"✅ Berhasil menghapus {amount} pesan.", delete_after=5)
 
 
-    @commands.command(name="serverinfo", help="Menampilkan info server.")
+    @commands.command(name="serverinfo", help="Menampilkan info server.", extras={"category": "General"})
     async def serverinfo(self, ctx):
         guild = ctx.guild
         embed = discord.Embed(title=f"Server Info: {guild.name}", color=discord.Color.blurple())
@@ -225,7 +79,7 @@ class main_cog(commands.Cog):
         embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
         await ctx.send(embed=embed)
 
-    @commands.command(name="userinfo", help="Tampilkan info pengguna.")
+    @commands.command(name="userinfo", help="Tampilkan info pengguna.", extras={"category": "General"})
     async def userinfo(self, ctx, member: discord.Member = None):
         member = member or ctx.author
         embed = discord.Embed(title=f"Info Pengguna: {member}", color=discord.Color.orange())
@@ -235,7 +89,7 @@ class main_cog(commands.Cog):
         embed.set_thumbnail(url=member.avatar.url if member.avatar else None)
         await ctx.send(embed=embed)
     
-    @commands.command(name="poll", help="Buat polling: mad poll <pertanyaan>")
+    @commands.command(name="poll", help="Buat polling: mad poll <pertanyaan>", extras={"category": "General"})
     async def poll(self, ctx, *, question):
         embed = discord.Embed(title="📊 Poll", description=question, color=discord.Color.gold())
         embed.set_footer(text=f"Requested by {ctx.author.display_name}")
@@ -244,7 +98,7 @@ class main_cog(commands.Cog):
         await message.add_reaction("👎")
 
 
-    @commands.command(name="giveaway", help="Mulai giveaway: mad giveaway <hadiah> <durasi detik>")
+    @commands.command(name="giveaway", help="Mulai giveaway: mad giveaway <hadiah> <durasi detik>", extras={"category": "General"})
     async def giveaway(self, ctx, hadiah: str, durasi: int):
         embed = discord.Embed(
             title="🎉 Giveaway!",
@@ -281,7 +135,12 @@ class main_cog(commands.Cog):
 
 
 
-    @commands.command(name="rolemenu", help="Buat menu role dengan emoji dan nama: mad rolemenu 🎮 DnD, 🧱 Minecraft")
+    @commands.command(
+        name="rolemenu",
+        usage="<emoji role1>, <emoji role2>, ...",
+        help="Buat menu role dengan emoji dan nama. Contoh: m rolemenu 🎮 DnD, 🧱 Minecraft",
+        extras={"category": "Role"}
+    )
     async def rolemenu(self, ctx, *, arg):
         if ctx.author.id != ctx.guild.owner_id and ctx.author.id != 416234104317804544:
             await ctx.send("❌ Hanya pemilik server yang bisa menggunakan command ini.")
@@ -377,7 +236,7 @@ class main_cog(commands.Cog):
                     print(f"Gagal menghapus role dari member: {e}")
 
 
-    @commands.command(name="pick", help="Pilih random dari daftar item dengan persentase opsional. Contoh: !pick ayam 5%, bakso, mie, nasi 10%")
+    @commands.command(name="pick", help="Pilih random dari daftar item dengan persentase opsional. Contoh: !pick ayam 5%, bakso, mie, nasi 10%", extras={"category": "General"})
     async def pick(self, ctx, *, items: str):
             entries = [x.strip() for x in items.split(',')]
             choices = []

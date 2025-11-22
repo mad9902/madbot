@@ -246,7 +246,7 @@ class DuelCog(commands.Cog):
 
         await start_msg.edit(embed=final_embed, attachments=[fileA, fileB])
 
-        # =====================================================================
+    # =====================================================================
     # ADMIN COMMAND — CLEAR DUEL
     # =====================================================================
     @commands.command(name="clearduel")

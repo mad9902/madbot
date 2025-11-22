@@ -219,7 +219,7 @@ class GeminiCog(commands.Cog):
         except Exception:
             pass
 
-    @commands.command(name="ai", help="Tanya ke AI (Gemini)")
+    @commands.command(name="ai", help="Tanya ke AI (Gemini)", extras={"category": "AI"})
     async def ai_command(self, ctx, *, prompt: str):
         print(f"[Gemini COMMAND] Called by {ctx.author} with prompt: {prompt}")
         async with ctx.typing():
@@ -237,7 +237,7 @@ class GeminiCog(commands.Cog):
                 print(f"[Gemini ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="anomali", help="Generate kata anomali beserta kisah background berdasarkan nama")
+    @commands.command(name="anomali", help="Generate kata anomali beserta kisah background berdasarkan nama", extras={"category": "AI"})
     async def anomali_command(self, ctx, *, name: str):
         prompt = (
             f"cukup satu saja. Buat anomali lucu berdasarkan nama '{name}' yang berisikan 2-5 kata. "
@@ -262,7 +262,7 @@ class GeminiCog(commands.Cog):
                 print(f"[Anomali ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="truth", help="Dapatkan pertanyaan truth dari AI")
+    @commands.command(name="truth", help="Dapatkan pertanyaan truth dari AI", extras={"category": "AI"})
     async def truth_command(self, ctx):
         prompt = (
             "Beri aku **satu pertanyaan truth** yang lucu, menantang, atau memalukan. "
@@ -279,7 +279,7 @@ class GeminiCog(commands.Cog):
                 print(f"[Truth ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="dare", help="Dapatkan tantangan dare dari AI")
+    @commands.command(name="dare", help="Dapatkan tantangan dare dari AI", extras={"category": "AI"})
     async def dare_command(self, ctx):
         prompt = (
             "Beri aku **satu tantangan dare** yang lucu, aneh, atau memalukan serta unik, kalau bisa sangat random. "
@@ -296,7 +296,7 @@ class GeminiCog(commands.Cog):
                 print(f"[Dare ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="rank", help="Buat ranking lucu berdasarkan topik yang kamu kasih")
+    @commands.command(name="rank", help="Buat ranking lucu berdasarkan topik yang kamu kasih", extras={"category": "AI"})
     async def mrank_command(self, ctx, *, topic: str):
         prompt = (
             f"Buat daftar ranking lucu berdasarkan topik: '{topic}'. "
@@ -314,7 +314,7 @@ class GeminiCog(commands.Cog):
                 print(f"[rank ERROR] {e}")
                 await ctx.send(f"\u274c Terjadi error: {str(e)}")
 
-    @commands.command(name="image", help="🖼️ Generate gambar AI gratis via Stable Horde")
+    @commands.command(name="image", help="🖼️ Generate gambar AI gratis via Stable Horde", extras={"category": "AI"})
     async def mimage_command(self, ctx, *, prompt: str):
         await ctx.typing()
 
@@ -389,7 +389,7 @@ class GeminiCog(commands.Cog):
             await ctx.send("❌ Terjadi error saat mengunduh gambar.", delete_after=5)
 
 
-    @commands.command(name="translate", help="Terjemahkan teks ke bahasa lain. Bisa pakai nama atau kode bahasa.")
+    @commands.command(name="translate", help="Terjemahkan teks ke bahasa lain. Bisa pakai nama atau kode bahasa.", extras={"category": "AI"})
     async def translate_command(self, ctx, *, arg: str):
         args = arg.strip().rsplit(" ", 1)
         if len(args) < 2:
@@ -413,7 +413,7 @@ class GeminiCog(commands.Cog):
                 await ctx.send("❌ Terjadi error saat menerjemahkan.")
                 
     # ==== FITUR SPLITBILL GEMINI ====
-    @commands.command(name="splitbill", help="Split bill otomatis pakai Gemini dari foto struk")
+    @commands.command(name="splitbill", help="Split bill otomatis pakai Gemini dari foto struk", extras={"category": "AI"})
     async def msplitbillgemini_command(self, ctx):
         if not ctx.message.attachments:
             return await ctx.send("❗ Harap attach gambar struk.")

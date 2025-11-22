@@ -845,7 +845,7 @@ class music_cog(commands.Cog):
     # AUTO PLAY MUSIC
     # ======================================================
 
-    @commands.command(name="autoplay", aliases=["ap"])
+    @commands.command(name="autoplay", aliases=["ap"], extras={"category": "Music"})
     async def autoplay_cmd(self, ctx, mode=None):
         if mode not in ["on", "off"]:
             return await ctx.send("🔁 Autoplay:\n`autoplay on`\n`autoplay off`")
@@ -936,7 +936,7 @@ class music_cog(commands.Cog):
     # COMMAND: PLAY
     # ======================================================
 
-    @commands.command(name="play", aliases=["p"])
+    @commands.command(name="play", aliases=["p"], extras={"category": "Music"})
     async def play_cmd(self, ctx, *, query):
         if ctx.author.voice is None:
             return await ctx.send("🔊 Join VC dulu.")
@@ -1072,7 +1072,7 @@ class music_cog(commands.Cog):
     # COMMAND: SKIP
     # ======================================================
 
-    @commands.command(name="skip", aliases=["s", "next"])
+    @commands.command(name="skip", aliases=["s", "next"], extras={"category": "Music"})
     async def skip_cmd(self, ctx):
         if not self.vc or not self.vc.is_playing():
             return await ctx.send("❌ Tidak ada lagu.")
@@ -1136,7 +1136,7 @@ class music_cog(commands.Cog):
         return embed
 
 
-    @commands.command(name="queue", aliases=["q"])
+    @commands.command(name="queue", aliases=["q"], extras={"category": "Music"})
     async def queue_cmd(self, ctx):
         if not self.current_song and len(self.music_queue) == 0:
             return await ctx.send("📭 Queue kosong.")
@@ -1146,7 +1146,7 @@ class music_cog(commands.Cog):
 
         await ctx.send(embed=embed, view=view)
 
-    @commands.command(name="loop")
+    @commands.command(name="loop", extras={"category": "Music"})
     async def loop_cmd(self, ctx, mode=None):
         valid_modes = ["single", "queue", "off"]
 
@@ -1195,7 +1195,7 @@ class music_cog(commands.Cog):
     # ======================================================
     # COMMAND: SHUFFLE
     # ======================================================
-    @commands.command(name="shuffle")
+    @commands.command(name="shuffle", extras={"category": "Music"})
     async def shuffle_cmd(self, ctx):
         # kalau tidak ada lagu
         if len(self.pending_spotify_tracks) == 0 and len(self.music_queue) < 2:
@@ -1242,7 +1242,7 @@ class music_cog(commands.Cog):
     # COMMAND: VOLUME
     # ======================================================
 
-    @commands.command(name="volume", aliases=["vol"])
+    @commands.command(name="volume", aliases=["vol"], extras={"category": "Music"})
     async def volume_cmd(self, ctx, vol: int = None):
         if vol is None:
             return await ctx.send(f"🔊 Volume sekarang: **{int(self.volume * 100)}%**")
@@ -1262,7 +1262,7 @@ class music_cog(commands.Cog):
     # COMMAND: BASSBOOST
     # ======================================================
 
-    @commands.command(name="bass", aliases=["bassboost"])
+    @commands.command(name="bass", aliases=["bassboost"], extras={"category": "Music"})
     async def bass_cmd(self, ctx, level=None):
         valid = ["off", "low", "medium", "high", "insane"]
 
@@ -1293,7 +1293,7 @@ class music_cog(commands.Cog):
     # COMMAND: DISCONNECT
     # ======================================================
 
-    @commands.command(name="disconnect", aliases=["dc", "stop", "leave"])
+    @commands.command(name="disconnect", aliases=["dc", "stop", "leave"], extras={"category": "Music"})
     async def dc_cmd(self, ctx):
         if not self.vc or not self.vc.is_connected():
             return await ctx.send("❌ Bot tidak sedang di VC.")
@@ -1309,7 +1309,7 @@ class music_cog(commands.Cog):
     # COMMAND: SONG (FIND BY LYRICS)
     # ======================================================
 
-    @commands.command(name="song")
+    @commands.command(name="song", extras={"category": "Music"})
     async def song_cmd(self, ctx, *, lyrics: str = None):
         if not lyrics:
             return await ctx.send("❗ Berikan potongan liriknya.")
@@ -1338,7 +1338,7 @@ class music_cog(commands.Cog):
     # COMMAND: LYRICS
     # ======================================================
 
-    @commands.command(name="lyrics")
+    @commands.command(name="lyrics", extras={"category": "Music"})
     async def lyrics_cmd(self, ctx, *, title=None):
         if not title:
             return await ctx.send("❗ Berikan judul lagu.")
@@ -1367,7 +1367,7 @@ class music_cog(commands.Cog):
     # COMMAND: SET MUSIC CHANNEL
     # ======================================================
 
-    @commands.command(name="setchmusic", aliases=["setchannel"])
+    @commands.command(name="setchmusic", aliases=["setchannel"], extras={"category": "Music"})
     async def setch_cmd(self, ctx, channel: discord.TextChannel):
         guild_id = str(ctx.guild.id)
         channel_id = str(channel.id)

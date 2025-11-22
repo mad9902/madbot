@@ -63,13 +63,13 @@ class LevelCog(commands.Cog):
         await self.load_disabled_guilds()
         await self.load_no_xp_roles()
 
-    @commands.command(name="level")
+    @commands.command(name="level", extras={"category": "XP"})
     async def show_level(self, ctx):
         xp = get_user_xp(self.db, ctx.author.id, ctx.guild.id)
         level = self.calculate_level(xp)
         await ctx.send(f"🔢 {ctx.author.mention}, kamu level {level} dengan {xp} XP.")
 
-    @commands.command(name="setrolelvl")
+    @commands.command(name="setrolelvl", extras={"category": "XP"})
     async def set_role_level(self, ctx, level: int, role: discord.Role):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
@@ -77,7 +77,7 @@ class LevelCog(commands.Cog):
         self.guild_level_roles.setdefault(ctx.guild.id, {})[level] = role.id
         await ctx.send(f"✅ Role {role.mention} akan diberikan pada level {level}.")
 
-    @commands.command(name="removerolelvl")
+    @commands.command(name="removerolelvl", extras={"category": "XP"})
     async def remove_role_level(self, ctx, level: int):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
@@ -88,14 +88,14 @@ class LevelCog(commands.Cog):
         self.guild_level_roles.get(ctx.guild.id, {}).pop(level, None)
         await ctx.send(f"✅ Role untuk level {level} dihapus.")
 
-    @commands.command(name="setchlevel")
+    @commands.command(name="setchlevel", extras={"category": "XP"})
     async def setchlevel(self, ctx, channel: discord.TextChannel):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
         set_channel_settings(self.db, ctx.guild.id, "level", channel.id)
         await ctx.send(f"✅ Channel level-up diatur ke {channel.mention}")
 
-    @commands.command(name="leveloff")
+    @commands.command(name="leveloff", extras={"category": "XP"})
     async def leveloff(self, ctx):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
@@ -103,7 +103,7 @@ class LevelCog(commands.Cog):
         self.disabled_guilds.add(ctx.guild.id)
         await ctx.send("🛑 Sistem level dinonaktifkan di server ini.")
 
-    @commands.command(name="levelon")
+    @commands.command(name="levelon", extras={"category": "XP"})
     async def levelon(self, ctx):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
@@ -111,7 +111,7 @@ class LevelCog(commands.Cog):
         self.disabled_guilds.discard(ctx.guild.id)
         await ctx.send("✅ Sistem level diaktifkan kembali di server ini.")
 
-    @commands.command(name="setnoxprole")
+    @commands.command(name="setnoxprole", extras={"category": "XP"})
     async def set_no_xp_role(self, ctx, role: discord.Role):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
@@ -119,7 +119,7 @@ class LevelCog(commands.Cog):
         self.no_xp_roles.setdefault(ctx.guild.id, set()).add(role.id)
         await ctx.send(f"🚫 Role {role.mention} tidak akan mendapatkan XP.")
 
-    @commands.command(name="removenoxprole")
+    @commands.command(name="removenoxprole", extras={"category": "XP"})
     async def remove_no_xp_role_cmd(self, ctx, role: discord.Role):
         if not self.is_admin_or_owner(ctx):
             return await ctx.send("❌ Hanya admin atau user yang diizinkan yang bisa menggunakan command ini.")
@@ -181,7 +181,7 @@ class LevelCog(commands.Cog):
             channel = message.guild.get_channel(int(ch_id)) if ch_id else message.channel
             await channel.send(msg)
 
-    @commands.command(name="leaderboard", help="Menampilkan 10 user dengan XP tertinggi")
+    @commands.command(name="leaderboard", help="Menampilkan 10 user dengan XP tertinggi", extras={"category": "XP"})
     async def leaderboard(self, ctx):
         cursor = self.db.cursor()
         cursor.execute("""

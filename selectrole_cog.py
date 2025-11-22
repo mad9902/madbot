@@ -178,7 +178,11 @@ class RoleSelectCog(commands.Cog):
     # ==================================================
     # COMMAND SELECTROLE
     # ==================================================
-    @commands.command(name="selectrole")
+    @commands.command(
+        name="selectrole",
+        usage="<single/multi> | <type> | <title> | <message> | @role emoji, ...",
+        extras={"category": "Role"}
+    )
     @commands.has_permissions(administrator=True)
     async def selectrole(self, ctx, *, args):
         """

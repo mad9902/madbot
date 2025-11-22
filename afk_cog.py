@@ -6,7 +6,12 @@ class AFK(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="afk", help="Menandai kamu sedang AFK")
+    @commands.command(
+        name="afk",
+        help="Menandai kamu sedang AFK",
+        extras={"category": "AFK"},
+        usage="afk <reason>"
+    )
     async def afk(self, ctx, *, reason="Tidak ada alasan"):
         db = connect_db()
         set_afk(db, ctx.author.id, ctx.guild.id, reason)

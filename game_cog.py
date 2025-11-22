@@ -31,14 +31,14 @@ class SambungKataMultiplayer(commands.Cog):
         self.bot = bot
         self.active_games = {}
 
-    @commands.command(name="cek")
+    @commands.command(name="cek", extras={"category": "General"})
     async def cek_cmd(self, ctx, *, word: str):
         if word.lower() in KBBI_SET:
             await ctx.send(f"✅ **'{word}' valid menurut KBBI offline.**")
         else:
             await ctx.send(f"❌ **'{word}' tidak ditemukan.**")
 
-    @commands.command(name="sambungkata")
+    @commands.command(name="sambungkata", extras={"category": "Games"})
     async def sambungkata_mp(self, ctx):
         if ctx.guild.id in self.active_games:
             await ctx.send("❌ Sudah ada game yang berjalan!")
@@ -62,7 +62,7 @@ class SambungKataMultiplayer(commands.Cog):
 
         self.bot.loop.create_task(wait_finish())
 
-    @commands.command(name="stopgame")
+    @commands.command(name="stopgame", extras={"category": "Games"})
     async def stop(self, ctx):
         view = self.active_games.get(ctx.guild.id)
         if view and ctx.author.id == view.host_id:
